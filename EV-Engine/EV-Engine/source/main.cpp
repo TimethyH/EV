@@ -2,22 +2,6 @@
 #include <Windows.h>
 #include <shellapi.h> // For CommandLineToArgvW
 
-
-// min max macros conflict 
-// use std::min and std::max
-#ifdef min
-#undef min
-#endif
-
-#ifdef max
-#undef max
-#endif
-
-// To create a window, the windows macro needs to be undefined. (from Windows.h)
-#ifdef CreateWindow
-#undef CreateWindow
-#endif
-
 // Windows Runtime Library, needed for Microsoft::WRD::ComPtr<> template class
 // All DX12 objects are COM objects, the ComPtr tracks their lifetimes
 #include <wrl.h>

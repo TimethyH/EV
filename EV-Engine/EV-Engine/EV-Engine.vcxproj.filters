@@ -18,9 +18,24 @@
     <ClCompile Include="source\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\application.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\window.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\application.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\window.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\clock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

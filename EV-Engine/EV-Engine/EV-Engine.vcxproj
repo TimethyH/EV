@@ -19,10 +19,15 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\application.cpp" />
     <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="header\application.h" />
+    <ClInclude Include="header\clock.h" />
     <ClInclude Include="header\helpers.h" />
+    <ClInclude Include="header\window.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
