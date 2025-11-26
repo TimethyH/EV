@@ -26,7 +26,9 @@
   <ItemGroup>
     <ClInclude Include="header\application.h" />
     <ClInclude Include="header\clock.h" />
+    <ClInclude Include="header\events.h" />
     <ClInclude Include="header\helpers.h" />
+    <ClInclude Include="header\key_codes.h" />
     <ClInclude Include="header\window.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">

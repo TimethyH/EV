@@ -38,5 +38,11 @@
     <ClInclude Include="header\clock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\events.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\key_codes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
