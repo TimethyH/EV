@@ -1,0 +1,21 @@
+/* Visual Studio Settings File */
+{
+  "environment.terminal.profiles+defaultItemIndex": 2,
+  "environment.terminal.profiles": [
+    {
+      "displayName": "Developer PowerShell",
+      "location": "C:\\WINDOWS\\system32\\WindowsPowerShell\\v1.0\\powershell.exe",
+      "arguments": "-NoExit -Command \"& { Import-Module \"\"\"$env:VSAPPIDDIR\\..\\Tools\\Microsoft.VisualStudio.DevShell.dll\"\"\"; Enter-VsDevShell -SkipAutomaticLocation -SetDefaultWindowTitle -InstallPath $env:VSAPPIDDIR\\..\\..\\}\""
+    },
+    {
+      "displayName": "Developer Command Prompt",
+      "location": "C:\\WINDOWS\\system32\\cmd.exe",
+      "arguments": "/k \"\"%VSAPPIDDIR%\\..\\Tools\\VsDevCmd.bat\""
+    },
+    {
+      "displayName": "Git Bash",
+      "location": "C:\\Program Files\\Git\\bin\\bash.exe",
+      "arguments": ""
+    }
+  ]
+}

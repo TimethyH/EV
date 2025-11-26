@@ -1,0 +1,7 @@
+<Solution>
+  <Configurations>
+    <Platform Name="x64" />
+    <Platform Name="x86" />
+  </Configurations>
+  <Project Path="EV-Engine/EV-Engine.vcxproj" Id="1de97d5e-8144-40a9-9164-014572e6b153" />
+</Solution>
