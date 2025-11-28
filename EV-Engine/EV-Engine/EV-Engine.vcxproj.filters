@@ -24,6 +24,12 @@
     <ClCompile Include="source\window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\dx12_includes.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\command_queue.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -42,6 +48,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\key_codes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\game.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\dx12_includes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\command_queue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

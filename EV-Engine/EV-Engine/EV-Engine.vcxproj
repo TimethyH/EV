@@ -19,14 +19,19 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\command_queue.cpp" />
     <ClCompile Include="source\application.cpp" />
+    <ClCompile Include="source\dx12_includes.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="header\command_queue.h" />
     <ClInclude Include="header\application.h" />
     <ClInclude Include="header\clock.h" />
+    <ClInclude Include="header\dx12_includes.h" />
     <ClInclude Include="header\events.h" />
+    <ClInclude Include="header\game.h" />
     <ClInclude Include="header\helpers.h" />
     <ClInclude Include="header\key_codes.h" />
     <ClInclude Include="header\window.h" />
