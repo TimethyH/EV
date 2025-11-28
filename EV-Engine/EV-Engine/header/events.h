@@ -13,8 +13,8 @@ class KeyEventArgs : public EventArgs
 public:
 	enum KeyState
 	{
-		Released = 0,
-		Pressed = 1,
+		RELEASED = 0,
+		PRESSED = 1,
 	};
 
 	typedef EventArgs base;
@@ -33,4 +33,159 @@ public:
 	bool control = {};
 	bool shift = {};
 	bool alt = {};
+};
+
+class MouseMotionEventArgs : public EventArgs
+{
+public: 
+	typedef EventArgs base;
+	MouseMotionEventArgs(bool bLeft, bool bRight, bool bMiddle, bool bControl, bool bShift, int mouseX, int mouseY)
+		:leftButton(bLeft)
+		,rightButton(bRight)
+		,middleButton(bMiddle)
+		,controlButton(bControl)
+		,shiftButton(bShift)
+		,xPosition(mouseX)
+		,yPosition(mouseY)
+	{}
+
+	bool leftButton = false;
+	bool rightButton = false;
+	bool middleButton = false;
+	bool controlButton = false;
+	bool shiftButton = false;
+
+	// these are relative to the top left corner of the screen
+	int xPosition = 0;
+	int yPosition = 0;
+	// movement since last captured position 
+	int deltaX = 0;
+	int deltaY = 0;
+};
+
+class MouseButtonEventArgs : EventArgs
+{
+public:
+	typedef EventArgs base;
+	enum MouseButton
+	{
+		NONE = 0,
+		LEFT = 1,
+		RIGHT = 2,
+		MIDDLE = 3,
+	};
+
+	enum ButtonState
+	{
+		RELEASED = 0,
+		PRESSED = 1
+	};
+
+	MouseButtonEventArgs(MouseButton buttonID, ButtonState buttonState, bool bLeft, bool bRight, bool bMiddle, bool bControl, bool bShift, int x, int y)
+		:button(buttonID)
+		,state(buttonState)
+		,leftButton(bLeft)
+		,rightButton(bRight)
+		,middleButton(bMiddle)
+		,controlButton(bControl)
+		,shiftButton(bShift)
+		,xPos(x)
+		,yPos(y)
+	{}
+
+	MouseButton button = {};
+	ButtonState state = RELEASED;
+	bool leftButton = false;
+	bool rightButton = false;
+	bool middleButton = false;
+	bool controlButton = false;
+	bool shiftButton = false;
+
+	// positions relative to upper left corner.
+	int xPos = 0;
+	int yPos = 0;
+};
+
+class MouseWheelEventArgs : public EventArgs
+{
+public:
+	typedef EventArgs base;
+	MouseWheelEventArgs(float wheelDisplacement, bool bLeft, bool bRight, bool bMiddle, bool bControl, bool bShift, int x, int y)
+		:wheelDelta(wheelDisplacement)
+		, leftButton(bLeft)
+		, rightButton(bRight)
+		, middleButton(bMiddle)
+		, controlButton(bControl)
+		, shiftButton(bShift)
+		, xPos(x)
+		, yPos(y)
+	{}
+
+	float wheelDelta = 0.0f;
+	bool leftButton = false;
+	bool rightButton = false;
+	bool middleButton = false;
+	bool controlButton = false;
+	bool shiftButton = false;
+
+	// positions relative to upper left corner.
+	int xPos = 0;
+	int yPos = 0;
+};
+
+class ResizeEventArgs : EventArgs
+{
+public:
+	typedef EventArgs base;
+	ResizeEventArgs(int width, int height)
+		:windowWidth(width)
+		,windowHeight(height)
+	{}
+
+	int windowWidth = 0;
+	int windowHeight = 0;
+};
+
+class UpdateEventArgs : EventArgs
+{
+public:
+	typedef EventArgs base;
+	UpdateEventArgs(double fDeltaTime, double fTotalTime)
+		:elapsedTime(fDeltaTime)
+		,totalTime(fTotalTime)
+	{}
+
+
+	double elapsedTime = 0.0;
+	double totalTime = 0.0;
+};
+
+class RenderEventArgs : EventArgs
+{
+public:
+	typedef EventArgs base;
+	RenderEventArgs(double fDeltaTime, double fTotalTime)
+		:elapsedTime(fDeltaTime)
+		, totalTime(fTotalTime)
+	{
+	}
+
+
+	double elapsedTime = 0.0;
+	double totalTime = 0.0;
+};
+
+class UserEventArgs : EventArgs
+{
+public:
+	typedef EventArgs base;
+	UserEventArgs(int user_code, void* user_data1, void* user_data2)
+		:code(user_code)
+		,data1(user_data1)
+		,data2(user_data2)
+	{}
+
+	int code = 0;
+	void* data1;
+	void* data2;
 };
