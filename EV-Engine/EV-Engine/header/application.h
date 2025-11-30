@@ -36,12 +36,12 @@ public:
 	void Quit(int exitCode = 0);
 
 	Microsoft::WRL::ComPtr<ID3D12Device13> GetDevice() const;
-	std::shared_ptr<ID3D12CommandQueue> GetCommandQueue(
+	std::shared_ptr<CommandQueue> GetCommandQueue(
 		D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 	void Flush();
 
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(UINT numDescriptors, D3D12_HEAP_TYPE type);
-	UINT GetDescriptorHandleIncrementSize(D3D12_HEAP_TYPE type) const;
+	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(UINT numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type);
+	UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) const;
 
 protected:
 	Application(HINSTANCE hInstance);
@@ -58,6 +58,10 @@ private:
 	HINSTANCE m_hInstance = {};
 	Microsoft::WRL::ComPtr<IDXGIAdapter4> m_dxgiAdapter = {};
 	Microsoft::WRL::ComPtr<ID3D12Device13> m_device = {};
+
+	std::shared_ptr<CommandQueue> m_DirectCommandQueue;
+	std::shared_ptr<CommandQueue> m_ComputeCommandQueue;
+	std::shared_ptr<CommandQueue> m_CopyCommandQueue;
 
 	bool m_tearingSupported = false;
 
