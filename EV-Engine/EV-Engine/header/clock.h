@@ -30,6 +30,6 @@ private:
     // Initial time point.
     std::chrono::high_resolution_clock::time_point m_T0;
     // Time since last tick.
-    std::chrono::high_resolution_clock::duration m_DeltaTime;
-    std::chrono::high_resolution_clock::duration m_TotalTime;
+    std::chrono::high_resolution_clock::duration m_deltaTime;
+    std::chrono::high_resolution_clock::duration m_totalTime;
 };

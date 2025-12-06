@@ -12,7 +12,7 @@ public:
 	CommandQueue(Microsoft::WRL::ComPtr<ID3D12Device13> pDevice, D3D12_COMMAND_LIST_TYPE type);
 	virtual ~CommandQueue();
 
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList() const;
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList();
 
 	uint64_t ExecuteCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> commandList);
 
@@ -25,7 +25,7 @@ public:
 
 protected:
 	Microsoft::WRL::ComPtr<ID3D12CommandAllocator> CreateCommandAllocator();
-	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> commandList);
+	Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> CreateCommandList(Microsoft::WRL::ComPtr<ID3D12CommandAllocator> allocator);
 
 private:
 	// Keep track of command allocators in flight

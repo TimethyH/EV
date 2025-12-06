@@ -17,7 +17,7 @@ Window::Window(HWND hWnd, const std::wstring& windowName, uint32_t windowWidth, 
 	m_IsTearingSupported = app.TearingSupported();
 
 	m_dxgiSwapChain = CreateSwapChain();
-	m_d3d12RTVDescriptorHeap = app.CreateDescriptorHeap(frameBufferCount, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
+	m_d3d12RTVDescriptorHeap = app.CreateDescriptorHeap(BufferCount, D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 	m_RTVDescriptorSize = app.GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
 
 	UpdateRenderTargetViews();
@@ -223,14 +223,14 @@ void Window::OnResize(ResizeEventArgs& e)
 
 		Application::Get().Flush();
 
-		for (int i = 0; i < frameBufferCount; ++i)
+		for (int i = 0; i < BufferCount; ++i)
 		{
 			m_d3d12BackBuffers[i].Reset();
 		}
 
 		DXGI_SWAP_CHAIN_DESC desc = {};
 		ThrowIfFailed(m_dxgiSwapChain->GetDesc(&desc));
-		ThrowIfFailed(m_dxgiSwapChain->ResizeBuffers(frameBufferCount, m_screenWidth, m_screenHeight, desc.BufferDesc.Format, desc.Flags));
+		ThrowIfFailed(m_dxgiSwapChain->ResizeBuffers(BufferCount, m_screenWidth, m_screenHeight, desc.BufferDesc.Format, desc.Flags));
 
 		m_CurrentBackBufferIndex= m_dxgiSwapChain->GetCurrentBackBufferIndex();
 		UpdateRenderTargetViews();
@@ -262,7 +262,7 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Window::CreateSwapChain()
 	swapChainDesc.Stereo = FALSE;
 	swapChainDesc.SampleDesc = { 1, 0 };
 	swapChainDesc.BufferUsage = DXGI_USAGE_RENDER_TARGET_OUTPUT;
-	swapChainDesc.BufferCount = frameBufferCount;
+	swapChainDesc.BufferCount = BufferCount;
 	swapChainDesc.Scaling = DXGI_SCALING_STRETCH;
 	swapChainDesc.SwapEffect = DXGI_SWAP_EFFECT_FLIP_DISCARD;
 	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
@@ -297,7 +297,7 @@ void Window::UpdateRenderTargetViews()
 
 	CD3DX12_CPU_DESCRIPTOR_HANDLE rtvHandle(m_d3d12RTVDescriptorHeap->GetCPUDescriptorHandleForHeapStart());
 
-	for (int i = 0; i < frameBufferCount; ++i)
+	for (int i = 0; i < BufferCount; ++i)
 	{
 		ComPtr<ID3D12Resource> backBuffer;
 		ThrowIfFailed(m_dxgiSwapChain->GetBuffer(i, IID_PPV_ARGS(&backBuffer)));

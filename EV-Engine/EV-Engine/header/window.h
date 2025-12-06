@@ -15,7 +15,7 @@ class Game;
 class Window
 {
 public:
-	static const UINT frameBufferCount = 3;
+	static const UINT BufferCount = 3;
 	HWND GetWindowHandle() const;
 	void Destroy();
 
@@ -100,7 +100,7 @@ private:
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> m_dxgiSwapChain;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_d3d12RTVDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_d3d12BackBuffers[frameBufferCount];
+	Microsoft::WRL::ComPtr<ID3D12Resource> m_d3d12BackBuffers[BufferCount];
 
 	UINT m_RTVDescriptorSize;
 	UINT m_CurrentBackBufferIndex;

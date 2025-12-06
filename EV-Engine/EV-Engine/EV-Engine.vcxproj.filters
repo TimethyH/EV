@@ -36,6 +36,9 @@
     <ClCompile Include="source\game..cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\demo.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -65,5 +68,12 @@
     <ClInclude Include="header\command_queue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\demo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders\vertex.hlsl" />
+    <FxCompile Include="shaders\pixel.hlsl" />
   </ItemGroup>
 </Project>

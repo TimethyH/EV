@@ -49,27 +49,27 @@ void Game::OnRender(RenderEventArgs& e)
 
 }
 
-void Game::OnKeyPressed(KeyEventArgs& e)
+void Game::OnKeyPress(KeyEventArgs& e)
 {
     // By default, do nothing.
 }
 
-void Game::OnKeyReleased(KeyEventArgs& e)
+void Game::OnKeyRelease(KeyEventArgs& e)
 {
     // By default, do nothing.
 }
 
-void Game::OnMouseMoved(class MouseMotionEventArgs& e)
+void Game::OnMouseMove(class MouseMotionEventArgs& e)
 {
     // By default, do nothing.
 }
 
-void Game::OnMouseButtonPressed(MouseButtonEventArgs& e)
+void Game::OnMouseButtonPress(MouseButtonEventArgs& e)
 {
     // By default, do nothing.
 }
 
-void Game::OnMouseButtonReleased(MouseButtonEventArgs& e)
+void Game::OnMouseButtonRelease(MouseButtonEventArgs& e)
 {
     // By default, do nothing.
 }
