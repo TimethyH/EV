@@ -3,7 +3,7 @@ struct PixelInput
     float4 color : COLOR;
 };
 
-float4 main(PixelInput input) : SV_TARGET
+float4 main(PixelInput input) : SV_Target
 {
-	return float4(input.color);
+	return input.color;
 }

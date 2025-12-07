@@ -3,8 +3,9 @@
 #include "window.h"
 #include "DirectXMath.h"
 
-class Demo : Game
+class Demo : public Game
 {
+public:
 	using super = Game;
 	Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSync = false);
 
@@ -50,4 +51,6 @@ private:
 	DirectX::XMMATRIX m_projection = {};
 
 	bool m_contentLoaded = false;
+
+
 };

@@ -142,6 +142,13 @@ void Window::ToggleFullScreen()
 	SetFullScreen(!m_fullScreen);
 }
 
+void Window::RegisterCallbacks(std::shared_ptr<Game> pGame)
+{
+	m_pGame = pGame;
+
+	return;
+}
+
 void Window::OnUpdate(UpdateEventArgs& e)
 {
 	m_updateClock.Tick();

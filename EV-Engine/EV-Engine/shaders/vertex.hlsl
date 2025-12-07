@@ -4,10 +4,6 @@ struct VertexData
     float3 color : COLOR;
 };
 
-struct ModelViewProjection
-{
-    matrix MVP;
-};
 
 struct VertexOutput
 {
@@ -15,12 +11,15 @@ struct VertexOutput
     float4 position : SV_Position;
 };
 
-ConsumeStructuredBuffer<ModelViewProjection> MVPcb : register(b0);
+cbuffer MVPcb : register(b0)
+{
+    float4x4 MVP;
+};
 
 VertexOutput main( VertexData data)
 {
     VertexOutput output;
-    output.position = mul(MVPcb.Consume().MVP, float4(data.position, 1.0f));
+    output.position = mul(MVP, float4(data.position, 1.0f));
 	output.color = float4(data.color, 1.0f);
 	
 	return output;
