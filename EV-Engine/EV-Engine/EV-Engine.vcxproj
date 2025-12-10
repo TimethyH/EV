@@ -26,18 +26,21 @@
     <ClCompile Include="source\dx12_includes.cpp" />
     <ClCompile Include="source\game..cpp" />
     <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\upload_buffer.cpp" />
     <ClCompile Include="source\window.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\command_queue.h" />
     <ClInclude Include="header\application.h" />
     <ClInclude Include="header\clock.h" />
+    <ClInclude Include="header\defines.h" />
     <ClInclude Include="header\demo.h" />
     <ClInclude Include="header\dx12_includes.h" />
     <ClInclude Include="header\events.h" />
     <ClInclude Include="header\game.h" />
     <ClInclude Include="header\helpers.h" />
     <ClInclude Include="header\key_codes.h" />
+    <ClInclude Include="header\upload_buffer.h" />
     <ClInclude Include="header\window.h" />
   </ItemGroup>
   <ItemGroup>

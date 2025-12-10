@@ -39,6 +39,9 @@
     <ClCompile Include="source\demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\upload_buffer.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -69,6 +72,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\demo.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\upload_buffer.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\defines.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
