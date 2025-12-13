@@ -43,6 +43,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> CreateDescriptorHeap(UINT numDescriptors, D3D12_DESCRIPTOR_HEAP_TYPE type);
 	UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) const;
 
+	static uint64_t GetFrameCount();
+
 protected:
 	Application(HINSTANCE hInstance);
 	virtual ~Application();
@@ -54,6 +56,8 @@ private:
 	Application(const Application& copy) = delete; // deletes copy constructor
 	Application& operator=(const Application& other) = delete; // deletes assignment operator
 
+	friend LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
 	// Instance the application was made with
 	HINSTANCE m_hInstance = {};
 	Microsoft::WRL::ComPtr<IDXGIAdapter4> m_dxgiAdapter = {};
@@ -64,5 +68,6 @@ private:
 	std::shared_ptr<CommandQueue> m_CopyCommandQueue;
 
 	bool m_tearingSupported = false;
+	static uint64_t m_frameCount;
 
 };

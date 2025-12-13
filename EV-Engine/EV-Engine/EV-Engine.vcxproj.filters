@@ -42,6 +42,15 @@
     <ClCompile Include="source\upload_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\descriptor_allocator.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\descriptor_allocator_page.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\descriptor_allocation.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -80,9 +89,18 @@
     <ClInclude Include="header\defines.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="header\descriptor_allocator.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\descriptor_allocator_page.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\pixel.hlsl" />
     <FxCompile Include="shaders\vertex.hlsl" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="header\descriptor_allocation.h" />
   </ItemGroup>
 </Project>

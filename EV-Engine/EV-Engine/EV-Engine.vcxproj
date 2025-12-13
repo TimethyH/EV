@@ -23,6 +23,9 @@
     <ClCompile Include="source\command_queue.cpp" />
     <ClCompile Include="source\application.cpp" />
     <ClCompile Include="source\demo.cpp" />
+    <ClCompile Include="source\descriptor_allocation.cpp" />
+    <ClCompile Include="source\descriptor_allocator.cpp" />
+    <ClCompile Include="source\descriptor_allocator_page.cpp" />
     <ClCompile Include="source\dx12_includes.cpp" />
     <ClCompile Include="source\game..cpp" />
     <ClCompile Include="source\main.cpp" />
@@ -35,6 +38,8 @@
     <ClInclude Include="header\clock.h" />
     <ClInclude Include="header\defines.h" />
     <ClInclude Include="header\demo.h" />
+    <ClInclude Include="header\descriptor_allocator.h" />
+    <ClInclude Include="header\descriptor_allocator_page.h" />
     <ClInclude Include="header\dx12_includes.h" />
     <ClInclude Include="header\events.h" />
     <ClInclude Include="header\game.h" />
@@ -60,6 +65,9 @@
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
     </FxCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="header\descriptor_allocation.h" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>

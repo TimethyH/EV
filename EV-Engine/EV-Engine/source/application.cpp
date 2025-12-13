@@ -15,7 +15,10 @@ static Application* gs_pSingelton = nullptr;
 static WindowMap gs_Windows;
 static WindowNameMap gs_WindowByName;
 
+uint64_t Application::m_frameCount = 0;
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
 
 // A wrapper struct to allow shared pointers for the window class.
 struct MakeWindow : public Window
@@ -76,6 +79,8 @@ Application::Application(HINSTANCE hInst)
 
         m_tearingSupported = CheckTearingSupport();
     }
+
+    m_frameCount = 0;
 }
 
 void Application::Create(HINSTANCE hInst)
@@ -364,6 +369,11 @@ UINT Application::GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE ty
     return m_device->GetDescriptorHandleIncrementSize(type);
 }
 
+uint64_t Application::GetFrameCount()
+{
+    return m_frameCount;
+}
+
 
 // Remove a window from our window lists.
 static void RemoveWindow(HWND hWnd)
@@ -426,6 +436,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         {
         case WM_PAINT:
         {
+            ++Application::m_frameCount;
             // Delta time will be filled in by the Window.
             UpdateEventArgs updateEventArgs(0.0f, 0.0f);
             pWindow->OnUpdate(updateEventArgs);
