@@ -5,6 +5,9 @@
 #include <command_queue.h>
 #include <window.h>
 
+#include "descriptor_allocation.h"
+#include "descriptor_allocator.h"
+
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
 
 using WindowPtr = std::shared_ptr<Window>;
@@ -606,4 +609,9 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
     }
 
     return 0;
+}
+
+DescriptorAllocation Application::AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors)
+{
+    return m_descriptorAllocators[type]->Allocate(numDescriptors);
 }

@@ -19,7 +19,9 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\buffer.cpp" />
     <ClCompile Include="source\clock.cpp" />
+    <ClCompile Include="source\command_list.cpp" />
     <ClCompile Include="source\command_queue.cpp" />
     <ClCompile Include="source\application.cpp" />
     <ClCompile Include="source\demo.cpp" />
@@ -27,12 +29,22 @@
     <ClCompile Include="source\descriptor_allocator.cpp" />
     <ClCompile Include="source\descriptor_allocator_page.cpp" />
     <ClCompile Include="source\dx12_includes.cpp" />
+    <ClCompile Include="source\dynamic_descriptor_heap.cpp" />
     <ClCompile Include="source\game..cpp" />
+    <ClCompile Include="source\index_buffer.cpp" />
     <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\dx12_render_target.cpp" />
+    <ClCompile Include="source\resource.cpp" />
+    <ClCompile Include="source\resource_state_tracker.cpp" />
+    <ClCompile Include="source\root_signature.cpp" />
+    <ClCompile Include="source\texture.cpp" />
     <ClCompile Include="source\upload_buffer.cpp" />
+    <ClCompile Include="source\vertex_buffer.cpp" />
     <ClCompile Include="source\window.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="header\buffer.h" />
+    <ClInclude Include="header\command_list.h" />
     <ClInclude Include="header\command_queue.h" />
     <ClInclude Include="header\application.h" />
     <ClInclude Include="header\clock.h" />
@@ -41,11 +53,20 @@
     <ClInclude Include="header\descriptor_allocator.h" />
     <ClInclude Include="header\descriptor_allocator_page.h" />
     <ClInclude Include="header\dx12_includes.h" />
+    <ClInclude Include="header\dynamic_descriptor_heap.h" />
     <ClInclude Include="header\events.h" />
     <ClInclude Include="header\game.h" />
     <ClInclude Include="header\helpers.h" />
+    <ClInclude Include="header\index_buffer.h" />
     <ClInclude Include="header\key_codes.h" />
+    <ClInclude Include="header\dx12_render_target.h" />
+    <ClInclude Include="header\resource.h" />
+    <ClInclude Include="header\resource_state_tracker.h" />
+    <ClInclude Include="header\root_signature.h" />
+    <ClInclude Include="header\texture.h" />
+    <ClInclude Include="header\texture_usage.h" />
     <ClInclude Include="header\upload_buffer.h" />
+    <ClInclude Include="header\vertex_buffer.h" />
     <ClInclude Include="header\window.h" />
   </ItemGroup>
   <ItemGroup>
@@ -74,7 +95,7 @@
     <Keyword>Win32Proj</Keyword>
     <ProjectGuid>{1de97d5e-8144-40a9-9164-014572e6b153}</ProjectGuid>
     <RootNamespace>EVEngine</RootNamespace>
-    <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
+    <WindowsTargetPlatformVersion>10.0</WindowsTargetPlatformVersion>
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
@@ -123,17 +144,21 @@
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
+    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
     <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
+    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
     <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
+    <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>

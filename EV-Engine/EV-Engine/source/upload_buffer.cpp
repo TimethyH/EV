@@ -1,6 +1,6 @@
+#include <dx12_includes.h>
 #include "upload_buffer.h"
 #include <new>
-#include <dx12_includes.h>
 #include "upload_buffer.h"
 #include "application.h"
 

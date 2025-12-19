@@ -6,6 +6,9 @@
 #include <memory>
 #include <string>
 
+#include "descriptor_allocation.h"
+
+class DescriptorAllocator;
 class Window;
 class Game;
 class CommandQueue;
@@ -44,6 +47,7 @@ public:
 	UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) const;
 
 	static uint64_t GetFrameCount();
+	DescriptorAllocation AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors = 1);
 
 protected:
 	Application(HINSTANCE hInstance);
@@ -69,5 +73,7 @@ private:
 
 	bool m_tearingSupported = false;
 	static uint64_t m_frameCount;
+
+	std::unique_ptr<DescriptorAllocator> m_descriptorAllocators[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 
 };
