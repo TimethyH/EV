@@ -29,16 +29,30 @@ using namespace Microsoft::WRL;
 #include <dxgi1_6.h>
 #include <d3dcompiler.h>
 #include <DirectXMath.h>
+#include <DirectXTex.h>
 
 // D3D12 extension library.
 #include <d3dx12.h>
 
+using namespace DirectX;
+
 // STL Headers
 #include <algorithm>
+#include <atomic>
 #include <cassert>
 #include <chrono>
+#include <condition_variable>
+#include <filesystem>
 #include <map>
 #include <memory>
+#include <mutex>
+#include <new>
+#include <string>
+#include <unordered_map>
+#include <thread>
+#include <vector>
+
+namespace fs = std::filesystem;
 
 // Helper functions
 #include <helpers.h>

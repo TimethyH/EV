@@ -1,4 +1,6 @@
 #include "demo.h"
+#include "demo.h"
+#include "demo.h"
 
 #include "application.h"
 #include "command_queue.h"
@@ -7,41 +9,105 @@
 
 #include "dx12_includes.h"
 using namespace DirectX;
+
+struct Matrices
+{
+    XMMATRIX ModelMatrix;
+    XMMATRIX ViewMatrix;
+    XMMATRIX InverseTransposeMVP;
+    XMMATRIX MVP;
+};
+
+
+
 struct VertexData
 {
 	XMFLOAT3 position;
 	XMFLOAT3 color;
 };
 
-static VertexData g_Vertices[8] = {
-    { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f) }, // 0
-    { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) }, // 1
-    { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f) }, // 2
-    { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) }, // 3
-    { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) }, // 4
-    { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f) }, // 5
-    { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f) }, // 6
-    { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f) }  // 7
+enum RootParameters
+{
+	MATRICES_CB,
+    MATERIAL_CB,
+    LIGHT_PROPERTIES_CB,
+    POINTLIGHTS,
+    SPOTLIGHTS,
+    TEXTURES,
+    NUM_PARAMETERS
 };
 
-static WORD g_Indicies[36] =
+XMMATRIX XM_CALLCONV LookAtMatrix(FXMVECTOR position, FXMVECTOR direction, FXMVECTOR up)
 {
-    0, 1, 2, 0, 2, 3,
-    4, 6, 5, 4, 7, 6,
-    4, 5, 1, 4, 1, 0,
-    3, 2, 6, 3, 6, 7,
-    1, 5, 6, 1, 6, 2,
-    4, 0, 3, 4, 3, 7
-};
+    assert(!XMVector3Equal(direction, XMVectorZero()));
+    assert(!XMVector3IsInfinite(direction));
+    assert(!XMVector3Equal(up, XMVectorZero()));
+    assert(!XMVector3IsInfinite(up));
+
+
+    XMVECTOR zAxis = XMVector3Normalize(direction);
+    XMVECTOR xAxis = XMVector3Cross(up, zAxis);
+    xAxis = XMVector3Normalize(xAxis);
+
+    XMVECTOR yAxis = XMVector3Cross(zAxis, xAxis);
+    yAxis = XMVector3Normalize(yAxis);
+
+    XMMATRIX matrix(xAxis, yAxis, zAxis, position);
+    return matrix;
+}
+
+
+// static VertexData g_Vertices[8] = {
+//     { XMFLOAT3(-1.0f, -1.0f, -1.0f), XMFLOAT3(0.0f, 0.0f, 0.0f) }, // 0
+//     { XMFLOAT3(-1.0f,  1.0f, -1.0f), XMFLOAT3(0.0f, 1.0f, 0.0f) }, // 1
+//     { XMFLOAT3(1.0f,  1.0f, -1.0f), XMFLOAT3(1.0f, 1.0f, 0.0f) }, // 2
+//     { XMFLOAT3(1.0f, -1.0f, -1.0f), XMFLOAT3(1.0f, 0.0f, 0.0f) }, // 3
+//     { XMFLOAT3(-1.0f, -1.0f,  1.0f), XMFLOAT3(0.0f, 0.0f, 1.0f) }, // 4
+//     { XMFLOAT3(-1.0f,  1.0f,  1.0f), XMFLOAT3(0.0f, 1.0f, 1.0f) }, // 5
+//     { XMFLOAT3(1.0f,  1.0f,  1.0f), XMFLOAT3(1.0f, 1.0f, 1.0f) }, // 6
+//     { XMFLOAT3(1.0f, -1.0f,  1.0f), XMFLOAT3(1.0f, 0.0f, 1.0f) }  // 7
+// };
+//
+// static WORD g_Indicies[36] =
+// {
+//     0, 1, 2, 0, 2, 3,
+//     4, 6, 5, 4, 7, 6,
+//     4, 5, 1, 4, 1, 0,
+//     3, 2, 6, 3, 6, 7,
+//     1, 5, 6, 1, 6, 2,
+//     4, 0, 3, 4, 3, 7
+// };
 
 Demo::Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSync)
-	: super(name, width, height, bVSync)
+    : super(name, width, height, bVSync)
     , m_scissorRect(CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX))
     , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)))
-    , m_fov(45.0)
+    , m_forward(0)
+    , m_backward(0)
+    , m_left(0)
+    , m_right(0)
+    , m_up(0)
+	, m_down(0)
+	, m_pitch(0)
+	, m_yaw(0)
+	, m_width(0)
+	, m_height(0)
     , m_contentLoaded(false)
 {
-	
+    XMVECTOR cameraPos = XMVectorSet(0, 5, -20, 1);
+    XMVECTOR cameraTarget = XMVectorSet(0, 5, 0, 1);
+    XMVECTOR cameraUp = XMVectorSet(0, 1, 0, 0);
+
+    m_camera.SetLookAt(cameraPos, cameraTarget, cameraUp);
+
+    m_pAlignedCameraData = (CameraData*)_aligned_malloc(sizeof(CameraData), 16);
+    m_pAlignedCameraData->m_initialPosition = m_camera.GetTranslation();
+    m_pAlignedCameraData->m_initialRotation = m_camera.GetRotation();
+}
+
+Demo::~Demo()
+{
+    _aligned_free(m_pAlignedCameraData);
 }
 
 void Demo::UpdateBufferResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, ID3D12Resource** pDestination, ID3D12Resource** pIntermediate, size_t numElements, size_t elementSize, const void* pBufferData, D3D12_RESOURCE_FLAGS flags)
@@ -300,7 +366,10 @@ bool Demo::LoadContent()
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
     
-	
+    m_cubeMesh = Mesh::CreateCube(commandList);
+    commandList->
+
+
 	// Upload vertex data
 	ComPtr<ID3D12Resource> intermediateVertexBuffer;
     UpdateBufferResource(commandList.Get(), &m_vertexBuffer, &intermediateVertexBuffer, _countof(g_Vertices),sizeof(VertexData), g_Vertices);

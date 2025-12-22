@@ -1,14 +1,17 @@
 #pragma once
+#include "camera.h"
 #include "game.h"
 #include "window.h"
 #include "DirectXMath.h"
+#include "mesh.h"
+#include "root_signature.h"
 
 class Demo : public Game
 {
 public:
 	using super = Game;
 	Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSync = false);
-
+	virtual ~Demo();
 	bool LoadContent() override;
 	void UnloadContent() override;
 
@@ -21,6 +24,47 @@ protected:
 	void OnResize(ResizeEventArgs& e) override;
 
 private:
+
+	std::unique_ptr<Mesh> m_cubeMesh;
+	std::unique_ptr<Mesh> m_sphereMesh;
+	std::unique_ptr<Mesh> m_coneMesh;
+	std::unique_ptr<Mesh> m_torusMesh;
+	std::unique_ptr<Mesh> m_planeMesh;
+
+
+	// TODO: add textures
+
+
+	RenderTarget m_rendertarget = {};
+
+	RootSignature m_rootSignature = {};
+
+	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
+
+	Camera m_camera;
+
+	struct alignas(16) CameraData
+	{
+		DirectX::XMVECTOR m_initialPosition;
+		DirectX::XMVECTOR m_initialRotation;
+	};
+	CameraData* m_pAlignedCameraData;
+
+	// Camera Controls
+	float m_forward;
+	float m_backward;
+	float m_left;
+	float m_right;
+	float m_up;
+	float m_down;
+
+	float m_pitch;
+	float m_yaw;
+
+	int m_width;
+	int m_height;
+
+
 	void TransitionResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, Microsoft::WRL::ComPtr<ID3D12Resource> pResource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
 	void ClearRTV(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, D3D12_CPU_DESCRIPTOR_HANDLE RTV, FLOAT* clearColor);
 	void ClearDepth(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, D3D12_CPU_DESCRIPTOR_HANDLE DSV, FLOAT depth = 1.0f);
@@ -39,16 +83,16 @@ private:
 	Microsoft::WRL::ComPtr<ID3D12Resource> m_depthBuffer = nullptr;
 	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_depthDescriptorHeap = {};
 
-	Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = {};
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = {};
+	// Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = {};
+	// Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = {};
 
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorRect = {};
 
-	float m_fov = 0.0f;
-	DirectX::XMMATRIX m_model = {};
-	DirectX::XMMATRIX m_view = {};
-	DirectX::XMMATRIX m_projection = {};
+	// float m_fov = 0.0f;
+	// DirectX::XMMATRIX m_model = {};
+	// DirectX::XMMATRIX m_view = {};
+	// DirectX::XMMATRIX m_projection = {};
 
 	bool m_contentLoaded = false;
 

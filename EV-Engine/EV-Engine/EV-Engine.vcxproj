@@ -20,6 +20,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\buffer.cpp" />
+    <ClCompile Include="source\camera.cpp" />
     <ClCompile Include="source\clock.cpp" />
     <ClCompile Include="source\command_list.cpp" />
     <ClCompile Include="source\command_queue.cpp" />
@@ -34,6 +35,7 @@
     <ClCompile Include="source\index_buffer.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\dx12_render_target.cpp" />
+    <ClCompile Include="source\mesh.cpp" />
     <ClCompile Include="source\resource.cpp" />
     <ClCompile Include="source\resource_state_tracker.cpp" />
     <ClCompile Include="source\root_signature.cpp" />
@@ -44,6 +46,7 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\buffer.h" />
+    <ClInclude Include="header\camera.h" />
     <ClInclude Include="header\command_list.h" />
     <ClInclude Include="header\command_queue.h" />
     <ClInclude Include="header\application.h" />
@@ -60,6 +63,7 @@
     <ClInclude Include="header\index_buffer.h" />
     <ClInclude Include="header\key_codes.h" />
     <ClInclude Include="header\dx12_render_target.h" />
+    <ClInclude Include="header\mesh.h" />
     <ClInclude Include="header\resource.h" />
     <ClInclude Include="header\resource_state_tracker.h" />
     <ClInclude Include="header\root_signature.h" />
@@ -143,20 +147,20 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
