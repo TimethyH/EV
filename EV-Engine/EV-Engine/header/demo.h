@@ -33,7 +33,7 @@ private:
 
 
 	// TODO: add textures
-
+	Texture m_defaultTexture;
 
 	RenderTarget m_rendertarget = {};
 

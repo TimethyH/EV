@@ -367,7 +367,8 @@ bool Demo::LoadContent()
     auto commandList = commandQueue->GetCommandList();
     
     m_cubeMesh = Mesh::CreateCube(commandList);
-    commandList->
+
+    commandList.Get
 
 
 	// Upload vertex data

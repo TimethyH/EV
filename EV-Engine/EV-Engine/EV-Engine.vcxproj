@@ -69,6 +69,7 @@
     <ClInclude Include="header\root_signature.h" />
     <ClInclude Include="header\texture.h" />
     <ClInclude Include="header\texture_usage.h" />
+    <ClInclude Include="header\thread_safe_queue.h" />
     <ClInclude Include="header\upload_buffer.h" />
     <ClInclude Include="header\vertex_buffer.h" />
     <ClInclude Include="header\window.h" />
