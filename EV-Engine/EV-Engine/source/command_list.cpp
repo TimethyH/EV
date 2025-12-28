@@ -10,7 +10,7 @@
 // #include <GenerateMipsPSO.h>
 #include <index_buffer.h>
 // #include <PanoToCubemapPSO.h>
-#include <dx12_render_target.h>
+#include <render_target.h>
 #include <resource.h>
 #include <resource_state_tracker.h>
 #include <root_signature.h>
@@ -19,7 +19,6 @@
 #include <upload_buffer.h>
 
 #include "buffer.h"
-#include "dx12_render_target.h"
 #include "texture_usage.h"
 #include "vertex_buffer.h"
 
@@ -278,7 +277,8 @@ void CommandList::LoadTextureFromFile(Texture& texture, const std::wstring& file
             break;
         }
 
-        ThrowIfFailed(device->CreateCommittedResource(&CD3DX12_HEAP_PROPERTIES(D3D12_HEAP_TYPE_DEFAULT),
+        CD3DX12_HEAP_PROPERTIES heapProps(D3D12_HEAP_TYPE_DEFAULT);
+        ThrowIfFailed(device->CreateCommittedResource(&heapProps,
             D3D12_HEAP_FLAG_NONE,
             &textureDesc,
             D3D12_RESOURCE_STATE_COMMON,
@@ -307,7 +307,7 @@ void CommandList::LoadTextureFromFile(Texture& texture, const std::wstring& file
 
         if (subresources.size() < textureResource->GetDesc().MipLevels)
         {
-            GenerateMips(texture);
+            // GenerateMips(texture); TODO: readd.
         }
 
         // Add the texture resource to the texture cache.

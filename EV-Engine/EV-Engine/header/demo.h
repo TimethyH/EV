@@ -4,7 +4,9 @@
 #include "window.h"
 #include "DirectXMath.h"
 #include "mesh.h"
+#include "render_target.h"
 #include "root_signature.h"
+#include "Texture.h"
 
 class Demo : public Game
 {
@@ -19,6 +21,7 @@ protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender(RenderEventArgs& e) override;	
 	void OnKeyPress(KeyEventArgs& e) override;
+	void OnKeyRelease(KeyEventArgs& e) override;
 	void OnMouseMove(MouseMotionEventArgs& e) override;
 	void OnMouseWheel(MouseWheelEventArgs& e) override;
 	void OnResize(ResizeEventArgs& e) override;
@@ -95,6 +98,8 @@ private:
 	// DirectX::XMMATRIX m_projection = {};
 
 	bool m_contentLoaded = false;
+	bool m_shift = false;
 
+	std::shared_ptr<Window> m_pWindow = nullptr;
 
 };

@@ -736,3 +736,41 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 	return retCode;
 }
 
+////////////////////////////////////////////////////////////////////////////// TODOs /////////////////////////////////////////////////////////////
+/*
+
+												GENERAL
+
+[ ] Understand ins and outs of the engine, how it works in its entirety.
+[ ] Find all TODOs in the engine and adres them
+[ ] 
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+
+
+												SPECIFIC
+[ ] Compile DirectXTex and build it as a separate library, so this project can simply include it and link to it.
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+
+
+
+
+*/
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

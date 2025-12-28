@@ -176,7 +176,7 @@ void CommandQueue::Wait(const CommandQueue& other)
     m_commandQueue->Wait(other.m_fence.Get(), other.m_fenceValue);
 }
 
-Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetD3D12CommandQueue() const
+Microsoft::WRL::ComPtr<ID3D12CommandQueue> CommandQueue::GetCommandQueue() const
 {
     return m_commandQueue;
 }

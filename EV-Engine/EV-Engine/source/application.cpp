@@ -68,22 +68,6 @@ Application::Application(HINSTANCE hInst)
     {
         MessageBoxA(NULL, "Unable to register the window class.", "Error", MB_OK | MB_ICONERROR);
     }
-
-    m_dxgiAdapter = GetAdapter(false);
-    if (m_dxgiAdapter)
-    {
-        m_device = CreateDevice(m_dxgiAdapter);
-    }
-    if (m_device)
-    {
-        m_DirectCommandQueue = std::make_shared<CommandQueue>(m_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
-        m_ComputeCommandQueue = std::make_shared<CommandQueue>(m_device, D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        m_CopyCommandQueue = std::make_shared<CommandQueue>(m_device, D3D12_COMMAND_LIST_TYPE_COPY);
-
-        m_tearingSupported = CheckTearingSupport();
-    }
-
-    m_frameCount = 0;
 }
 
 void Application::Create(HINSTANCE hInst)
@@ -91,6 +75,7 @@ void Application::Create(HINSTANCE hInst)
     if (!gs_pSingelton)
     {
         gs_pSingelton = new Application(hInst);
+        gs_pSingelton->Initialize();
     }
 }
 
@@ -115,6 +100,43 @@ void Application::Destroy()
 Application::~Application()
 {
     Flush();
+}
+
+void Application::Initialize()
+{
+#if defined(_DEBUG)
+    // Always enable the debug layer before doing anything DX12 related
+    // so all possible errors generated while creating DX12 objects
+    // are caught by the debug layer.
+    ComPtr<ID3D12Debug> debugInterface;
+    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)));
+    debugInterface->EnableDebugLayer();
+#endif
+
+    m_dxgiAdapter = GetAdapter(false);
+    if (m_dxgiAdapter)
+    {
+        m_device = CreateDevice(m_dxgiAdapter);
+    }
+    else
+    {
+        throw std::exception("DXGI Failed to retrieve a viable adapter");
+    }
+
+        m_DirectCommandQueue = std::make_shared<CommandQueue>(D3D12_COMMAND_LIST_TYPE_DIRECT);
+        m_ComputeCommandQueue = std::make_shared<CommandQueue>(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        m_CopyCommandQueue = std::make_shared<CommandQueue>(D3D12_COMMAND_LIST_TYPE_COPY);
+    
+        m_tearingSupported = CheckTearingSupport();
+    
+    m_frameCount = 0;
+
+    // Create Discriptor Allocator for each descriptor heap
+    for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
+    {
+        m_descriptorAllocators[i] = std::make_unique<DescriptorAllocator>(static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i));
+    }
+
 }
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::GetAdapter(bool bUseWarp)
@@ -257,6 +279,11 @@ std::shared_ptr<Window> Application::CreateRenderWindow(const std::wstring& wind
     }
 
     WindowPtr pWindow = std::make_shared<MakeWindow>(hWnd, windowName, clientWidth, clientHeight, vSync);
+    pWindow->Initialize();
+
+    // WindowPtr pWindow = Application::Get().CreateRenderWindow(windowName, clientWidth, clientHeight, vSync);
+    // pWindow->RegisterCallbacks(shared_from_this());
+    // pWindow->Show();
 
     gs_Windows.insert(WindowMap::value_type(hWnd, pWindow));
     gs_WindowByName.insert(WindowNameMap::value_type(windowName, pWindow));
@@ -614,4 +641,35 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
 DescriptorAllocation Application::AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors)
 {
     return m_descriptorAllocators[type]->Allocate(numDescriptors);
+}
+
+DXGI_SAMPLE_DESC Application::GetMultisampleQualityLevels(DXGI_FORMAT format, UINT numSamples, D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags) const
+{
+    DXGI_SAMPLE_DESC sampleDesc = { 1, 0 };
+
+    D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS qualityLevels;
+    qualityLevels.Format = format;
+    qualityLevels.SampleCount = 1;
+    qualityLevels.Flags = flags;
+    qualityLevels.NumQualityLevels = 0;
+
+    while (qualityLevels.SampleCount <= numSamples && SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS))) && qualityLevels.NumQualityLevels > 0)
+    {
+        // That works...
+        sampleDesc.Count = qualityLevels.SampleCount;
+        sampleDesc.Quality = qualityLevels.NumQualityLevels - 1;
+
+        // But can we do better?
+        qualityLevels.SampleCount *= 2;
+    }
+
+    return sampleDesc;
+}
+
+void Application::ReleaseStaleDescriptors(uint64_t finishedFrame)
+{
+    for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
+    {
+        m_descriptorAllocators[i]->ReleaseStaleDescriptors(finishedFrame);
+    }
 }

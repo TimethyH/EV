@@ -1,26 +1,40 @@
-struct VertexData
+struct Matrices
 {
-    float3 position : POSITION;
-    float3 color : COLOR;
+    matrix modelMatrix;
+    matrix modelViewMatrix;
+    matrix invTransposeModelViewMatrix;
+    matrix MVP;
 };
 
-
-struct VertexOutput
+cbuffer matrixCB : register(b0)
 {
-    float4 color : COLOR;
-    float4 position : SV_Position;
+    Matrices matrixBuffer;
+}
+
+
+struct VertexPositionNormalTexture
+{
+    float3 Position : POSITION;
+    float3 Normal : NORMAL;
+    float2 TexCoord : TEXCOORD;
 };
 
-cbuffer MVPcb : register(b0)
+struct VertexShaderOutput
 {
-    float4x4 MVP;
+    float4 PositionVS : POSITION;
+    float3 NormalVS : NORMAL;
+    float2 TexCoord : TEXCOORD;
+    float4 Position : SV_Position;
 };
 
-VertexOutput main( VertexData data)
+VertexShaderOutput main(VertexPositionNormalTexture data)
 {
-    VertexOutput output;
-    output.position = mul(MVP, float4(data.position, 1.0f));
-	output.color = float4(data.color, 1.0f);
-	
-	return output;
+    VertexShaderOutput OUT;
+
+    OUT.Position = mul(matrixBuffer.MVP, float4(data.Position, 1.0f));
+    OUT.PositionVS = mul(matrixBuffer.modelViewMatrix, float4(data.Position, 1.0f));
+    OUT.NormalVS = mul((float3x3) matrixBuffer.invTransposeModelViewMatrix, data.Normal);
+    OUT.TexCoord = data.TexCoord;
+
+    return OUT;
 }

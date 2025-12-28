@@ -102,7 +102,7 @@ std::unique_ptr<Mesh> Mesh::CreateSphere(CommandList& commandList, float diamete
     return mesh;
 }
 
-std::unique_ptr<Mesh> Mesh::CreateCube(Microsoft::WRL::ComPtr<ID3D12CommandList> commandList, float size, bool rhcoords)
+std::unique_ptr<Mesh> Mesh::CreateCube(CommandList& commandList, float size, bool rhcoords)
 {
     // A cube has six faces, each one pointing in a different direction.
     const int FaceCount = 6;

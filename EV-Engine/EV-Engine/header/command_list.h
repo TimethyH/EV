@@ -45,7 +45,7 @@
 #include <mutex> // for std::mutex
 #include <vector> // for std::vector
 
-#include "dx12_render_target.h"
+#include "render_target.h"
 
 class Buffer;
 class ByteAddressBuffer;

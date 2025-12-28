@@ -9,7 +9,9 @@
 
 #include <Events.h>
 #include <clock.h>
-	
+
+#include "Texture.h"
+
 class Game;
 
 class Window
@@ -40,11 +42,13 @@ public:
 
 	UINT GetCurrentBackBufferID() const;
 	// Present the current backbuffer to the screen
-	UINT Present();
+	UINT Present(const Texture& texture);
 
 	// Get RTV of current backbuffer
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentRTV() const;
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetCurrentBackBuffer() const;
+
+	bool Initialize();
 	
 protected:
 	Window() = delete;
@@ -92,6 +96,9 @@ private:
 	bool m_VSync = {};
 	bool m_fullScreen = {};
 
+	UINT64 m_fenceValues[BufferCount];
+	uint64_t m_frameValues[BufferCount];
+
 	HighResolutionClock m_updateClock = {};
 	HighResolutionClock m_renderClock = {};
 	uint64_t m__frameCounter = {};
@@ -99,17 +106,12 @@ private:
 	std::weak_ptr<Game> m_pGame;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> m_dxgiSwapChain;
-	Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> m_d3d12RTVDescriptorHeap;
-	Microsoft::WRL::ComPtr<ID3D12Resource> m_d3d12BackBuffers[BufferCount];
+	Texture m_backBufferTextures[BufferCount];
 
 	UINT m_RTVDescriptorSize;
-	UINT m_CurrentBackBufferIndex;
+	UINT m_currentBackBufferIndex;
 
-	RECT m_WindowRect;
-	bool m_IsTearingSupported;
-
-
-	
-
+	RECT m_windowRect;
+	bool m_isTearingSupported;
 };
 

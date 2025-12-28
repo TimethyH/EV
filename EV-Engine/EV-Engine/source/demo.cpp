@@ -8,17 +8,16 @@
 #include "window.h"
 
 #include "dx12_includes.h"
+#include "render_target.h"
 using namespace DirectX;
 
 struct Matrices
 {
     XMMATRIX ModelMatrix;
-    XMMATRIX ViewMatrix;
-    XMMATRIX InverseTransposeMVP;
+    XMMATRIX ModelViewMatrix;
+    XMMATRIX InverseTransposeModelView;
     XMMATRIX MVP;
 };
-
-
 
 struct VertexData
 {
@@ -29,10 +28,10 @@ struct VertexData
 enum RootParameters
 {
 	MATRICES_CB,
-    MATERIAL_CB,
-    LIGHT_PROPERTIES_CB,
-    POINTLIGHTS,
-    SPOTLIGHTS,
+    MATERIAL_CB, // is in space 1, not sure why..
+    // LIGHT_PROPERTIES_CB,
+    // POINTLIGHTS,
+    // SPOTLIGHTS,
     TEXTURES,
     NUM_PARAMETERS
 };
@@ -180,10 +179,15 @@ void Demo::OnResize(ResizeEventArgs& e)
     {
         super::OnResize(e);
 
+        float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
+        m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 100.0f);
+
+
         m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f,
             static_cast<float>(e.windowWidth), static_cast<float>(e.windowHeight));
 
-        ResizeDepthBuffer(e.windowWidth, e.windowHeight);
+        m_rendertarget.Resize(m_width, m_height);
+        // ResizeDepthBuffer(e.windowWidth, e.windowHeight);
     }
 }
 
@@ -209,21 +213,43 @@ void Demo::OnUpdate(UpdateEventArgs& e)
         totalTime = 0.0;
     }
 
-    // Update Model Matrix
-    float angle = static_cast<float>(e.totalTime);
-    const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
-    m_model = XMMatrixRotationAxis(rotationAxis, angle);
+    // Update Camera
+    float speedMultiplier = (m_shift ? 16.0f : 4.0f);
+    XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.elapsedTime);
+    XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.elapsedTime);
+    m_camera.Translate(cameraTranslate, Space::LOCAL);
+    m_camera.Translate(cameraPan, Space::LOCAL);
 
-    // Update View Matrix
-    const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
-    const XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
-    const XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
-    m_view = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
+    XMVECTOR cameraRotation = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(m_pitch), XMConvertToRadians(m_yaw), 0.0f);
+    m_camera.SetRotation(cameraRotation);
 
-    // Update Projection
-    float aspecRatio = GetScreenWidth() / static_cast<float>(GetScreenHeight());
-    m_projection = XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fov), aspecRatio, 0.1f, 100.0f);
+    XMMATRIX viewMatrix = m_camera.GetViewMatrix();
 
+    
+    //
+    // // Update Model Matrix
+    // float angle = static_cast<float>(e.totalTime);
+    // const XMVECTOR rotationAxis = XMVectorSet(0, 1, 1, 0);
+    // m_model = XMMatrixRotationAxis(rotationAxis, angle);
+    //
+    // // Update View Matrix
+    // const XMVECTOR eyePosition = XMVectorSet(0, 0, -10, 1);
+    // const XMVECTOR focusPoint = XMVectorSet(0, 0, 0, 1);
+    // const XMVECTOR upDirection = XMVectorSet(0, 1, 0, 0);
+    // m_view = XMMatrixLookAtLH(eyePosition, focusPoint, upDirection);
+    //
+    // // Update Projection
+    // float aspecRatio = GetScreenWidth() / static_cast<float>(GetScreenHeight());
+    // m_projection = XMMatrixPerspectiveFovLH(XMConvertToRadians(m_fov), aspecRatio, 0.1f, 100.0f);
+
+}
+
+void XM_CALLCONV ComputeMatrices( FXMMATRIX model, CXMMATRIX view, CXMMATRIX viewProj, Matrices& mat)
+{
+    mat.ModelMatrix = model;
+    mat.ModelViewMatrix = model * view;
+    mat.InverseTransposeModelView = XMMatrixTranspose(XMMatrixInverse(nullptr, mat.ModelViewMatrix));
+    mat.MVP = model * viewProj;
 }
 
 void Demo::TransitionResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, Microsoft::WRL::ComPtr<ID3D12Resource> pResource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after)
@@ -252,63 +278,94 @@ void Demo::OnRender(RenderEventArgs& e)
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue->GetCommandList();
 
-    UINT currentBackBufferID = m_pWindow->GetCurrentBackBufferID();
-    auto backbuffer = m_pWindow->GetCurrentBackBuffer();
-    auto rtv = m_pWindow->GetCurrentRTV();
-    auto dsv = m_depthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
+    // UINT currentBackBufferID = m_pWindow->GetCurrentBackBufferID();
+    // auto backbuffer = m_pWindow->GetCurrentBackBuffer();
+    // auto rtv = m_pWindow->GetCurrentRTV();
+    // auto dsv = m_depthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
     // Clear the render targets.
     {
-        TransitionResource(commandList, backbuffer,
-            D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+        // TransitionResource(commandList, backbuffer,
+        //     D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
         FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-        ClearRTV(commandList, rtv, clearColor);
-        ClearDepth(commandList, dsv);
+        commandList->ClearTexture(m_rendertarget.GetTexture(AttachmentPoint::Color0), clearColor);
+        commandList->ClearDepthStencilTexture(m_rendertarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
+
+        // ClearRTV(commandList, rtv, clearColor);
+        // ClearDepth(commandList, dsv);
     }
 
-    // prepare rendering pipeline
-    commandList->SetPipelineState(m_pipelineState.Get());
-    commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+    commandList->SetViewport(m_viewport);
+    commandList->SetScissorRect(m_scissorRect);
 
-    // Setup Input Assembler
+    commandList->SetRenderTarget(m_rendertarget);
 
-    commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    commandList->IASetIndexBuffer(&m_indexBufferView);
-    commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    // Draw Cube
+    XMMATRIX translationMatrix = XMMatrixTranslation(4.0f, 4.0f, 4.0f);
+    XMMATRIX rotationMatrix = XMMatrixIdentity();
+    XMMATRIX scaleMatrix = XMMatrixScaling(4.0f, 4.0f, 4.0f);
+    XMMATRIX worldMatrix = scaleMatrix * rotationMatrix * translationMatrix;
+    XMMATRIX viewMatrix = m_camera.GetViewMatrix();
+    XMMATRIX viewProjectionMatrix = viewMatrix * m_camera.GetProjectionMatrix();
 
-    // Setup Rastertizer state (RS)
-    commandList->RSSetViewports(1, &m_viewport);
-    commandList->RSSetScissorRects(1, &m_scissorRect);
+    Matrices cubeMatrix;
+    ComputeMatrices(worldMatrix, viewMatrix, viewProjectionMatrix, cubeMatrix);
+    
+    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, cubeMatrix);
+    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, XMFLOAT4(1.0f,1.0f,1.0f,1.0f));
+    commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-    // Bind Render Targets to Output Merger (OM)
-    commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    m_cubeMesh->Draw(*commandList);
 
-    // Update Root Parameters
+    commandQueue->ExecuteCommandList(commandList);
 
-    // MVP
-    XMMATRIX mvp = XMMatrixMultiply(m_model, m_view);
-    mvp = XMMatrixMultiply(mvp, m_projection);
-    commandList->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp, 0);
+    // Present
+    m_pWindow->Present(m_rendertarget.GetTexture(AttachmentPoint::Color0));
 
 
-    // Draw !!!!!
-
-    commandList->DrawIndexedInstanced(_countof(g_Indicies), 1, 0, 0, 0);
-
-    // Present the rtv
-
-    {
-        TransitionResource(commandList, backbuffer,
-            D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
-
-        m_fenceValues[currentBackBufferID] = commandQueue->ExecuteCommandList(commandList);
-
-        currentBackBufferID = m_pWindow->Present();
-
-        commandQueue->WaitForFenceValue(m_fenceValues[currentBackBufferID]);
-    }
+    // // prepare rendering pipeline
+    // commandList->SetPipelineState(m_pipelineState.Get());
+    // commandList->SetGraphicsRootSignature(m_rootSignature.Get());
+    //
+    // // Setup Input Assembler
+    //
+    // commandList->IASetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    // commandList->IASetIndexBuffer(&m_indexBufferView);
+    // commandList->IASetVertexBuffers(0, 1, &m_vertexBufferView);
+    //
+    // // Setup Rastertizer state (RS)
+    // commandList->RSSetViewports(1, &m_viewport);
+    // commandList->RSSetScissorRects(1, &m_scissorRect);
+    //
+    // // Bind Render Targets to Output Merger (OM)
+    // commandList->OMSetRenderTargets(1, &rtv, FALSE, &dsv);
+    //
+    // // Update Root Parameters
+    //
+    // // MVP
+    // XMMATRIX mvp = XMMatrixMultiply(m_model, m_view);
+    // mvp = XMMatrixMultiply(mvp, m_projection);
+    // commandList->SetGraphicsRoot32BitConstants(0, sizeof(XMMATRIX) / 4, &mvp, 0);
+    //
+    //
+    // // Draw !!!!!
+    //
+    // commandList->DrawIndexedInstanced(_countof(g_Indicies), 1, 0, 0, 0);
+    //
+    // // Present the rtv
+    //
+    // {
+    //     TransitionResource(commandList, backbuffer,
+    //         D3D12_RESOURCE_STATE_RENDER_TARGET, D3D12_RESOURCE_STATE_PRESENT);
+    //
+    //     m_fenceValues[currentBackBufferID] = commandQueue->ExecuteCommandList(commandList);
+    //
+    //     currentBackBufferID = m_pWindow->Present();
+    //
+    //     commandQueue->WaitForFenceValue(m_fenceValues[currentBackBufferID]);
+    // }
 }
 
 void Demo::OnKeyPress(KeyEventArgs& e)
@@ -330,6 +387,75 @@ void Demo::OnKeyPress(KeyEventArgs& e)
     case KeyCode::V:
         m_pWindow->ToggleVSync();
         break;
+    case KeyCode::R:
+        // Reset camera transform
+        m_camera.SetTranslation(m_pAlignedCameraData->m_initialPosition);
+        m_camera.SetRotation(m_pAlignedCameraData->m_initialRotation);
+        m_pitch = 0.0f;
+        m_yaw = 0.0f;
+        break;
+    case KeyCode::Up:
+    case KeyCode::W:
+        m_forward = 1.0f;
+        break;
+    case KeyCode::Left:
+    case KeyCode::A:
+        m_left = 1.0f;
+        break;
+    case KeyCode::Down:
+    case KeyCode::S:
+        m_backward = 1.0f;
+        break;
+    case KeyCode::Right:
+    case KeyCode::D:
+        m_right = 1.0f;
+        break;
+    case KeyCode::Q:
+        m_down = 1.0f;
+        break;
+    case KeyCode::E:
+        m_up = 1.0f;
+        break;
+    case KeyCode::Space:
+        // m_animateLights = !m_AnimateLights;
+        break;
+    case KeyCode::ShiftKey:
+        m_shift = true;
+        break;
+    }
+}
+
+void Demo::OnKeyRelease(KeyEventArgs& e)
+{
+    super::OnKeyRelease(e);
+
+    switch (e.key)
+    {
+    case KeyCode::Up:
+    case KeyCode::W:
+        m_forward = 0.0f;
+        break;
+    case KeyCode::Left:
+    case KeyCode::A:
+        m_left = 0.0f;
+        break;
+    case KeyCode::Down:
+    case KeyCode::S:
+        m_backward = 0.0f;
+        break;
+    case KeyCode::Right:
+    case KeyCode::D:
+        m_right = 0.0f;
+        break;
+    case KeyCode::Q:
+        m_down = 0.0f;
+        break;
+    case KeyCode::E:
+        m_up = 0.0f;
+        break;
+    case KeyCode::ShiftKey:
+        m_shift = false;
+        break;
     }
 }
 
@@ -340,11 +466,15 @@ void Demo::OnMouseMove(MouseMotionEventArgs& e)
 
 void Demo::OnMouseWheel(MouseWheelEventArgs& e)
 {
-    m_fov -= e.wheelDelta;
-    m_fov = std::clamp(m_fov, 12.0f, 90.0f);
+    auto fov = m_camera.GetFov();
+
+    fov -= e.wheelDelta;
+    fov = std::clamp(fov, 12.0f, 90.0f);
+
+    m_camera.SetFov(fov);
 
     char buffer[256];
-    sprintf_s(buffer, "FoV: %f\n", m_fov);
+    sprintf_s(buffer, "FoV: %f\n", fov);
     OutputDebugStringA(buffer);
 }
 
@@ -357,6 +487,7 @@ struct PipelineStateStream
     CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY primitiveTopologyType;
     CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT depthFormat;
     CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS renderTargetFormats;
+    CD3DX12_PIPELINE_STATE_STREAM_SAMPLE_DESC sampleDesc;
 } pipelineStateStream;
 
 
@@ -365,34 +496,11 @@ bool Demo::LoadContent()
     auto device = Application::Get().GetDevice();
     auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
-    
-    m_cubeMesh = Mesh::CreateCube(commandList);
-
-    commandList.Get
 
 
-	// Upload vertex data
-	ComPtr<ID3D12Resource> intermediateVertexBuffer;
-    UpdateBufferResource(commandList.Get(), &m_vertexBuffer, &intermediateVertexBuffer, _countof(g_Vertices),sizeof(VertexData), g_Vertices);
+    m_cubeMesh = Mesh::CreateCube(*commandList);
 
-    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
-    m_vertexBufferView.SizeInBytes = sizeof(g_Vertices);
-    m_vertexBufferView.StrideInBytes = sizeof(VertexData);
-
-    // Upload index data
-    ComPtr<ID3D12Resource> intermediataIndexBuffer;
-    UpdateBufferResource(commandList.Get(), &m_indexBuffer, &intermediataIndexBuffer, _countof(g_Indicies), sizeof(WORD), g_Indicies);
-
-    m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
-    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
-    m_indexBufferView.SizeInBytes = sizeof(g_Indicies);
-
-    // Create a descriptor heap for depth stencil view
-    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
-    dsvHeapDesc.NumDescriptors = 1;
-    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
-    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
-    ThrowIfFailed(device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_depthDescriptorHeap)));
+    commandList->LoadTextureFromFile(m_defaultTexture, L"../../assets/Mona_Lisa.jpg");
 
     // Load Vertex Shader
     ComPtr<ID3DBlob> vertexShaderBlob;
@@ -402,13 +510,6 @@ bool Demo::LoadContent()
     ComPtr<ID3DBlob> pixelShaderBlob;
     ThrowIfFailed(D3DReadFileToBlob(L"pixel.cso", &pixelShaderBlob));
 
-    // Create Vertex input layout
-    D3D12_INPUT_ELEMENT_DESC inputLayout[] =
-    {
-        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-		{"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
-    };
-
     // Root Signature
     D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
     featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
@@ -417,60 +518,176 @@ bool Demo::LoadContent()
         featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
     }
 
-    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = {
+    // Allow input but deny unused shader stages
+    D3D12_ROOT_SIGNATURE_FLAGS rootFlags =
         D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
-    };
+        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
-    CD3DX12_ROOT_PARAMETER1 rootParameters[1];
-    rootParameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
 
-
-    // Root Signature Description
-
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
-    rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
-
-
-    // Serialize root signature
-    ComPtr<ID3DBlob> rootSignatureBlob;
-    ComPtr<ID3DBlob> errorBlob;
-
-    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &rootSignatureBlob, &errorBlob));
-
-    // Create RootSignature
-    ThrowIfFailed(device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+    CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NUM_PARAMETERS];
+    rootParameters[RootParameters::MATRICES_CB].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
+    rootParameters[RootParameters::MATERIAL_CB].InitAsConstantBufferView(0, 1, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::TEXTURES].InitAsDescriptorTable(1, &descriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
+ 
+    // Samplers (anisotropic is for stretched textures for example a street going into distance)
+    CD3DX12_STATIC_SAMPLER_DESC linearRepeatSampler(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
+    CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
+	
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
+    rootSignatureDesc.Init_1_1(RootParameters::NUM_PARAMETERS, rootParameters, 1, &linearRepeatSampler, rootFlags);
+	
+    m_rootSignature.SetRootSignatureDesc(rootSignatureDesc.Desc_1_1, featureData.HighestVersion);
+	
+    DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 
     D3D12_RT_FORMAT_ARRAY rtvFormats = {};
     rtvFormats.NumRenderTargets = 1;
-    rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+    rtvFormats.RTFormats[0] = backBufferFormat;
 
-    // initialize pipeline state stream
-    pipelineStateStream.rootSignature = m_rootSignature.Get();
-    pipelineStateStream.inputLayout = { inputLayout, _countof(inputLayout) };
+    DXGI_SAMPLE_DESC sampleDesc = Application::Get().GetMultisampleQualityLevels(backBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
+    
+	pipelineStateStream.rootSignature = m_rootSignature.GetRootSignature().Get();
+    pipelineStateStream.depthFormat = depthBufferFormat;
+    pipelineStateStream.inputLayout = { VertexPositionNormalTexture::inputElements, VertexPositionNormalTexture::inputElementCount };
     pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineStateStream.vertexShader = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-    pipelineStateStream.pixelShader = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-    pipelineStateStream.depthFormat = DXGI_FORMAT_D32_FLOAT;
     pipelineStateStream.renderTargetFormats = rtvFormats;
+    pipelineStateStream.pixelShader = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+    pipelineStateStream.vertexShader = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+    pipelineStateStream.sampleDesc = sampleDesc;
 
-    // using the pipeline state stream, we create the pipeline state object.
-    D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = { sizeof(PipelineStateStream), &pipelineStateStream };
-    ThrowIfFailed(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_pipelineState)));
+    D3D12_PIPELINE_STATE_STREAM_DESC pipelineDesc = {
+	    sizeof(PipelineStateStream), &pipelineStateStream
+    };
+    
+    ThrowIfFailed(device->CreatePipelineState(&pipelineDesc, IID_PPV_ARGS(&m_pipelineState)));
+	
+    
+	// offscreen render target
+    auto colorDesc = CD3DX12_RESOURCE_DESC::Tex2D(backBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+	
+    D3D12_CLEAR_VALUE clearColor;
+    clearColor.Format = colorDesc.Format;
+    clearColor.Color[0] = 0.0f;
+    clearColor.Color[1] = 0.0f;
+    clearColor.Color[2] = 0.3f;
+    clearColor.Color[3] = 1.0f;
 
+    Texture colorTexture = Texture(colorDesc, &clearColor, TextureUsage::RenderTarget, L"Color Render Target");
 
+    auto depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+	
+    D3D12_CLEAR_VALUE depthClearValue;
+    depthClearValue.Format = depthDesc.Format;
+    depthClearValue.DepthStencil = { 1.0f, 0 };
+
+    Texture depthTexture = Texture(depthDesc, &depthClearValue, TextureUsage::Depth, L"Depth Render Target");
+
+    // attach textures to the render target
+    m_rendertarget.AttachTexture(AttachmentPoint::Color0, colorTexture);
+    m_rendertarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
+	
     auto fenceValue = commandQueue->ExecuteCommandList(commandList);
     commandQueue->WaitForFenceValue(fenceValue);
 
-    m_contentLoaded = true;
-
-    // now that depth descriptorheap was created, we can create/resize the depth bufffer
-    ResizeDepthBuffer(GetScreenWidth(), GetScreenHeight());
-
     return true;
+	
+	//
+ //    // Upload vertex data
+	// ComPtr<ID3D12Resource> intermediateVertexBuffer;
+ //    UpdateBufferResource(commandList.Get(), &m_vertexBuffer, &intermediateVertexBuffer, _countof(g_Vertices),sizeof(VertexData), g_Vertices);
+ //
+ //    m_vertexBufferView.BufferLocation = m_vertexBuffer->GetGPUVirtualAddress();
+ //    m_vertexBufferView.SizeInBytes = sizeof(g_Vertices);
+ //    m_vertexBufferView.StrideInBytes = sizeof(VertexData);
+ //
+ //    // Upload index data
+ //    ComPtr<ID3D12Resource> intermediataIndexBuffer;
+ //    UpdateBufferResource(commandList.Get(), &m_indexBuffer, &intermediataIndexBuffer, _countof(g_Indicies), sizeof(WORD), g_Indicies);
+ //
+ //    m_indexBufferView.BufferLocation = m_indexBuffer->GetGPUVirtualAddress();
+ //    m_indexBufferView.Format = DXGI_FORMAT_R16_UINT;
+ //    m_indexBufferView.SizeInBytes = sizeof(g_Indicies);
+ //
+ //    // Create a descriptor heap for depth stencil view
+ //    D3D12_DESCRIPTOR_HEAP_DESC dsvHeapDesc = {};
+ //    dsvHeapDesc.NumDescriptors = 1;
+ //    dsvHeapDesc.Type = D3D12_DESCRIPTOR_HEAP_TYPE_DSV;
+ //    dsvHeapDesc.Flags = D3D12_DESCRIPTOR_HEAP_FLAG_NONE;
+ //    ThrowIfFailed(device->CreateDescriptorHeap(&dsvHeapDesc, IID_PPV_ARGS(&m_depthDescriptorHeap)));
+ //
+ //    // Create Vertex input layout
+ //    D3D12_INPUT_ELEMENT_DESC inputLayout[] =
+ //    {
+ //        {"POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+	// 	{"COLOR", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT, D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0},
+ //    };
+ //
+ //    // Root Signature
+ //    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+ //    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+ //    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+ //    {
+ //        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+ //    }
+ //
+ //    D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = {
+ //        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+ //        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+ //        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS |
+ //        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+ //        D3D12_ROOT_SIGNATURE_FLAG_DENY_PIXEL_SHADER_ROOT_ACCESS
+ //    };
+ //
+ //    CD3DX12_ROOT_PARAMETER1 rootParameters[1];
+ //    rootParameters[0].InitAsConstants(sizeof(XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
+ //
+ //
+ //    // Root Signature Description
+ //
+ //    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc = {};
+ //    rootSignatureDesc.Init_1_1(_countof(rootParameters), rootParameters, 0, nullptr, rootSignatureFlags);
+ //
+ //
+ //    // Serialize root signature
+ //    ComPtr<ID3DBlob> rootSignatureBlob;
+ //    ComPtr<ID3DBlob> errorBlob;
+ //
+ //    ThrowIfFailed(D3DX12SerializeVersionedRootSignature(&rootSignatureDesc, featureData.HighestVersion, &rootSignatureBlob, &errorBlob));
+ //
+ //    // Create RootSignature
+ //    ThrowIfFailed(device->CreateRootSignature(0, rootSignatureBlob->GetBufferPointer(), rootSignatureBlob->GetBufferSize(), IID_PPV_ARGS(&m_rootSignature)));
+ //
+ //    D3D12_RT_FORMAT_ARRAY rtvFormats = {};
+ //    rtvFormats.NumRenderTargets = 1;
+ //    rtvFormats.RTFormats[0] = DXGI_FORMAT_R8G8B8A8_UNORM;
+ //
+ //    // initialize pipeline state stream
+ //    pipelineStateStream.rootSignature = m_rootSignature.Get();
+ //    pipelineStateStream.inputLayout = { inputLayout, _countof(inputLayout) };
+ //    pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+ //    pipelineStateStream.vertexShader = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
+ //    pipelineStateStream.pixelShader = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+ //    pipelineStateStream.depthFormat = DXGI_FORMAT_D32_FLOAT;
+ //    pipelineStateStream.renderTargetFormats = rtvFormats;
+ //
+ //    // using the pipeline state stream, we create the pipeline state object.
+ //    D3D12_PIPELINE_STATE_STREAM_DESC pipelineStateStreamDesc = { sizeof(PipelineStateStream), &pipelineStateStream };
+ //    ThrowIfFailed(device->CreatePipelineState(&pipelineStateStreamDesc, IID_PPV_ARGS(&m_pipelineState)));
+ //
+ //
+ //    auto fenceValue = commandQueue->ExecuteCommandList(commandList);
+ //    commandQueue->WaitForFenceValue(fenceValue);
+ //
+ //    m_contentLoaded = true;
+ //
+ //    // now that depth descriptorheap was created, we can create/resize the depth bufffer
+ //    ResizeDepthBuffer(GetScreenWidth(), GetScreenHeight());
+ //
+ //    return true;
 }
 
 void Demo::UnloadContent()

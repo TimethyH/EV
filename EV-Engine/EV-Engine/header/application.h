@@ -48,10 +48,16 @@ public:
 
 	static uint64_t GetFrameCount();
 	DescriptorAllocation AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors = 1);
+	DXGI_SAMPLE_DESC GetMultisampleQualityLevels(DXGI_FORMAT format, UINT numSamples,
+	                                             D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags = D3D12_MULTISAMPLE_QUALITY_LEVELS_FLAG_NONE) const;
+
+	void ReleaseStaleDescriptors(uint64_t finishedFrame);
+
 
 protected:
 	Application(HINSTANCE hInstance);
 	virtual ~Application();
+	void Initialize();
 
 	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool bUseWarp);
 	Microsoft::WRL::ComPtr<ID3D12Device13> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);

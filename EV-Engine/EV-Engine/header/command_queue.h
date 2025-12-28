@@ -64,7 +64,7 @@ public:
     // Wait for another command queue to finish.
     void Wait(const CommandQueue& other);
 
-    Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetD3D12CommandQueue() const;
+    Microsoft::WRL::ComPtr<ID3D12CommandQueue> GetCommandQueue() const;
 
 private:
     // Free any command lists that are finished processing on the command queue.
