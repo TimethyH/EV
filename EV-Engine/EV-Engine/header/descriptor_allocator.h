@@ -18,7 +18,7 @@ public:
 
 	DescriptorAllocation Allocate(uint32_t numDescriptors = 1);
 	// Release stale descriptors after a frame ended
-	void ReleaseStaleDescriptors(uint64_t frameNr);
+	void ReleaseStaleDescriptors();
 
 
 private:

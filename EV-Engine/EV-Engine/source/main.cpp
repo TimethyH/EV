@@ -743,7 +743,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 [ ] Understand ins and outs of the engine, how it works in its entirety.
 [ ] Find all TODOs in the engine and adres them
-[ ] 
+[ ] Add ImGui to the project.
 [ ]
 [ ]
 [ ]
@@ -757,7 +757,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												SPECIFIC
 [ ] Compile DirectXTex and build it as a separate library, so this project can simply include it and link to it.
-[ ]
+[ ] 
 [ ]
 [ ]
 [ ]

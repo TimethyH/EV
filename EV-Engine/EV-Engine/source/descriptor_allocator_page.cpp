@@ -183,11 +183,11 @@ void DescriptorAllocatorPage::FreeBlock(uint32_t offset, uint32_t numDescriptors
 	AddNewBlock(offset, numDescriptors);
 }
 
-void DescriptorAllocatorPage::ReleaseStaleDescriptors(uint64_t frameID)
+void DescriptorAllocatorPage::ReleaseStaleDescriptors()
 {
 	std::lock_guard<std::mutex> lock(m_allocationMutex);
 
-	while (!m_staleDescriptors.empty() && m_staleDescriptors.front().frameNumber <= frameID)
+	while (!m_staleDescriptors.empty())
 	{
 		auto& staleDescriptor = m_staleDescriptors.front();
 

@@ -9,11 +9,9 @@
 class RootSignature
 {
 public:
-    RootSignature();
-    RootSignature(
-        const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc,
-        D3D_ROOT_SIGNATURE_VERSION rootSignatureVersion
-    );
+    RootSignature(const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc);
+
+
 
     virtual ~RootSignature();
 
@@ -25,9 +23,7 @@ public:
     }
 
     void SetRootSignatureDesc(
-        const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc,
-        D3D_ROOT_SIGNATURE_VERSION rootSignatureVersion
-    );
+        const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc);
 
     const D3D12_ROOT_SIGNATURE_DESC1& GetRootSignatureDesc() const
     {

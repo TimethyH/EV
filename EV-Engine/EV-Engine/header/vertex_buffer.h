@@ -30,51 +30,39 @@
   *  @brief Vertex buffer resource.
   */
 
+#include "Buffer.h"
 
-#include "buffer.h"
-
-class VertexBuffer : public Buffer
-{
-public:
-    VertexBuffer(const std::wstring& name = L"");
-    virtual ~VertexBuffer();
-
-    // Inherited from Buffer
-    virtual void CreateViews(size_t numElements, size_t elementSize) override;
-
-    /**
-     * Get the vertex buffer view for binding to the Input Assembler stage.
-     */
-    D3D12_VERTEX_BUFFER_VIEW GetVertexBufferView() const
+// namespace dx12lib
+// {
+    class VertexBuffer : public Buffer
     {
-        return m_vertexBufferView;
-    }
+    public:
+        D3D12_VERTEX_BUFFER_VIEW GetVertexBufferView() const
+        {
+            return m_vertexBufferView;
+        }
 
-    size_t GetNumVertices() const
-    {
-        return m_numVertices;
-    }
+        size_t GetNumVertices() const
+        {
+            return m_numVertices;
+        }
 
-    size_t GetVertexStride() const
-    {
-        return m_vertexStride;
-    }
+        size_t GetVertexStride() const
+        {
+            return m_vertexStride;
+        }
 
-    /**
-    * Get the SRV for a resource.
-    */
-    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc = nullptr) const override;
+    protected:
+        VertexBuffer(size_t numVertices, size_t vertexStride);
+        VertexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numVertices,
+            size_t vertexStride);
+        virtual ~VertexBuffer();
 
-    /**
-    * Get the UAV for a (sub)resource.
-    */
-    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetUnorderedAccessView(const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = nullptr) const override;
+        void CreateVertexBufferView();
 
-protected:
-
-private:
-    size_t m_numVertices;
-    size_t m_vertexStride;
-
-    D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
-};
+    private:
+        size_t                   m_numVertices;
+        size_t                   m_vertexStride;
+        D3D12_VERTEX_BUFFER_VIEW m_vertexBufferView;
+    };
+// }  // namespace dx12lib

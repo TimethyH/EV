@@ -22,7 +22,7 @@ public:
 	DescriptorAllocation Allocate(uint32_t numDescriptors);
 
 	void Free(DescriptorAllocation&& descriptor, uint32_t frame);
-	void ReleaseStaleDescriptors(uint64_t frameID);
+	void ReleaseStaleDescriptors();
 protected:
 
 	// Computes the offset of the descriptor handle from the start of the heap.

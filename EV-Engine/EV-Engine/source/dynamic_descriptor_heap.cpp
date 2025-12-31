@@ -27,24 +27,26 @@ DynamicDescriptorHeap::~DynamicDescriptorHeap()
 {
 }
 
-void DynamicDescriptorHeap::ParseRootSignature(const RootSignature& rootSignature)
+void DynamicDescriptorHeap::ParseRootSignature(const std::shared_ptr<RootSignature>& rootSignature)
 {
+    assert(rootSignature);
+
     // If the root signature changes, all descriptors must be (re)bound to the
     // command list.
     m_staleDescriptorTableBitMask = 0;
 
-    const auto& rootSignatureDesc = rootSignature.GetRootSignatureDesc();
+    const auto& rootSignatureDesc = rootSignature->GetRootSignatureDesc();
 
     // Get a bit mask that represents the root parameter indices that match the 
     // descriptor heap type for this dynamic descriptor heap.
-    m_descriptorTableBitMask = rootSignature.GetDescriptorTableBitMask(m_descriptorHeapType);
+    m_descriptorTableBitMask = rootSignature->GetDescriptorTableBitMask(m_descriptorHeapType);
     uint32_t descriptorTableBitMask = m_descriptorTableBitMask;
 
     uint32_t currentOffset = 0;
     DWORD rootIndex;
     while (_BitScanForward(&rootIndex, descriptorTableBitMask) && rootIndex < rootSignatureDesc.NumParameters)
     {
-        uint32_t numDescriptors = rootSignature.GetNumDescriptors(rootIndex);
+        uint32_t numDescriptors = rootSignature->GetNumDescriptors(rootIndex);
 
         DescriptorTableCache& descriptorTableCache = m_descriptorTableCache[rootIndex];
         descriptorTableCache.numDescriptors = numDescriptors;

@@ -96,8 +96,8 @@ private:
 
     void Initialize(CommandList& commandList, VertexCollection& vertices, IndexCollection& indices, bool rhcoords);
 
-    VertexBuffer m_vertexBuffer;
-    IndexBuffer m_indexBuffer;
+	std::shared_ptr<VertexBuffer> m_vertexBuffer;
+    std::shared_ptr<IndexBuffer> m_indexBuffer;
 
     UINT m_indexCount;
 };

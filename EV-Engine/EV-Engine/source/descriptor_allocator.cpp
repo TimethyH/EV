@@ -59,7 +59,7 @@ DescriptorAllocation DescriptorAllocator::Allocate(uint32_t numDescriptors)
 	return allocation;
 }
 
-void DescriptorAllocator::ReleaseStaleDescriptors(uint64_t frameNumber)
+void DescriptorAllocator::ReleaseStaleDescriptors()
 {
 	std::lock_guard<std::mutex> lock(m_allocationMutex);
 
@@ -67,7 +67,7 @@ void DescriptorAllocator::ReleaseStaleDescriptors(uint64_t frameNumber)
 	{
 		auto page = m_heapPool[i];
 
-		page->ReleaseStaleDescriptors(frameNumber);
+		page->ReleaseStaleDescriptors();
 
 		if (page->GetNumFreeHandles() > 0)
 		{

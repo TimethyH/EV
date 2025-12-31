@@ -51,59 +51,82 @@ namespace
 
 /// --------------------------------
 
-Texture::Texture(TextureUsage textureUsage, const std::wstring& name)
-    : Resource(name)
-    , m_textureUsage(textureUsage)
-{
-}
+// Texture::Texture(TextureUsage textureUsage, const std::wstring& name)
+//     : Resource(name)
+//     , m_textureUsage(textureUsage)
+// {
+// }
+//
+// Texture::Texture(const D3D12_RESOURCE_DESC& resourceDesc,
+//     const D3D12_CLEAR_VALUE* clearValue,
+//     TextureUsage textureUsage,
+//     const std::wstring& name)
+//     : Resource(resourceDesc, clearValue, name)
+//     , m_textureUsage(textureUsage)
+// {
+//     CreateViews();
+// }
+//
+// Texture::Texture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
+//     TextureUsage textureUsage,
+//     const std::wstring& name)
+//     : Resource(resource, name)
+//     , m_textureUsage(textureUsage)
+// {
+//     CreateViews();
+// }
+//
+// Texture::Texture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
+//     TextureUsage textureUsage)
+//     : Resource(resource)
+//     , m_textureUsage(textureUsage)
+// {
+//     CreateViews();
+// }
 
-Texture::Texture(const D3D12_RESOURCE_DESC& resourceDesc,
-    const D3D12_CLEAR_VALUE* clearValue,
-    TextureUsage textureUsage,
-    const std::wstring& name)
-    : Resource(resourceDesc, clearValue, name)
-    , m_textureUsage(textureUsage)
+
+
+// Texture::Texture(const Texture& copy)
+//     : Resource(copy)
+// {
+//     CreateViews();
+// }
+//
+// Texture::Texture(Texture&& copy)
+//     : Resource(copy)
+// {
+//     CreateViews();
+// }
+
+Texture::Texture(const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_CLEAR_VALUE* clearValue)
+    : Resource(resourceDesc, clearValue)
 {
     CreateViews();
 }
 
-Texture::Texture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-    TextureUsage textureUsage,
-    const std::wstring& name)
-    : Resource(resource, name)
-    , m_textureUsage(textureUsage)
+Texture::Texture(ComPtr<ID3D12Resource> resource,
+    const D3D12_CLEAR_VALUE* clearValue)
+    : Resource(resource, clearValue)
 {
     CreateViews();
 }
 
-Texture::Texture(const Texture& copy)
-    : Resource(copy)
-{
-    CreateViews();
-}
-
-Texture::Texture(Texture&& copy)
-    : Resource(copy)
-{
-    CreateViews();
-}
-
-Texture& Texture::operator=(const Texture& other)
-{
-    Resource::operator=(other);
-
-    CreateViews();
-
-    return *this;
-}
-Texture& Texture::operator=(Texture&& other)
-{
-    Resource::operator=(other);
-
-    CreateViews();
-
-    return *this;
-}
+// Texture& Texture::operator=(const Texture& other)
+// {
+//     Resource::operator=(other);
+//
+//     CreateViews();
+//
+//     return *this;
+// }
+// Texture& Texture::operator=(Texture&& other)
+// {
+//     Resource::operator=(other);
+//
+//     CreateViews();
+//
+//     return *this;
+// }
 
 Texture::~Texture()
 {
@@ -208,26 +231,41 @@ void Texture::CreateViews()
         formatSupport.Format = desc.Format;
         ThrowIfFailed(device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &formatSupport, sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)));
 
-        if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 &&
-            CheckRTVSupport(formatSupport.Support1))
+        // Create RTV
+        if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET) != 0 && CheckRTVSupport())
         {
             m_renderTargetView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_RTV);
-            device->CreateRenderTargetView(m_resource.Get(), nullptr, m_renderTargetView.GetDescriptorHandle());
+            device->CreateRenderTargetView(m_resource.Get(), nullptr,
+                m_renderTargetView.GetDescriptorHandle());
         }
-        if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
-            CheckDSVSupport(formatSupport.Support1))
+        // Create DSV
+        if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 && CheckDSVSupport())
         {
             m_depthStencilView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
-            device->CreateDepthStencilView(m_resource.Get(), nullptr, m_depthStencilView.GetDescriptorHandle());
+            device->CreateDepthStencilView(m_resource.Get(), nullptr,
+                m_depthStencilView.GetDescriptorHandle());
+        }
+        // Create SRV
+        if ((desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) == 0 && CheckSRVSupport())
+        {
+            m_shaderResourceView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            device->CreateShaderResourceView(m_resource.Get(), nullptr,
+                m_shaderResourceView.GetDescriptorHandle());
+        }
+        // Create UAV for each mip (only supported for 1D and 2D textures).
+        if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0 && CheckUAVSupport() &&
+            desc.DepthOrArraySize == 1)
+        {
+            m_unorderedAccessView =
+                app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, desc.MipLevels);
+            for (int i = 0; i < desc.MipLevels; ++i)
+            {
+                auto uavDesc = GetUAVDesc(desc, i);
+                device->CreateUnorderedAccessView(m_resource.Get(), nullptr, &uavDesc,
+                    m_unorderedAccessView.GetDescriptorHandle(i));
+            }
         }
     }
-
-    std::lock_guard<std::mutex> lock(m_shaderResourceViewsMutex);
-    std::lock_guard<std::mutex> guard(m_unorderedAccessViewsMutex);
-
-    // SRVs and UAVs will be created as needed.
-    m_shaderResourceViews.clear();
-    m_unorderedAccessViews.clear();
 }
 
 DescriptorAllocation Texture::CreateShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc) const
@@ -253,44 +291,14 @@ DescriptorAllocation Texture::CreateUnorderedAccessView(const D3D12_UNORDERED_AC
 }
 
 
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc) const
+D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetShaderResourceView() const
 {
-    std::size_t hash = 0;
-    if (srvDesc)
-    {
-        hash = HashSRVDesc(*srvDesc); // TODO: Check if these work as intended
-    }
-
-    std::lock_guard<std::mutex> lock(m_shaderResourceViewsMutex);
-
-    auto iter = m_shaderResourceViews.find(hash);
-    if (iter == m_shaderResourceViews.end())
-    {
-        auto srv = CreateShaderResourceView(srvDesc);
-        iter = m_shaderResourceViews.insert({ hash, std::move(srv) }).first;
-    }
-
-    return iter->second.GetDescriptorHandle();
+    return m_shaderResourceView.GetDescriptorHandle();
 }
 
-D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetUnorderedAccessView(const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc) const
+D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetUnorderedAccessView(uint32_t mip) const
 {
-    std::size_t hash = 0;
-    if (uavDesc)
-    {
-        hash = HashUAVDesc(*uavDesc); // TODO: Check if these work as intended
-    }
-
-    std::lock_guard<std::mutex> guard(m_unorderedAccessViewsMutex);
-
-    auto iter = m_unorderedAccessViews.find(hash);
-    if (iter == m_unorderedAccessViews.end())
-    {
-        auto uav = CreateUnorderedAccessView(uavDesc);
-        iter = m_unorderedAccessViews.insert({ hash, std::move(uav) }).first;
-    }
-
-    return iter->second.GetDescriptorHandle();
+    return m_unorderedAccessView.GetDescriptorHandle(mip);
 }
 
 D3D12_CPU_DESCRIPTOR_HANDLE Texture::GetRenderTargetView() const
@@ -485,4 +493,60 @@ DXGI_FORMAT Texture::GetTypelessFormat(DXGI_FORMAT format)
     }
 
     return typelessFormat;
+}
+
+DXGI_FORMAT Texture::GetUAVCompatableFormat(DXGI_FORMAT format)
+{
+    DXGI_FORMAT uavFormat = format;
+
+    switch (format)
+    {
+    case DXGI_FORMAT_R8G8B8A8_TYPELESS:
+    case DXGI_FORMAT_R8G8B8A8_UNORM_SRGB:
+    case DXGI_FORMAT_B8G8R8A8_UNORM:
+    case DXGI_FORMAT_B8G8R8X8_UNORM:
+    case DXGI_FORMAT_B8G8R8A8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8A8_UNORM_SRGB:
+    case DXGI_FORMAT_B8G8R8X8_TYPELESS:
+    case DXGI_FORMAT_B8G8R8X8_UNORM_SRGB:
+        uavFormat = DXGI_FORMAT_R8G8B8A8_UNORM;
+        break;
+    case DXGI_FORMAT_R32_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT:
+        uavFormat = DXGI_FORMAT_R32_FLOAT;
+        break;
+    }
+
+    return uavFormat;
+}
+
+DXGI_FORMAT Texture::GetSRGBFormat(DXGI_FORMAT format)
+{
+    DXGI_FORMAT srgbFormat = format;
+    switch (format)
+    {
+    case DXGI_FORMAT_R8G8B8A8_UNORM:
+        srgbFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+        break;
+    case DXGI_FORMAT_BC1_UNORM:
+        srgbFormat = DXGI_FORMAT_BC1_UNORM_SRGB;
+        break;
+    case DXGI_FORMAT_BC2_UNORM:
+        srgbFormat = DXGI_FORMAT_BC2_UNORM_SRGB;
+        break;
+    case DXGI_FORMAT_BC3_UNORM:
+        srgbFormat = DXGI_FORMAT_BC3_UNORM_SRGB;
+        break;
+    case DXGI_FORMAT_B8G8R8A8_UNORM:
+        srgbFormat = DXGI_FORMAT_B8G8R8A8_UNORM_SRGB;
+        break;
+    case DXGI_FORMAT_B8G8R8X8_UNORM:
+        srgbFormat = DXGI_FORMAT_B8G8R8X8_UNORM_SRGB;
+        break;
+    case DXGI_FORMAT_BC7_UNORM:
+        srgbFormat = DXGI_FORMAT_BC7_UNORM_SRGB;
+        break;
+    }
+
+    return srgbFormat;
 }

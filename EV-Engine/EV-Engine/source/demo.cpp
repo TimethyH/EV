@@ -89,9 +89,10 @@ Demo::Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSyn
 	, m_down(0)
 	, m_pitch(0)
 	, m_yaw(0)
-	, m_width(0)
-	, m_height(0)
+	, m_width(width)
+	, m_height(height)
     , m_contentLoaded(false)
+	// TODO: Add VSync initialization
 {
     XMVECTOR cameraPos = XMVectorSet(0, 5, -20, 1);
     XMVECTOR cameraTarget = XMVectorSet(0, 5, 0, 1);
@@ -500,7 +501,10 @@ bool Demo::LoadContent()
 
     m_cubeMesh = Mesh::CreateCube(*commandList);
 
-    commandList->LoadTextureFromFile(m_defaultTexture, L"../../assets/Mona_Lisa.jpg");
+    auto whiteTexture = commandList->LoadTextureFromFile(L"../../assets/white.png", true);
+
+    commandQueue->ExecuteCommandList(commandList);
+
 
     // Load Vertex Shader
     ComPtr<ID3DBlob> vertexShaderBlob;
@@ -539,7 +543,8 @@ bool Demo::LoadContent()
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
     rootSignatureDesc.Init_1_1(RootParameters::NUM_PARAMETERS, rootParameters, 1, &linearRepeatSampler, rootFlags);
 	
-    m_rootSignature.SetRootSignatureDesc(rootSignatureDesc.Desc_1_1, featureData.HighestVersion);
+    // m_rootSignature.SetRootSignatureDesc(rootSignatureDesc.Desc_1_1, featureData.HighestVersion);
+    m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDesc.Desc_1_1);
 	
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
@@ -550,7 +555,7 @@ bool Demo::LoadContent()
 
     DXGI_SAMPLE_DESC sampleDesc = Application::Get().GetMultisampleQualityLevels(backBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
     
-	pipelineStateStream.rootSignature = m_rootSignature.GetRootSignature().Get();
+	pipelineStateStream.rootSignature = m_rootSignature->GetRootSignature().Get();
     pipelineStateStream.depthFormat = depthBufferFormat;
     pipelineStateStream.inputLayout = { VertexPositionNormalTexture::inputElements, VertexPositionNormalTexture::inputElementCount };
     pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -576,7 +581,9 @@ bool Demo::LoadContent()
     clearColor.Color[2] = 0.3f;
     clearColor.Color[3] = 1.0f;
 
-    Texture colorTexture = Texture(colorDesc, &clearColor, TextureUsage::RenderTarget, L"Color Render Target");
+    // Texture colorTexture = Texture(colorDesc, &clearColor, TextureUsage::RenderTarget, L"Color Render Target");
+    auto colorTexture = Application::Get().CreateTexture(colorDesc, &clearColor);
+    colorTexture->SetName(L"Color Render Target");
 
     auto depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 	
@@ -584,7 +591,9 @@ bool Demo::LoadContent()
     depthClearValue.Format = depthDesc.Format;
     depthClearValue.DepthStencil = { 1.0f, 0 };
 
-    Texture depthTexture = Texture(depthDesc, &depthClearValue, TextureUsage::Depth, L"Depth Render Target");
+    // Texture depthTexture = Texture(depthDesc, &depthClearValue, TextureUsage::Depth, L"Depth Render Target");
+    auto depthTexture = Application::Get().CreateTexture(depthDesc, &depthClearValue);
+    depthTexture->SetName(L"Depth Render Target");
 
     // attach textures to the render target
     m_rendertarget.AttachTexture(AttachmentPoint::Color0, colorTexture);

@@ -7,6 +7,10 @@
 
 #include "descriptor_allocation.h"
 #include "descriptor_allocator.h"
+#include "pipeline_state_object.h"
+#include "root_signature.h"
+#include "shader_resource_view.h"
+#include "unordered_access_view.h"
 
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
 
@@ -30,6 +34,106 @@ struct MakeWindow : public Window
         : Window(hWnd, windowName, clientWidth, clientHeight, vSync)
     {
     }
+};
+
+class MakeUnorderedAccessView : public UnorderedAccessView
+{
+public:
+    MakeUnorderedAccessView(const std::shared_ptr<Resource>& resource,
+        const std::shared_ptr<Resource>& counterResource,
+        const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav)
+        : UnorderedAccessView(resource, counterResource, uav)
+    {
+    }
+
+    virtual ~MakeUnorderedAccessView() {}
+};
+
+class MakeShaderResourceView : public ShaderResourceView
+{
+public:
+    MakeShaderResourceView(const std::shared_ptr<Resource>& resource,
+        const D3D12_SHADER_RESOURCE_VIEW_DESC* srv)
+        : ShaderResourceView(resource, srv)
+    {
+    }
+
+    virtual ~MakeShaderResourceView() {}
+};
+
+//
+// class MakePipelineStateObject : public PipelineStateObject
+// {
+// public:
+//     MakePipelineStateObject(const D3D12_PIPELINE_STATE_STREAM_DESC& desc)
+//         : PipelineStateObject(desc)
+//     {
+//     }
+//
+//     virtual ~MakePipelineStateObject() {}
+// };
+class MakeRootSignature : public RootSignature
+{
+public:
+    MakeRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc)
+        : RootSignature(rootSignatureDesc)
+    {
+    }
+
+    virtual ~MakeRootSignature() {}
+};
+
+
+class MakeTexture : public Texture
+{
+public:
+    MakeTexture(const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_CLEAR_VALUE* clearValue)
+        : Texture(resourceDesc, clearValue)
+    {
+    }
+
+    MakeTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource, const D3D12_CLEAR_VALUE* clearValue)
+        : Texture(resource, clearValue)
+    {
+    }
+
+    virtual ~MakeTexture() {}
+};
+
+std::shared_ptr<RootSignature> Application::CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc)
+{
+    std::shared_ptr<RootSignature> rootSignature = std::make_shared<MakeRootSignature>(rootSignatureDesc);
+
+    return rootSignature;
+}
+
+std::shared_ptr<ShaderResourceView> Application::CreateShaderResourceView(const std::shared_ptr<Resource>& resource,
+                                                                          const D3D12_SHADER_RESOURCE_VIEW_DESC* srv)
+{
+    std::shared_ptr<ShaderResourceView> shaderResourceView =
+        std::make_shared<MakeShaderResourceView>(resource, srv);
+
+    return shaderResourceView;
+}
+
+std::shared_ptr<UnorderedAccessView> Application::CreateUnorderedAccessView(const std::shared_ptr<Resource>& resource,
+	const std::shared_ptr<Resource>& counterResource, const D3D12_UNORDERED_ACCESS_VIEW_DESC* uav)
+{
+    std::shared_ptr<UnorderedAccessView> unorderedAccessView =
+        std::make_shared<MakeUnorderedAccessView>(resource, counterResource, uav);
+
+    return unorderedAccessView;
+}
+
+class MakePipelineStateObject : public PipelineStateObject
+{
+public:
+    MakePipelineStateObject(const D3D12_PIPELINE_STATE_STREAM_DESC& desc)
+        : PipelineStateObject(desc)
+    {
+    }
+
+    virtual ~MakePipelineStateObject() {}
 };
 
 Application::Application(HINSTANCE hInst)
@@ -137,6 +241,17 @@ void Application::Initialize()
         m_descriptorAllocators[i] = std::make_unique<DescriptorAllocator>(static_cast<D3D12_DESCRIPTOR_HEAP_TYPE>(i));
     }
 
+    // Check features.
+    {
+        D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData;
+        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+        if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData,
+            sizeof(D3D12_FEATURE_DATA_ROOT_SIGNATURE))))
+        {
+            featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+        }
+        m_highestRootSignatureVersion = featureData.HighestVersion;
+    }
 }
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::GetAdapter(bool bUseWarp)
@@ -249,6 +364,15 @@ bool Application::CheckTearingSupport()
     return allowTearing == TRUE;
 }
 
+std::shared_ptr<PipelineStateObject> Application::DoCreatePipelineStateObject(
+	const D3D12_PIPELINE_STATE_STREAM_DESC& pipelineStateStreamDesc)
+{
+    std::shared_ptr<PipelineStateObject> pipelineStateObject =
+        std::make_shared<MakePipelineStateObject>(pipelineStateStreamDesc);
+
+    return pipelineStateObject;
+}
+
 bool Application::TearingSupported() const
 {
     return m_tearingSupported;
@@ -279,7 +403,7 @@ std::shared_ptr<Window> Application::CreateRenderWindow(const std::wstring& wind
     }
 
     WindowPtr pWindow = std::make_shared<MakeWindow>(hWnd, windowName, clientWidth, clientHeight, vSync);
-    pWindow->Initialize();
+    // pWindow->Initialize();
 
     // WindowPtr pWindow = Application::Get().CreateRenderWindow(windowName, clientWidth, clientHeight, vSync);
     // pWindow->RegisterCallbacks(shared_from_this());
@@ -666,10 +790,24 @@ DXGI_SAMPLE_DESC Application::GetMultisampleQualityLevels(DXGI_FORMAT format, UI
     return sampleDesc;
 }
 
-void Application::ReleaseStaleDescriptors(uint64_t finishedFrame)
+void Application::ReleaseStaleDescriptors()
 {
     for (int i = 0; i < D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES; ++i)
     {
-        m_descriptorAllocators[i]->ReleaseStaleDescriptors(finishedFrame);
+        m_descriptorAllocators[i]->ReleaseStaleDescriptors();
     }
+}
+
+std::shared_ptr<Texture> Application::CreateTexture(const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_CLEAR_VALUE* clearValue)
+{
+    std::shared_ptr<Texture> texture = std::make_shared<MakeTexture>(resourceDesc, clearValue);
+
+    return texture;
+}
+
+std::shared_ptr<Texture> Application::CreateTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource, const D3D12_CLEAR_VALUE* clearValue)
+{
+    std::shared_ptr<Texture> texture = std::make_shared<MakeTexture>(resource, clearValue);
+
+    return texture;
 }

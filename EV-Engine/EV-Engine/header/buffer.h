@@ -30,24 +30,14 @@
   *  @brief Abstract base class for buffer resources.
   */
 
-#include "resource.h"
+#include "Resource.h"
 
-class Buffer : public Resource
-{
-public:
-    Buffer(const std::wstring& name = L"");
-    Buffer(const D3D12_RESOURCE_DESC& resDesc,
-        size_t numElements, size_t elementSize,
-        const std::wstring& name = L"");
+    //class Device;
 
-    /**
-     * Create the views for the buffer resource.
-     * Used by the CommandList when setting the buffer contents.
-     */
-    virtual void CreateViews(size_t numElements, size_t elementSize) = 0;
-
-protected:
-
-private:
-
-};
+    class Buffer : public Resource
+    {
+    public:
+    protected:
+        Buffer(const D3D12_RESOURCE_DESC& resDesc);
+        Buffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource);
+    };

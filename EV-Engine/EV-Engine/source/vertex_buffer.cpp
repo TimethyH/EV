@@ -1,35 +1,33 @@
-#include <dx12_includes.h>
+#include "dx12_includes.h"
 
 #include <vertex_buffer.h>
 
-VertexBuffer::VertexBuffer(const std::wstring& name)
-    : Buffer(name)
-    , m_numVertices(0)
-    , m_vertexStride(0)
-    , m_vertexBufferView({})
+// using namespace dx12lib;
+
+VertexBuffer::VertexBuffer(size_t numVertices, size_t vertexStride)
+    : Buffer(CD3DX12_RESOURCE_DESC::Buffer(numVertices* vertexStride))
+    , m_numVertices(numVertices)
+    , m_vertexStride(vertexStride)
+    , m_vertexBufferView{}
 {
+    CreateVertexBufferView();
 }
 
-VertexBuffer::~VertexBuffer()
+VertexBuffer::VertexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numVertices,
+    size_t vertexStride)
+    : Buffer(resource)
+    , m_numVertices(numVertices)
+    , m_vertexStride(vertexStride)
+    , m_vertexBufferView{}
 {
+    CreateVertexBufferView();
 }
 
-void VertexBuffer::CreateViews(size_t numElements, size_t elementSize)
-{
-    m_numVertices = numElements;
-    m_vertexStride = elementSize;
+VertexBuffer::~VertexBuffer() {}
 
+void VertexBuffer::CreateVertexBufferView()
+{
     m_vertexBufferView.BufferLocation = m_resource->GetGPUVirtualAddress();
     m_vertexBufferView.SizeInBytes = static_cast<UINT>(m_numVertices * m_vertexStride);
     m_vertexBufferView.StrideInBytes = static_cast<UINT>(m_vertexStride);
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE VertexBuffer::GetShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc) const
-{
-    throw std::exception("VertexBuffer::GetShaderResourceView should not be called.");
-}
-
-D3D12_CPU_DESCRIPTOR_HANDLE VertexBuffer::GetUnorderedAccessView(const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc) const
-{
-    throw std::exception("VertexBuffer::GetUnorderedAccessView should not be called.");
 }

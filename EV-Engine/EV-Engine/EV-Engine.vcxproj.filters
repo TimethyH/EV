@@ -150,6 +150,18 @@
     <ClCompile Include="thirdparty\DirectXTex\DirectXTexWIC.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\generate_mips_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\pipeline_state_object.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\shader_resource_view.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\unordered_access_view.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -258,6 +270,21 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="thirdparty\DirectXTex\scoped.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\generate_mips_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="shaders\GenerateMips_CS.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\shader_resource_view.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\unordered_access_view.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\pipeline_state_object.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

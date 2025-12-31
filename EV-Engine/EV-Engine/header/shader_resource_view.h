@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- *  Copyright(c) 2018 Jeremiah van Oosten
+ *  Copyright(c) 2020 Jeremiah van Oosten
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files(the "Software"), to deal
@@ -23,49 +23,43 @@
  */
 
  /**
-  *  @file IndexBuffer.h
-  *  @date October 24, 2018
+  *  @file ShaderResourceView.h
+  *  @date October 17, 2020
   *  @author Jeremiah van Oosten
   *
-  *  @brief Index buffer resource.
+  *  @brief Wrapper for a Shader Resource View (SRV)
   */
 
-#include "Buffer.h"
+#include <descriptor_allocation.h>
 
-// namespace dx12lib
-// {
-    class IndexBuffer : public Buffer
+#include <d3d12.h>  // For D3D12_SHADER_RESOURCE_VIEW_DESC and D3D12_CPU_DESCRIPTOR_HANDLE
+#include <memory>   // For std::shared_ptr
+
+
+    class Device;
+    class Resource;
+
+    class ShaderResourceView
     {
     public:
-        /**
-         * Get the index buffer view for biding to the Input Assembler stage.
-         */
-        D3D12_INDEX_BUFFER_VIEW GetIndexBufferView() const
+        std::shared_ptr<Resource> GetResource() const
         {
-            return m_indexBufferView;
+            return m_resource;
         }
 
-        size_t GetNumIndices() const
+        D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle() const
         {
-            return m_numIndices;
+            return m_descriptor.GetDescriptorHandle();
         }
 
-        DXGI_FORMAT GetIndexFormat() const
-        {
-            return m_indexFormat;
-        }
-
-    protected:
-        IndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat);
-        IndexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numIndices,
-            DXGI_FORMAT indexFormat);
-        virtual ~IndexBuffer() = default;
-
-        void CreateIndexBufferView();
+    // protected:
+        ShaderResourceView(const std::shared_ptr<Resource>& resource,
+            const D3D12_SHADER_RESOURCE_VIEW_DESC* srv = nullptr);
+        virtual ~ShaderResourceView() = default;
 
     private:
-        size_t      m_numIndices;
-        DXGI_FORMAT m_indexFormat;
-        D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
+        // Device& m_device;
+        std::shared_ptr<Resource> m_resource;
+        DescriptorAllocation      m_descriptor;
     };
-// }  // namespace dx12lib
+

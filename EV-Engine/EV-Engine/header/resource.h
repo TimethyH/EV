@@ -39,17 +39,22 @@
 class Resource
 {
 public:
-    Resource(const std::wstring& name = L"");
+    // Resource(const std::wstring& name = L"");
+    // Resource(const D3D12_RESOURCE_DESC& resourceDesc,
+    //     const D3D12_CLEAR_VALUE* clearValue = nullptr,
+    //     const std::wstring& name = L"");
+    // Resource(Microsoft::WRL::ComPtr<ID3D12Resource> resource, const std::wstring& name = L"");
+    // Resource(const Resource& copy);
+    // Resource(Resource&& copy);
+    //
+    // Resource& operator=(const Resource& other);
+    // Resource& operator=(Resource&& other);
+
+   // Resource creation should go through the device.
     Resource(const D3D12_RESOURCE_DESC& resourceDesc,
-        const D3D12_CLEAR_VALUE* clearValue = nullptr,
-        const std::wstring& name = L"");
-    Resource(Microsoft::WRL::ComPtr<ID3D12Resource> resource, const std::wstring& name = L"");
-    Resource(const Resource& copy);
-    Resource(Resource&& copy);
-
-    Resource& operator=(const Resource& other);
-    Resource& operator=(Resource&& other);
-
+        const D3D12_CLEAR_VALUE* clearValue = nullptr);
+    Resource(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
+        const D3D12_CLEAR_VALUE* clearValue = nullptr);
     virtual ~Resource();
 
     /**
@@ -85,18 +90,15 @@ public:
     /**
      * Get the SRV for a resource.
      *
-     * @param srvDesc The description of the SRV to return. The default is nullptr
-     * which returns the default SRV for the resource (the SRV that is created when no
-     * description is provided.
      */
-    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetShaderResourceView(const D3D12_SHADER_RESOURCE_VIEW_DESC* srvDesc = nullptr) const = 0;
+    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetShaderResourceView() const = 0;
 
     /**
      * Get the UAV for a (sub)resource.
      *
-     * @param uavDesc The description of the UAV to return.
+     * @param mip
      */
-    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetUnorderedAccessView(const D3D12_UNORDERED_ACCESS_VIEW_DESC* uavDesc = nullptr) const = 0;
+    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetUnorderedAccessView(uint32_t mip) const = 0;
 
     /**
      * Set the name of the resource. Useful for debugging purposes.
@@ -105,6 +107,10 @@ public:
      */
     void SetName(const std::wstring& name);
 
+    bool CheckFormatSupport(D3D12_FORMAT_SUPPORT1 formatSupport) const;
+
+    bool CheckFormatSupport(D3D12_FORMAT_SUPPORT2 formatSupport) const;
+    void CheckFeatureSupport();
     /**
      * Release the underlying resource.
      * This is useful for swap chain resizing.
@@ -114,6 +120,7 @@ public:
 protected:
     // The underlying D3D12 resource.
     Microsoft::WRL::ComPtr<ID3D12Resource> m_resource;
+    D3D12_FEATURE_DATA_FORMAT_SUPPORT m_formatSupport;
     std::unique_ptr<D3D12_CLEAR_VALUE> m_clearValue;
     std::wstring m_resourceName;
 };

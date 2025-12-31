@@ -1,7 +1,7 @@
 #pragma once
 
 /*
- *  Copyright(c) 2018 Jeremiah van Oosten
+ *  Copyright(c) 2020 Jeremiah van Oosten
  *
  *  Permission is hereby granted, free of charge, to any person obtaining a copy
  *  of this software and associated documentation files(the "Software"), to deal
@@ -23,49 +23,30 @@
  */
 
  /**
-  *  @file IndexBuffer.h
-  *  @date October 24, 2018
+  *  @file PipelineStateObject.h
+  *  @date October 18, 2020
   *  @author Jeremiah van Oosten
   *
-  *  @brief Index buffer resource.
+  *  @brief Wrapper for a ID3D12PipelineState object.
   */
 
-#include "Buffer.h"
+#include <d3d12.h>       // For D3D12_PIPELINE_STATE_STREAM_DESC, and ID3D12PipelineState
+#include <wrl/client.h>  // For Microsoft::WRL::ComPtr
 
-// namespace dx12lib
-// {
-    class IndexBuffer : public Buffer
+    class Device;
+
+    class PipelineStateObject
     {
     public:
-        /**
-         * Get the index buffer view for biding to the Input Assembler stage.
-         */
-        D3D12_INDEX_BUFFER_VIEW GetIndexBufferView() const
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> GetD3D12PipelineState() const
         {
-            return m_indexBufferView;
-        }
-
-        size_t GetNumIndices() const
-        {
-            return m_numIndices;
-        }
-
-        DXGI_FORMAT GetIndexFormat() const
-        {
-            return m_indexFormat;
+            return m_pipelineState;
         }
 
     protected:
-        IndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat);
-        IndexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numIndices,
-            DXGI_FORMAT indexFormat);
-        virtual ~IndexBuffer() = default;
-
-        void CreateIndexBufferView();
+        PipelineStateObject(const D3D12_PIPELINE_STATE_STREAM_DESC& desc);
+        virtual ~PipelineStateObject() = default;
 
     private:
-        size_t      m_numIndices;
-        DXGI_FORMAT m_indexFormat;
-        D3D12_INDEX_BUFFER_VIEW m_indexBufferView;
+        Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
     };
-// }  // namespace dx12lib

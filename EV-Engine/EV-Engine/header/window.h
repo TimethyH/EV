@@ -42,7 +42,7 @@ public:
 
 	UINT GetCurrentBackBufferID() const;
 	// Present the current backbuffer to the screen
-	UINT Present(const Texture& texture);
+	UINT Present(const std::shared_ptr<Texture>& texture = nullptr);
 
 	// Get RTV of current backbuffer
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentRTV() const;
@@ -106,7 +106,7 @@ private:
 	std::weak_ptr<Game> m_pGame;
 
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> m_dxgiSwapChain;
-	Texture m_backBufferTextures[BufferCount];
+	std::shared_ptr<Texture> m_backBufferTextures[BufferCount];
 
 	UINT m_RTVDescriptorSize;
 	UINT m_currentBackBufferIndex;

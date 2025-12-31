@@ -36,11 +36,11 @@ private:
 
 
 	// TODO: add textures
-	Texture m_defaultTexture;
+	std::shared_ptr<Texture> m_defaultTexture;
 
 	RenderTarget m_rendertarget = {};
 
-	RootSignature m_rootSignature = {};
+	std::shared_ptr<RootSignature> m_rootSignature = nullptr;
 
 	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
 
@@ -64,8 +64,8 @@ private:
 	float m_pitch;
 	float m_yaw;
 
-	int m_width;
-	int m_height;
+	uint32_t m_width;
+	uint32_t m_height;
 
 
 	void TransitionResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, Microsoft::WRL::ComPtr<ID3D12Resource> pResource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
