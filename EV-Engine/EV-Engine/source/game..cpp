@@ -26,9 +26,9 @@ bool Game::Initialize()
         return false;
     }
 
-    m_pWindow = Application::Get().CreateRenderWindow(m_name, m_width, m_height, m_VSync);
-    m_pWindow->RegisterCallbacks(shared_from_this());
-    m_pWindow->Show();
+    // m_pWindow = Application::Get().CreateRenderWindow(m_name, m_width, m_height, m_VSync);
+    // m_pWindow->RegisterCallbacks(shared_from_this());
+    // m_pWindow->Show();
 
     return true;
 }

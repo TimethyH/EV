@@ -40,9 +40,33 @@ public:
 	* Since the DynamicDescriptorHeap can't know which function will be used, it must
 	* be passed as an argument to the function.
 	*/
-    void CommitStagedDescriptors(CommandList& commandList, std::function<void(ID3D12GraphicsCommandList*, UINT, D3D12_GPU_DESCRIPTOR_HANDLE)> setFunc);
-    void CommitStagedDescriptorsForDraw(CommandList& commandList);
+    // void CommitStagedDescriptors(CommandList& commandList, std::function<void(ID3D12GraphicsCommandList*, UINT, D3D12_GPU_DESCRIPTOR_HANDLE)> setFunc);
+	void CommitDescriptorTables(CommandList& commandList,
+	                            std::function<void(ID3D12GraphicsCommandList*, UINT, D3D12_GPU_DESCRIPTOR_HANDLE)>
+	                            setFunc);
+	void CommitInlineDescriptors(CommandList& commandList, const D3D12_GPU_VIRTUAL_ADDRESS* bufferLocations,
+	                             uint32_t& bitMask,
+	                             std::function<void(ID3D12GraphicsCommandList*, UINT, D3D12_GPU_VIRTUAL_ADDRESS)>
+	                             setFunc);
+	void CommitStagedDescriptorsForDraw(CommandList& commandList);
     void CommitStagedDescriptorsForDispatch(CommandList& commandList);
+
+
+
+	/**
+	* Stage an inline CBV descriptor.
+	*/
+	void StageInlineCBV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
+
+	/**
+	 * Stage an inline SRV descriptor.
+	 */
+	void StageInlineSRV(uint32_t rootParameterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
+
+	/**
+	 * Stage an inline UAV descriptor.
+	 */
+	void StageInlineUAV(uint32_t rootParamterIndex, D3D12_GPU_VIRTUAL_ADDRESS bufferLocation);
 
 	/**
 	* Copies a single CPU visible descriptor to a GPU visible descriptor heap.
@@ -144,6 +168,9 @@ private:
 	// in the root signature that has changed since the last time the 
 	// descriptors were copied.
 	uint32_t m_staleDescriptorTableBitMask;
+	uint32_t m_staleCBVBitMask;
+	uint32_t m_staleSRVBitMask;
+	uint32_t m_staleUAVBitMask;
 
 	using DescriptorHeapPool = std::queue< Microsoft::WRL::ComPtr<ID3D12DescriptorHeap> >;
 
@@ -155,5 +182,13 @@ private:
 	CD3DX12_CPU_DESCRIPTOR_HANDLE m_currentCPUDescriptorHandle;
 
 	uint32_t m_numFreeHandles;
+
+	// Inline CBV
+	D3D12_GPU_VIRTUAL_ADDRESS m_inlineCBV[m_maxDescriptorTables];
+	// Inline SRV				
+	D3D12_GPU_VIRTUAL_ADDRESS m_inlineSRV[m_maxDescriptorTables];
+	// Inline UAV				
+	D3D12_GPU_VIRTUAL_ADDRESS m_inlineUAV[m_maxDescriptorTables];
+
 
 };

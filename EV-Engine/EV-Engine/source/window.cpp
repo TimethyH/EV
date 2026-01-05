@@ -157,17 +157,17 @@ Window::Window(HWND hWnd, const std::wstring& windowName, uint32_t windowWidth, 
 	,m_screenHeight(windowHeight)
 	,m_VSync(bVSync)
 {
-	Application& app = Application::Get();
-
-	m_isTearingSupported = app.TearingSupported();
-
-	for (int i = 0; i < BufferCount; ++i)
-	{
-		m_backBufferTextures[i]->SetName(L"Backbuffer[" + std::to_wstring(i) + L"]");
-	}
-
-	m_dxgiSwapChain = CreateSwapChain();
-	UpdateRenderTargetViews();
+	// Application& app = Application::Get();
+	//
+	// m_isTearingSupported = app.TearingSupported();
+	//
+	// for (int i = 0; i < BufferCount; ++i)
+	// {
+	// 	m_backBufferTextures[i]->SetName(L"Backbuffer[" + std::to_wstring(i) + L"]");
+	// }
+	//
+	// m_dxgiSwapChain = CreateSwapChain();
+	// UpdateRenderTargetViews();
 }
 
 Window::~Window()

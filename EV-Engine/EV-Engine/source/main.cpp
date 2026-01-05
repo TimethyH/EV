@@ -159,7 +159,7 @@ HWND CreateWindow(const wchar_t* windowClassName, HINSTANCE hInst, const wchar_t
 }
 
 // Query Adapter
-ComPtr<IDXGIAdapter4> GetAdapter(bool useWarp)
+ComPtr<IDXGIAdapter4> CreateAdapter(bool useWarp)
 {
 	ComPtr<IDXGIFactory4> dxgiFactory;
 	UINT createFactoryFlags = 0;
@@ -652,7 +652,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 	::GetWindowRect(g_hWnd, &g_WindowRect);
 
 	// Create DX12 objects.
-	ComPtr<IDXGIAdapter4> dxgiAdapter4 = GetAdapter(g_UseWarp);
+	ComPtr<IDXGIAdapter4> dxgiAdapter4 = CreateAdapter(g_UseWarp);
 	g_device = CreateDevice(dxgiAdapter4);
 	g_CommandQueue = CreateCommandQueue(g_device, D3D12_COMMAND_LIST_TYPE_DIRECT);
 	g_SwapChain = CreateSwapChain(g_hWnd, g_CommandQueue, g_ScreenWidth, g_ScreenHeight, g_NumFrames);
@@ -715,18 +715,18 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 {
 	int retCode = 0;
 
-	// Set the working directory to the path of the executable.
-	WCHAR path[MAX_PATH];
-	HMODULE hModule = GetModuleHandleW(NULL);
-	if (GetModuleFileNameW(hModule, path, MAX_PATH) > 0)
-	{
-		PathRemoveFileSpecW(path);
-		SetCurrentDirectoryW(path);
-	}
+	// // Set the working directory to the path of the executable.
+	// WCHAR path[MAX_PATH];
+	// HMODULE hModule = GetModuleHandleW(NULL);
+	// if (GetModuleFileNameW(hModule, path, MAX_PATH) > 0)
+	// {
+	// 	PathRemoveFileSpecW(path);
+	// 	SetCurrentDirectoryW(path);
+	// }
 
 	Application::Create(hInstance);
 	{
-		std::shared_ptr<Demo> demo = std::make_shared<Demo>(L"EV Engine", 1280, 720);
+		std::shared_ptr<Demo> demo = std::make_shared<Demo>(L"EV Engine", 1920, 1080);
 		retCode = Application::Get().Run(demo);
 	}
 	Application::Destroy();
@@ -744,10 +744,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 [ ] Understand ins and outs of the engine, how it works in its entirety.
 [ ] Find all TODOs in the engine and adres them
 [ ] Add ImGui to the project.
-[ ]
-[ ]
-[ ]
-[ ]
+[ ] Solve Resource State tracking problem
+[ ]	Solve File loading problem ("No interface")
+[ ]	Read chapter 4 of Jeremiah's Tutorial
+[ ] Read the DX12 samples and understand how they do it.
 [ ]
 [ ]
 [ ]

@@ -105,20 +105,24 @@ void ResourceStateTracker::AliasBarrier(const Resource* resourceBefore, const Re
     ResourceBarrier(CD3DX12_RESOURCE_BARRIER::Aliasing(pResourceBefore, pResourceAfter));
 }
 
-void ResourceStateTracker::FlushResourceBarriers(CommandList& commandList)
+void ResourceStateTracker::FlushResourceBarriers(const std::shared_ptr<CommandList>& commandList)
 {
+    assert(commandList);
+
     UINT numBarriers = static_cast<UINT>(m_resourceBarriers.size());
     if (numBarriers > 0)
     {
-        auto d3d12CommandList = commandList.GetGraphicsCommandList();
+        auto d3d12CommandList = commandList->GetCommandList();
         d3d12CommandList->ResourceBarrier(numBarriers, m_resourceBarriers.data());
         m_resourceBarriers.clear();
     }
 }
 
-uint32_t ResourceStateTracker::FlushPendingResourceBarriers(CommandList& commandList)
+uint32_t ResourceStateTracker::FlushPendingResourceBarriers(const std::shared_ptr<CommandList>& commandList)
 {
     assert(m_isLocked);
+    assert(commandList);
+
 
     // Resolve the pending resource barriers by checking the global state of the 
     // (sub)resources. Add barriers if the pending state and the global state do
@@ -172,7 +176,7 @@ uint32_t ResourceStateTracker::FlushPendingResourceBarriers(CommandList& command
     UINT numBarriers = static_cast<UINT>(resourceBarriers.size());
     if (numBarriers > 0)
     {
-        auto d3d12CommandList = commandList.GetGraphicsCommandList();
+        auto d3d12CommandList = commandList->GetCommandList();
         d3d12CommandList->ResourceBarrier(numBarriers, resourceBarriers.data());
     }
 

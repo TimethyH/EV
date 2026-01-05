@@ -89,6 +89,13 @@ public:
 
     // Get the format of the attached depth/stencil buffer.
     DXGI_FORMAT GetDepthStencilFormat() const;
+    DXGI_SAMPLE_DESC GetSampleDesc() const;
+
+    // Reset all textures
+    void Reset()
+    {
+        m_textures = RenderTargetList(AttachmentPoint::NumAttachmentPoints);
+    }
 
 private:
 

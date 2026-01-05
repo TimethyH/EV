@@ -79,10 +79,9 @@ void CommandList::TransitionBarrier(const std::shared_ptr<Resource>& resource, D
 }
 
 
-void CommandList::UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers)
+void CommandList::UAVBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> resource, bool flushBarriers)
 {
-	auto d3d12Resource = resource->GetD3D12Resource();
-	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(d3d12Resource.Get());
+	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(resource.Get());
 
 	m_resourceStateTracker->ResourceBarrier(barrier);
 
@@ -90,6 +89,12 @@ void CommandList::UAVBarrier(const std::shared_ptr<Resource>& resource, bool flu
 	{
 		FlushResourceBarriers();
 	}
+}
+
+void CommandList::UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers)
+{
+	auto d3d12Resource = resource ? resource->GetD3D12Resource() : nullptr;
+	UAVBarrier(d3d12Resource, flushBarriers);
 }
 
 void CommandList::AliasingBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> beforeResource,
@@ -117,7 +122,7 @@ void CommandList::AliasingBarrier(const std::shared_ptr<Resource>& beforeResourc
 
 void CommandList::FlushResourceBarriers()
 {
-	m_resourceStateTracker->FlushResourceBarriers(*this);
+	m_resourceStateTracker->FlushResourceBarriers(shared_from_this());
 }
 
 void CommandList::CopyResource(Microsoft::WRL::ComPtr<ID3D12Resource> dstRes,
@@ -145,7 +150,7 @@ void CommandList::CopyResource(const std::shared_ptr<Resource>& dstRes, const st
 }
 
 void CommandList::ResolveSubresource(const std::shared_ptr<Resource>& dstRes, const std::shared_ptr<Resource>& srcRes,
-	uint32_t dstSubresource, uint32_t srcSubresource) 
+	uint32_t dstSubresource, uint32_t srcSubresource)
 {
 	assert(dstRes && srcRes);
 
@@ -164,7 +169,7 @@ void CommandList::ResolveSubresource(const std::shared_ptr<Resource>& dstRes, co
 
 
 ComPtr<ID3D12Resource> CommandList::CopyBuffer(Buffer& buffer, size_t numElements, size_t elementSize,
-                                               const void* bufferData, D3D12_RESOURCE_FLAGS flags)
+	const void* bufferData, D3D12_RESOURCE_FLAGS flags)
 {
 	auto device = Application::Get().GetDevice();
 
@@ -257,6 +262,7 @@ std::shared_ptr<Texture> CommandList::LoadTextureFromFile(const std::wstring& fi
 {
 	std::shared_ptr<Texture> texture;
 	fs::path                 filePath(fileName);
+	auto path = fs::current_path();
 	if (!fs::exists(filePath))
 	{
 		auto path = fs::current_path();
@@ -346,7 +352,7 @@ std::shared_ptr<Texture> CommandList::LoadTextureFromFile(const std::wstring& fi
 
 		if (subresources.size() < textureResource->GetDesc().MipLevels)
 		{
-			GenerateMips(*texture);
+			GenerateMips(texture);
 		}
 
 		// Add the texture resource to the texture cache.
@@ -356,50 +362,10 @@ std::shared_ptr<Texture> CommandList::LoadTextureFromFile(const std::wstring& fi
 	return texture;
 }
 
-void CommandList::GenerateMips(Texture& texture)
+void CommandList::GenerateMips(const std::shared_ptr<Texture>& texture)
 {
-	// if (m_commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
-	// {
-	//     if (!m_computeCommandList)
-	//     {
-	//         m_computeCommandList = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandList();
-	//     }
-	//     m_computeCommandList->GenerateMips(texture);
-	//     return;
-	// }
-	//
-	// auto resource = texture.GetD3D12Resource();
-	//
-	// // If the texture doesn't have a valid resource, do nothing.
-	// if (!resource) return;
-	// auto resourceDesc = resource->GetDesc();
-	//
-	// // If the texture only has a single mip level (level 0)
-	// // do nothing.
-	// if (resourceDesc.MipLevels == 1) return;
-	// // Currently, only 2D textures are supported.
-	// if (resourceDesc.Dimension != D3D12_RESOURCE_DIMENSION_TEXTURE2D || resourceDesc.DepthOrArraySize != 1)
-	// {
-	//     throw std::exception("Generate Mips only supports 2D Textures.");
-	// }
-	//
-	// if (Texture::IsUAVCompatibleFormat(resourceDesc.Format))
-	// {
-	//     GenerateMips_UAV(texture); // TODO: readd
-	// }
-	// else if (Texture::IsBGRFormat(resourceDesc.Format))
-	// {
-	//     // GenerateMips_BGR(texture); // TODO: readd
-	// }
-	// else if (Texture::IsSRGBFormat(resourceDesc.Format))
-	// {
-	//     // GenerateMips_sRGB(texture);
-	// }
-	// else
-	// {
-	//     throw std::exception("Unsupported texture format for mipmap generation.");
-	// }
-
+	if (!texture)
+		return;
 
 	auto d3d12Device = Application::Get().GetDevice();
 
@@ -407,13 +373,13 @@ void CommandList::GenerateMips(Texture& texture)
 	{
 		if (!m_computeCommandList)
 		{
-			m_computeCommandList = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE).get()->GetCommandList();
+			m_computeCommandList = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandList();
 		}
 		m_computeCommandList->GenerateMips(texture);
 		return;
 	}
 
-	auto d3d12Resource = texture.GetD3D12Resource();
+	auto d3d12Resource = texture->GetD3D12Resource();
 
 	// If the texture doesn't have a valid resource? Do nothing...
 	if (!d3d12Resource)
@@ -441,7 +407,7 @@ void CommandList::GenerateMips(Texture& texture)
 	// If the passed-in resource does not allow for UAV access
 	// then create a staging resource that is used to generate
 	// the mipmap chain.
-	if (!texture.CheckUAVSupport() || (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
+	if (!texture->CheckUAVSupport() || (resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
 	{
 		// Describe an alias resource that is used to copy the original texture.
 		auto aliasDesc = resourceDesc;
@@ -506,9 +472,7 @@ void CommandList::GenerateMips(Texture& texture)
 	}
 
 	// Generate mips with the UAV compatible resource.
-	auto uavTexture = std::make_shared<Texture>(uavResource);
-
-	// auto uavTexture = d3d12Device-> CreateTexture(uavResource);
+	auto uavTexture = Application::Get().CreateTexture(uavResource);
 	GenerateMips_UAV(uavTexture, Texture::IsSRGBFormat(resourceDesc.Format));
 
 	if (aliasResource)
@@ -522,128 +486,11 @@ void CommandList::GenerateMips(Texture& texture)
 
 void CommandList::GenerateMips_UAV(const std::shared_ptr<Texture>& texture, bool isSRGB)
 {
-	// if (!m_generateMipsPSO)
-	// {
-	// 	m_generateMipsPSO = std::make_unique<GenerateMipsPSO>();
-	// }
-	//
-	// auto device = Application::Get().GetDevice();
-	//
-	// auto resource = texture.GetD3D12Resource();
-	// auto resourceDesc = resource->GetDesc();
-	//
-	// auto stagingResource = resource;
-	// Texture stagingTexture(stagingResource);
-	// // If the passed-in resource does not allow for UAV access
-	// // then create a staging resource that is used to generate
-	// // the mipmap chain.
-	// if ((resourceDesc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) == 0)
-	// {
-	// 	auto stagingDesc = resourceDesc;
-	// 	stagingDesc.Flags |= D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-	// 	CD3DX12_HEAP_PROPERTIES heapProp(D3D12_HEAP_TYPE_DEFAULT);
-	// 	ThrowIfFailed(device->CreateCommittedResource(
-	// 		&heapProp,
-	// 		D3D12_HEAP_FLAG_NONE,
-	// 		&stagingDesc,
-	// 		D3D12_RESOURCE_STATE_COPY_DEST,
-	// 		nullptr,
-	// 		IID_PPV_ARGS(&stagingResource)
-	//
-	// 	));
-	//
-	// 	ResourceStateTracker::AddGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
-	//
-	// 	stagingTexture.SetD3D12Resource(stagingResource);
-	// 	stagingTexture.CreateViews();
-	// 	stagingTexture.SetName(L"Generate Mips UAV Staging Texture");
-	//
-	// 	CopyResource(stagingTexture, texture);
-	// }
-	//
-	// m_commandList->SetPipelineState(m_generateMipsPSO->GetPipelineState().Get());
-	// SetComputeRootSignature(*m_generateMipsPSO->GetRootSignature().get());
-	//
-	// GenerateMipsCB generateMipsCB;
-	//
-	// for (uint32_t srcMip = 0; srcMip < resourceDesc.MipLevels - 1u; )
-	// {
-	// 	uint64_t srcWidth = resourceDesc.Width >> srcMip;
-	// 	uint32_t srcHeight = resourceDesc.Height >> srcMip;
-	// 	uint32_t dstWidth = static_cast<uint32_t>(srcWidth >> 1);
-	// 	uint32_t dstHeight = srcHeight >> 1;
-	//
-	// 	// Determine the compute shader to use based on the dimension of the 
-	// 	// source texture.
-	// 	// 0b00(0): Both width and height are even.
-	// 	// 0b01(1): Width is odd, height is even.
-	// 	// 0b10(2): Width is even, height is odd.
-	// 	// 0b11(3): Both width and height are odd.
-	// 	generateMipsCB.SrcDimension = (srcHeight & 1) << 1 | (srcWidth & 1);
-	//
-	// 	// How many mipmap levels to compute this pass (max 4 mips per pass)
-	// 	DWORD mipCount;
-	//
-	// 	// The number of times we can half the size of the texture and get
-	// 	// exactly a 50% reduction in size.
-	// 	// A 1 bit in the width or height indicates an odd dimension.
-	// 	// The case where either the width or the height is exactly 1 is handled
-	// 	// as a special case (as the dimension does not require reduction).
-	// 	_BitScanForward(&mipCount, (dstWidth == 1 ? dstHeight : dstWidth) |
-	// 		(dstHeight == 1 ? dstWidth : dstHeight));
-	// 	// Maximum number of mips to generate is 4.
-	// 	mipCount = std::min<DWORD>(4, mipCount + 1);
-	// 	// Clamp to total number of mips left over.
-	// 	mipCount = (srcMip + mipCount) > resourceDesc.MipLevels ?
-	// 		resourceDesc.MipLevels - srcMip : mipCount;
-	//
-	// 	// Dimensions should not reduce to 0.
-	// 	// This can happen if the width and height are not the same.
-	// 	dstWidth = std::max<DWORD>(1, dstWidth);
-	// 	dstHeight = std::max<DWORD>(1, dstHeight);
-	//
-	// 	generateMipsCB.SrcMipLevel = srcMip;
-	// 	generateMipsCB.NumMipLevels = mipCount;
-	// 	generateMipsCB.TexelSize.x = 1.0f / (float)dstWidth;
-	// 	generateMipsCB.TexelSize.y = 1.0f / (float)dstHeight;
-	//
-	// 	SetCompute32BitConstants(GenerateMips::GenerateMipsCB, generateMipsCB);
-	//
-	// 	SetShaderResourceView(GenerateMips::SrcMip, 0, stagingTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE, srcMip, 1);
-	// 	for (uint32_t mip = 0; mip < mipCount; ++mip)
-	// 	{
-	// 		D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-	// 		uavDesc.Format = resourceDesc.Format;
-	// 		uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2D;
-	// 		uavDesc.Texture2D.MipSlice = srcMip + mip + 1;
-	//
-	// 		SetUnorderedAccessView(GenerateMips::OutMip, mip, stagingTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, srcMip + mip + 1, 1, &uavDesc);
-	// 	}
-	// 	// Pad any unused mip levels with a default UAV. Doing this keeps the DX12 runtime happy.
-	// 	if (mipCount < 4)
-	// 	{
-	// 		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(GenerateMips::OutMip, mipCount, 4 - mipCount, m_generateMipsPSO->GetDefaultUAV());
-	// 	}
-	//
-	// 	Dispatch(Math::DivideByMultiple(dstWidth, 8), Math::DivideByMultiple(dstHeight, 8));
-	//
-	// 	UAVBarrier(stagingTexture);
-	//
-	// 	srcMip += mipCount;
-	// }
-	//
-	// // Copy back to the original texture.
-	// if (stagingResource != resource)
-	// {
-	// 	CopyResource(texture, stagingTexture);
-	// }
-
 	if (!m_generateMipsPSO)
 	{
 		m_generateMipsPSO = std::make_unique<GenerateMipsPSO>();
 	}
 
-	auto device = Application::Get().GetDevice();
 	SetPipelineState(m_generateMipsPSO->GetPipelineState());
 	SetComputeRootSignature(m_generateMipsPSO->GetRootSignature());
 
@@ -661,10 +508,8 @@ void CommandList::GenerateMips_UAV(const std::shared_ptr<Texture>& texture, bool
 		D3D12_SRV_DIMENSION_TEXTURE2D;  // Only 2D textures are supported (this was checked in the calling function).
 	srvDesc.Texture2D.MipLevels = resourceDesc.MipLevels;
 
-	// Used to be create, but Getting it creates one if its not there.
-	// auto srv = texture->GetShaderResourceView(&srvDesc);
 	auto srv = Application::Get().CreateShaderResourceView(texture, &srvDesc);
-	// auto srvResource = texture->GetD3D12Resource();
+
 	for (uint32_t srcMip = 0; srcMip < resourceDesc.MipLevels - 1u; )
 	{
 		uint64_t srcWidth = resourceDesc.Width >> srcMip;
@@ -1273,28 +1118,43 @@ void CommandList::SetShaderResourceView(uint32_t rootParameterIndex, uint32_t de
 		rootParameterIndex, descriptorOffset, 1, srv->GetDescriptorHandle());
 }
 
-void CommandList::SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
-	const std::shared_ptr<Texture>& texture, D3D12_RESOURCE_STATES stateAfter,
-	UINT firstSubresource, UINT numSubresources)
+// void CommandList::SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
+// 	const std::shared_ptr<Texture>& texture, D3D12_RESOURCE_STATES stateAfter,
+// 	UINT firstSubresource, UINT numSubresources)
+// {
+// 	if (texture)
+// 	{
+// 		if (numSubresources < D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+// 		{
+// 			for (uint32_t i = 0; i < numSubresources; ++i)
+// 			{
+// 				TransitionBarrier(texture, stateAfter, firstSubresource + i);
+// 			}
+// 		}
+// 		else
+// 		{
+// 			TransitionBarrier(texture, stateAfter);
+// 		}
+//
+// 		TrackResource(texture);
+//
+// 		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
+// 			rootParameterIndex, descriptorOffset, 1, texture->GetShaderResourceView());
+// 	}
+// }
+
+void CommandList::SetShaderResourceView(uint32_t rootParameterIndex, const std::shared_ptr<Buffer>& buffer,
+	D3D12_RESOURCE_STATES stateAfter, size_t bufferOffset)
 {
-	if (texture)
+	if (buffer)
 	{
-		if (numSubresources < D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
-		{
-			for (uint32_t i = 0; i < numSubresources; ++i)
-			{
-				TransitionBarrier(texture, stateAfter, firstSubresource + i);
-			}
-		}
-		else
-		{
-			TransitionBarrier(texture, stateAfter);
-		}
+		auto d3d12Resource = buffer->GetD3D12Resource();
+		TransitionBarrier(d3d12Resource, stateAfter);
 
-		TrackResource(texture);
+		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageInlineSRV(
+			rootParameterIndex, d3d12Resource->GetGPUVirtualAddress() + bufferOffset);
 
-		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
-			rootParameterIndex, descriptorOffset, 1, texture->GetShaderResourceView());
+		TrackResource(buffer);
 	}
 }
 
@@ -1355,7 +1215,38 @@ void CommandList::SetUnorderedAccessView(uint32_t rootParameterIndex, uint32_t d
 	}
 }
 
+void CommandList::SetUnorderedAccessView(uint32_t rootParameterIndex, const std::shared_ptr<Buffer>& buffer,
+	D3D12_RESOURCE_STATES stateAfter, size_t bufferOffset)
+{
+	if (buffer)
+	{
+		auto d3d12Resource = buffer->GetD3D12Resource();
+		TransitionBarrier(d3d12Resource, stateAfter);
 
+		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageInlineUAV(
+			rootParameterIndex, d3d12Resource->GetGPUVirtualAddress() + bufferOffset);
+
+		TrackResource(buffer);
+	}
+}
+
+
+// void CommandList::SetConstantBufferView(uint32_t rootParameterIndex, uint32_t descriptorOffset,
+// 	const std::shared_ptr<ConstantBufferView>& cbv,
+// 	D3D12_RESOURCE_STATES                      stateAfter)
+// {
+// 	assert(cbv);
+//
+// 	auto constantBuffer = cbv->GetConstantBuffer();
+// 	if (constantBuffer)
+// 	{
+// 		TransitionBarrier(constantBuffer, stateAfter);
+// 		TrackResource(constantBuffer);
+// 	}
+//
+// 	m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
+// 		rootParameterIndex, descriptorOffset, 1, cbv->GetDescriptorHandle());
+// }
 
 void CommandList::SetRenderTarget(const RenderTarget& renderTarget)
 {
@@ -1431,7 +1322,7 @@ void CommandList::Dispatch(uint32_t numGroupsX, uint32_t numGroupsY, uint32_t nu
 	m_commandList->Dispatch(numGroupsX, numGroupsY, numGroupsZ);
 }
 
-bool CommandList::Close(CommandList& pendingCommandList)
+bool CommandList::Close(const std::shared_ptr<CommandList>& pendingCommandList)
 {
 	// Flush any remaining barriers.
 	FlushResourceBarriers();

@@ -67,7 +67,7 @@ class Texture;
 class UploadBuffer;
 class VertexBuffer;
 
-class CommandList
+class CommandList : public std::enable_shared_from_this<CommandList>
 {
 public:
     CommandList(D3D12_COMMAND_LIST_TYPE type);
@@ -84,7 +84,7 @@ public:
     /**
      * Get direct access to the ID3D12GraphicsCommandList2 interface.
      */
-    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetGraphicsCommandList() const
+    Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList() const
     {
         return m_commandList;
     }
@@ -100,7 +100,7 @@ public:
     void TransitionBarrier(const std::shared_ptr<Resource>& resource, D3D12_RESOURCE_STATES stateAfter,
         UINT subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
     void TransitionBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> resource, D3D12_RESOURCE_STATES stateAfter,
-        UINT subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
+                           UINT subresource = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, bool flushBarriers = false);
 
     /**
      * Add a UAV barrier to ensure that any writes to a resource have completed
@@ -112,6 +112,7 @@ public:
      * to be in a particular state can run.
      */
     void UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers = false);
+    void UAVBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> resource, bool flushBarriers);
 
     /**
      * Add an aliasing barrier to indicate a transition between usages of two
@@ -129,12 +130,12 @@ public:
      * Flush any barriers that have been pushed to the command list.
      */
     void FlushResourceBarriers();
-    void CopyResource(Microsoft::WRL::ComPtr<ID3D12Resource> dstRes, Microsoft::WRL::ComPtr<ID3D12Resource> srcRes);
 
     /**
      * Copy resources.
      */
     void CopyResource(const std::shared_ptr<Resource>& dstRes, const std::shared_ptr<Resource>& srcRes);
+    void CopyResource(Microsoft::WRL::ComPtr<ID3D12Resource> dstRes, Microsoft::WRL::ComPtr<ID3D12Resource> srcRes);
 
     /**
      * Resolve a multisampled resource into a non-multisampled resource.
@@ -211,7 +212,7 @@ public:
      * The first subresource is used to generate the mip chain.
      * Mips are automatically generated for textures loaded from files.
      */
-    void GenerateMips(Texture& texture);
+    void GenerateMips(const std::shared_ptr<Texture>& texture);
 
     /**
      * Generate a cubemap texture from a panoramic (equirectangular) texture.
@@ -335,16 +336,18 @@ public:
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
         UINT firstSubresource = 0,
         UINT numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+    void SetShaderResourceView(uint32_t rootParameterIndex, const std::shared_ptr<Buffer>& buffer,
+                               D3D12_RESOURCE_STATES stateAfter, size_t bufferOffset);
 
-    /**
-     * Set an SRV on the graphics pipeline using the default SRV for the texture.
-     */
-    void SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
-        const std::shared_ptr<Texture>& texture,
-        D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-        UINT firstSubresource = 0,
-        UINT numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+    // /**
+    //  * Set an SRV on the graphics pipeline using the default SRV for the texture.
+    //  */
+    // void SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
+    //     const std::shared_ptr<Texture>& texture,
+    //     D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+    //     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+    //     UINT firstSubresource = 0,
+    //     UINT numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
     /**
     * Set the UAV on the graphics pipeline.
@@ -363,6 +366,15 @@ public:
         D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
         UINT                  firstSubresource = 0,
         UINT                  numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+
+    /**
+     * Set an inline UAV.
+     *
+     * Note: Only Buffer resoruces can be used with inline UAV's.
+     */
+    void SetUnorderedAccessView(uint32_t rootParameterIndex, const std::shared_ptr<Buffer>& buffer,
+        D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_UNORDERED_ACCESS,
+        size_t                bufferOffset = 0);
 
 
     /**
@@ -395,7 +407,7 @@ public:
       * @return true if there are any pending resource barriers that need to be
       * processed.
       */
-    bool Close(CommandList& pendingCommandList);
+    bool Close(const std::shared_ptr<CommandList>& pendingCommandList);
     // Just close the command list. This is useful for pending command lists.
     void Close();
 
@@ -423,6 +435,9 @@ public:
     }
 
 protected:
+    // friend class CommandQueue;
+    // friend class DynamicDescriptorHeap;
+    // friend class std::default_delete<CommandList>;
 
 private:
     // void TrackObject(Microsoft::WRL::ComPtr<ID3D12Object> object);
@@ -431,7 +446,7 @@ private:
     // Generate mips for UAV compatible textures.
     void GenerateMips_UAV(const std::shared_ptr<Texture>& texture, bool isSRGB);
     // Generate mips for BGR textures.
-    void GenerateMips_BGR(Texture& texture);
+    // void GenerateMips_BGR(Texture& texture);
     // Generate mips for sRGB textures.
     void GenerateMips_sRGB(Texture& texture);
 

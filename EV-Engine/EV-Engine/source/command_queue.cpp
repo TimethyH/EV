@@ -127,15 +127,15 @@ uint64_t CommandQueue::ExecuteCommandLists(const std::vector<std::shared_ptr<Com
     for (auto commandList : commandLists)
     {
         auto pendingCommandList = GetCommandList();
-        bool hasPendingBarriers = commandList->Close(*pendingCommandList);
+        bool hasPendingBarriers = commandList->Close(pendingCommandList);
         pendingCommandList->Close();
         // If there are no pending barriers on the pending command list, there is no reason to 
         // execute an empty command list on the command queue.
         if (hasPendingBarriers)
         {
-            d3d12CommandLists.push_back(pendingCommandList->GetGraphicsCommandList().Get());
+            d3d12CommandLists.push_back(pendingCommandList->GetCommandList().Get());
         }
-        d3d12CommandLists.push_back(commandList->GetGraphicsCommandList().Get());
+        d3d12CommandLists.push_back(commandList->GetCommandList().Get());
 
         toBeQueued.push_back(pendingCommandList);
         toBeQueued.push_back(commandList);

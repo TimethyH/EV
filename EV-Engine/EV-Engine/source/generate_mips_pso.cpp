@@ -31,16 +31,16 @@ GenerateMipsPSO::GenerateMipsPSO()
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc(GenerateMips::NumRootParameters, rootParameters, 1,
         &linearClampSampler);
+    //
+    // D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+    // featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    // if (FAILED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+    // {
+    //     featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    // }
 
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-    {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
-
-    m_RootSignature.get()->SetRootSignatureDesc(rootSignatureDesc.Desc_1_1);
-    // m_RootSignature = device.CreateRootSignature(rootSignatureDesc.Desc_1_1);
+    // m_RootSignature.get()->SetRootSignatureDesc(rootSignatureDesc.Desc_1_1);
+    m_RootSignature = Application::Get().CreateRootSignature(rootSignatureDesc.Desc_1_1);
 
     // Create the PSO for GenerateMips shader.
     struct PipelineStateStream
@@ -52,10 +52,10 @@ GenerateMipsPSO::GenerateMipsPSO()
     // pipelineStateStream.pRootSignature = m_RootSignature->GetD3D12RootSignature().Get();
     pipelineStateStream.pRootSignature = m_RootSignature->GetRootSignature().Get();
     pipelineStateStream.CS = { g_GenerateMips_CS, sizeof(g_GenerateMips_CS) };
-
-    D3D12_PIPELINE_STATE_STREAM_DESC pipelineDesc = {
-       sizeof(PipelineStateStream), &pipelineStateStream
-    };
+    //
+    // D3D12_PIPELINE_STATE_STREAM_DESC pipelineDesc = {
+    //    sizeof(PipelineStateStream), &pipelineStateStream
+    // };
 
     // ThrowIfFailed(d3d12Device->CreatePipelineState(&pipelineDesc, IID_PPV_ARGS(&m_PipelineState)));
 		

@@ -8,6 +8,9 @@
 #include "root_signature.h"
 #include "Texture.h"
 
+class GUI;
+class SwapChain;
+
 class Demo : public Game
 {
 public:
@@ -99,7 +102,10 @@ private:
 
 	bool m_contentLoaded = false;
 	bool m_shift = false;
+	bool m_vSync = false;
 
 	std::shared_ptr<Window> m_pWindow = nullptr;
+	std::shared_ptr<SwapChain> m_swapChain = nullptr;
+	std::shared_ptr<GUI> m_GUI = nullptr;
 
 };

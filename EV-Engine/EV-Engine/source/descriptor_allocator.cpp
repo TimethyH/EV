@@ -29,34 +29,39 @@ DescriptorAllocation DescriptorAllocator::Allocate(uint32_t numDescriptors)
 	std::lock_guard<std::mutex> lock(m_allocationMutex);
 	DescriptorAllocation allocation;
 
-	for (auto i = m_availableHeaps.begin(); i != m_availableHeaps.end(); ++i)
-	{
-		auto allocationPage = m_heapPool[*i];
+    auto iter = m_availableHeaps.begin();
+    while (iter != m_availableHeaps.end())
+    {
+        auto allocatorPage = m_heapPool[*iter];
 
-		allocation = allocationPage->Allocate(numDescriptors);
+        allocation = allocatorPage->Allocate(numDescriptors);
 
-		if (allocationPage->GetNumFreeHandles() == 0)
-		{
-			i = m_availableHeaps.erase(i);
-		}
+        if (allocatorPage->GetNumFreeHandles() == 0)
+        {
+            iter = m_availableHeaps.erase(iter);
+        }
+        else
+        {
+            ++iter;
+        }
 
-		// A valid allocation has been found.
-		if (!allocation.IsNull())
-		{
-			break;
-		}
+        // A valid allocation has been found.
+        if (!allocation.IsNull())
+        {
+            break;
+        }
+    }
 
-	}
-	// No available heap could satisfy the requested number of descriptors.
-	if (allocation.IsNull())
-	{
-		m_numDescriptorsPerHeap = std::max(m_numDescriptorsPerHeap, numDescriptors);
-		auto newPage = CreateAllocatorPage();
+    // No available heap could satisfy the requested number of descriptors.
+    if (allocation.IsNull())
+    {
+        m_numDescriptorsPerHeap = std::max(m_numDescriptorsPerHeap, numDescriptors);
+        auto newPage = CreateAllocatorPage();
 
-		allocation = newPage->Allocate(numDescriptors);
-	}
+        allocation = newPage->Allocate(numDescriptors);
+    }
 
-	return allocation;
+    return allocation;
 }
 
 void DescriptorAllocator::ReleaseStaleDescriptors()

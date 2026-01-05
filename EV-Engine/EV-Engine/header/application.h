@@ -7,7 +7,11 @@
 #include <string>
 
 #include "descriptor_allocation.h"
+#include "events.h"
+#include "GUI.h"
+#include "render_target.h"
 
+class SwapChain;
 class UnorderedAccessView;
 class Resource;
 class ShaderResourceView;
@@ -20,6 +24,13 @@ class Window;
 class Game;
 class CommandQueue;
 class PipelineStateObject;
+
+
+/**
+ * Windows message handler.
+ */
+using WndProcEvent = del::Delegate<LRESULT(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)>;
+
 
 class Application
 {
@@ -95,6 +106,7 @@ public:
 		const D3D12_CLEAR_VALUE* clearValue = nullptr);
 	std::shared_ptr<Texture> CreateTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
 		const D3D12_CLEAR_VALUE* clearValue = nullptr);
+	std::shared_ptr<GUI> CreateGUI(HWND hWnd, const RenderTarget& renderTarget);
 
 	std::shared_ptr<IndexBuffer> CreateIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat);
 	std::shared_ptr<IndexBuffer> CreateIndexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numIndices,
@@ -134,12 +146,21 @@ public:
 		return m_highestRootSignatureVersion;
 	}
 
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter();
+
+	std::shared_ptr<SwapChain> CreateSwapchain(HWND hWnd, DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R10G10B10A2_UNORM);
+
+	/**
+	 * Invoked when a message is sent to a window.
+	 */
+	WndProcEvent wndProcHandler;
+
 protected:
 	Application(HINSTANCE hInstance);
 	virtual ~Application();
 	void Initialize();
 
-	Microsoft::WRL::ComPtr<IDXGIAdapter4> GetAdapter(bool bUseWarp);
+	Microsoft::WRL::ComPtr<IDXGIAdapter4> CreateAdapter(bool bUseWarp);
 	Microsoft::WRL::ComPtr<ID3D12Device13> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
 	bool CheckTearingSupport();
 	std::shared_ptr<PipelineStateObject>

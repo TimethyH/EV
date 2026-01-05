@@ -33,6 +33,7 @@
     <ClCompile Include="source\dynamic_descriptor_heap.cpp" />
     <ClCompile Include="source\game..cpp" />
     <ClCompile Include="source\generate_mips_pso.cpp" />
+    <ClCompile Include="source\GUI.cpp" />
     <ClCompile Include="source\index_buffer.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\pipeline_state_object.cpp" />
@@ -42,6 +43,7 @@
     <ClCompile Include="source\resource_state_tracker.cpp" />
     <ClCompile Include="source\root_signature.cpp" />
     <ClCompile Include="source\shader_resource_view.cpp" />
+    <ClCompile Include="source\swapchain.cpp" />
     <ClCompile Include="source\texture.cpp" />
     <ClCompile Include="source\unordered_access_view.cpp" />
     <ClCompile Include="source\upload_buffer.cpp" />
@@ -68,6 +70,11 @@
     <ClCompile Include="thirdparty\DirectXTex\DirectXTexTGA.cpp" />
     <ClCompile Include="thirdparty\DirectXTex\DirectXTexUtil.cpp" />
     <ClCompile Include="thirdparty\DirectXTex\DirectXTexWIC.cpp" />
+    <ClCompile Include="thirdparty\imgui\imgui.cpp" />
+    <ClCompile Include="thirdparty\imgui\imgui_demo.cpp" />
+    <ClCompile Include="thirdparty\imgui\imgui_draw.cpp" />
+    <ClCompile Include="thirdparty\imgui\imgui_impl_win32.cpp" />
+    <ClCompile Include="thirdparty\imgui\imgui_widgets.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\buffer.h" />
@@ -85,9 +92,11 @@
     <ClInclude Include="header\events.h" />
     <ClInclude Include="header\game.h" />
     <ClInclude Include="header\generate_mips_pso.h" />
+    <ClInclude Include="header\GUI.h" />
     <ClInclude Include="header\helpers.h" />
     <ClInclude Include="header\index_buffer.h" />
     <ClInclude Include="header\key_codes.h" />
+    <ClInclude Include="header\optional.hpp" />
     <ClInclude Include="header\pipeline_state_object.h" />
     <ClInclude Include="header\render_target.h" />
     <ClInclude Include="header\mesh.h" />
@@ -95,6 +104,8 @@
     <ClInclude Include="header\resource_state_tracker.h" />
     <ClInclude Include="header\root_signature.h" />
     <ClInclude Include="header\shader_resource_view.h" />
+    <ClInclude Include="header\signals.hpp" />
+    <ClInclude Include="header\swapchain.h" />
     <ClInclude Include="header\texture.h" />
     <ClInclude Include="header\texture_usage.h" />
     <ClInclude Include="header\thread_safe_queue.h" />
@@ -103,6 +114,8 @@
     <ClInclude Include="header\vertex_buffer.h" />
     <ClInclude Include="header\window.h" />
     <ClInclude Include="shaders\GenerateMips_CS.h" />
+    <ClInclude Include="shaders\imGUI_PS.h" />
+    <ClInclude Include="shaders\imGUI_VS.h" />
     <ClInclude Include="thirdparty\DirectXTex\BC.h" />
     <ClInclude Include="thirdparty\DirectXTex\BCDirectCompute.h" />
     <ClInclude Include="thirdparty\DirectXTex\d3dx12.h" />
@@ -111,6 +124,13 @@
     <ClInclude Include="thirdparty\DirectXTex\DirectXTexP.h" />
     <ClInclude Include="thirdparty\DirectXTex\Filters.h" />
     <ClInclude Include="thirdparty\DirectXTex\scoped.h" />
+    <ClInclude Include="thirdparty\imgui\imconfig.h" />
+    <ClInclude Include="thirdparty\imgui\imgui.h" />
+    <ClInclude Include="thirdparty\imgui\imgui_impl_win32.h" />
+    <ClInclude Include="thirdparty\imgui\imgui_internal.h" />
+    <ClInclude Include="thirdparty\imgui\imstb_rectpack.h" />
+    <ClInclude Include="thirdparty\imgui\imstb_textedit.h" />
+    <ClInclude Include="thirdparty\imgui\imstb_truetype.h" />
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\pixel.hlsl">
@@ -194,20 +214,20 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>

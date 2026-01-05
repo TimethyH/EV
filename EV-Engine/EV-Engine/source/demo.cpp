@@ -9,6 +9,7 @@
 
 #include "dx12_includes.h"
 #include "render_target.h"
+#include "swapchain.h"
 using namespace DirectX;
 
 struct Matrices
@@ -91,9 +92,12 @@ Demo::Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSyn
 	, m_yaw(0)
 	, m_width(width)
 	, m_height(height)
+	, m_vSync(bVSync)
     , m_contentLoaded(false)
 	// TODO: Add VSync initialization
 {
+    m_pWindow = Application::Get().CreateRenderWindow(name, width, height);
+
     XMVECTOR cameraPos = XMVectorSet(0, 5, -20, 1);
     XMVECTOR cameraTarget = XMVectorSet(0, 5, 0, 1);
     XMVECTOR cameraUp = XMVectorSet(0, 1, 0, 0);
@@ -316,7 +320,8 @@ void Demo::OnRender(RenderEventArgs& e)
     
     commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, cubeMatrix);
     commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, XMFLOAT4(1.0f,1.0f,1.0f,1.0f));
-    commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    // TODO: READD !!!
+	// commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     m_cubeMesh->Draw(*commandList);
 
@@ -494,14 +499,25 @@ struct PipelineStateStream
 
 bool Demo::LoadContent()
 {
-    auto device = Application::Get().GetDevice();
-    auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto& app = Application::Get();
+    auto device = app.GetDevice();
+    
+
+    // Create Swapchain
+    m_swapChain = app.CreateSwapchain(m_pWindow->GetWindowHandle(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    m_swapChain->SetVSync(m_vSync);
+
+    m_GUI = app.CreateGUI(m_pWindow->GetWindowHandle(), m_swapChain->GetRenderTarget());
+   
+    // This magic here allows ImGui to process window messages.(TODO: not sure how this works yet)
+	app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
+
+    auto commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue->GetCommandList();
 
+	m_cubeMesh = Mesh::CreateCube(*commandList);
 
-    m_cubeMesh = Mesh::CreateCube(*commandList);
-
-    auto whiteTexture = commandList->LoadTextureFromFile(L"../../assets/white.png", true);
+    auto whiteTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 
     commandQueue->ExecuteCommandList(commandList);
 
@@ -544,7 +560,7 @@ bool Demo::LoadContent()
     rootSignatureDesc.Init_1_1(RootParameters::NUM_PARAMETERS, rootParameters, 1, &linearRepeatSampler, rootFlags);
 	
     // m_rootSignature.SetRootSignatureDesc(rootSignatureDesc.Desc_1_1, featureData.HighestVersion);
-    m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDesc.Desc_1_1);
+    m_rootSignature = app.CreateRootSignature(rootSignatureDesc.Desc_1_1);
 	
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
@@ -553,7 +569,7 @@ bool Demo::LoadContent()
     rtvFormats.NumRenderTargets = 1;
     rtvFormats.RTFormats[0] = backBufferFormat;
 
-    DXGI_SAMPLE_DESC sampleDesc = Application::Get().GetMultisampleQualityLevels(backBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
+    DXGI_SAMPLE_DESC sampleDesc = app.GetMultisampleQualityLevels(backBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
     
 	pipelineStateStream.rootSignature = m_rootSignature->GetRootSignature().Get();
     pipelineStateStream.depthFormat = depthBufferFormat;

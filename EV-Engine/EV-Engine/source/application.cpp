@@ -7,9 +7,11 @@
 
 #include "descriptor_allocation.h"
 #include "descriptor_allocator.h"
+#include "GUI.h"
 #include "pipeline_state_object.h"
 #include "root_signature.h"
 #include "shader_resource_view.h"
+#include "swapchain.h"
 #include "unordered_access_view.h"
 
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
@@ -61,6 +63,17 @@ public:
     virtual ~MakeShaderResourceView() {}
 };
 
+class MakeGUI : public GUI
+{
+public:
+    MakeGUI(HWND hWnd, const RenderTarget& renderTarget)
+        : GUI(hWnd, renderTarget)
+    {
+    }
+
+    virtual ~MakeGUI() {}
+};
+
 //
 // class MakePipelineStateObject : public PipelineStateObject
 // {
@@ -81,6 +94,17 @@ public:
     }
 
     virtual ~MakeRootSignature() {}
+};
+
+class MakeSwapChain : public SwapChain
+{
+public:
+    MakeSwapChain(HWND hWnd, DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R10G10B10A2_UNORM)
+        : SwapChain(hWnd, backBufferFormat)
+    {
+    }
+
+    virtual ~MakeSwapChain() {}
 };
 
 
@@ -217,7 +241,7 @@ void Application::Initialize()
     debugInterface->EnableDebugLayer();
 #endif
 
-    m_dxgiAdapter = GetAdapter(false);
+    m_dxgiAdapter = CreateAdapter(false);
     if (m_dxgiAdapter)
     {
         m_device = CreateDevice(m_dxgiAdapter);
@@ -254,7 +278,7 @@ void Application::Initialize()
     }
 }
 
-Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::GetAdapter(bool bUseWarp)
+Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::CreateAdapter(bool bUseWarp)
 {
     ComPtr<IDXGIFactory4> dxgiFactory;
     UINT createFactoryFlags = 0;
@@ -296,6 +320,20 @@ Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::GetAdapter(bool bUseWarp)
 
     return dxgiAdapter4;
 }
+
+Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::GetAdapter()
+{
+    return m_dxgiAdapter;
+}
+
+std::shared_ptr<SwapChain> Application::CreateSwapchain(HWND hWnd, DXGI_FORMAT backBufferFormat)
+{
+    std::shared_ptr<SwapChain> swapChain;
+    swapChain = std::make_shared<MakeSwapChain>(hWnd, backBufferFormat);
+
+    return swapChain;
+}
+
 Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter)
 {
     ComPtr<ID3D12Device13> d3d12Device13;
@@ -444,7 +482,8 @@ std::shared_ptr<Window> Application::GetWindow(const std::wstring& windowName)
 
 int Application::Run(std::shared_ptr<Game> pGame)
 {
-    if (!pGame->Initialize()) return 1;
+    Initialize();
+    // if (!pGame->Initialize()) return 1;
     if (!pGame->LoadContent()) return 2;
 
     MSG msg = { 0 };
@@ -810,4 +849,11 @@ std::shared_ptr<Texture> Application::CreateTexture(Microsoft::WRL::ComPtr<ID3D1
     std::shared_ptr<Texture> texture = std::make_shared<MakeTexture>(resource, clearValue);
 
     return texture;
+}
+
+std::shared_ptr<GUI> Application::CreateGUI(HWND hWnd, const RenderTarget& renderTarget)
+{
+    std::shared_ptr<GUI> gui = std::make_shared<MakeGUI>(hWnd, renderTarget);
+
+    return gui;
 }
