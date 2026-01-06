@@ -131,8 +131,14 @@ void CommandList::CopyResource(Microsoft::WRL::ComPtr<ID3D12Resource> dstRes,
 	assert(dstRes);
 	assert(srcRes);
 
-	TransitionBarrier(dstRes, D3D12_RESOURCE_STATE_COPY_DEST);
-	TransitionBarrier(srcRes, D3D12_RESOURCE_STATE_COPY_SOURCE);
+	// Copy queues can only transition to/from COMMON state
+	// Direct/Compute queues can use COPY_DEST state
+	TransitionBarrier(dstRes, m_commandListType == D3D12_COMMAND_LIST_TYPE_COPY ?
+		D3D12_RESOURCE_STATE_COMMON :
+		D3D12_RESOURCE_STATE_COPY_DEST);
+	TransitionBarrier(srcRes, m_commandListType == D3D12_COMMAND_LIST_TYPE_COPY ?
+		D3D12_RESOURCE_STATE_COMMON :
+		D3D12_RESOURCE_STATE_COPY_SOURCE);
 
 	FlushResourceBarriers();
 
@@ -962,7 +968,7 @@ void CommandList::SetVertexBuffers(uint32_t                                     
 		}
 	}
 
-	m_commandList->IASetVertexBuffers(startSlot, views.size(), views.data());
+	m_commandList->IASetVertexBuffers(startSlot, static_cast<UINT>(views.size()), views.data());
 }
 
 void CommandList::SetVertexBuffer(uint32_t slot, const std::shared_ptr<VertexBuffer>& vertexBuffer)
