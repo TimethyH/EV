@@ -171,16 +171,16 @@ private:
         }
 
         // Set a subresource to a particular state.
-        void SetSubresourceState(UINT subresource, D3D12_RESOURCE_STATES State)
+        void SetSubresourceState(UINT subresource, D3D12_RESOURCE_STATES _state)
         {
             if (subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
             {
-                state = State;
+                state = _state;
                 subresourceState.clear();
             }
             else
             {
-                subresourceState[subresource] = state;
+                subresourceState[subresource] = _state;
             }
         }
 

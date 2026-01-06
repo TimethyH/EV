@@ -65,22 +65,22 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
     auto fontTextureDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height);
 
     // TODO: Doesnt work.. resource states break
-    // m_fontTexture = app.CreateTexture(fontTextureDesc);
-    // m_fontTexture->SetName(L"ImGui Font Texture");
-    // m_fontSRV = app.CreateShaderResourceView(m_fontTexture);
-    //
-    // size_t rowPitch, slicePitch;
-    // GetSurfaceInfo(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, &slicePitch, &rowPitch, nullptr);
-    //
-    // D3D12_SUBRESOURCE_DATA subresourceData;
-    // subresourceData.pData = pixelData;
-    // subresourceData.RowPitch = rowPitch;
-    // subresourceData.SlicePitch = slicePitch;
-    //
-    // commandList->CopyTextureSubresource(m_fontTexture, 0, 1, &subresourceData);
-    // commandList->GenerateMips(m_fontTexture);
-    //
-    // commandQueue->ExecuteCommandList(commandList);
+     m_fontTexture = app.CreateTexture(fontTextureDesc);
+     m_fontTexture->SetName(L"ImGui Font Texture");
+     m_fontSRV = app.CreateShaderResourceView(m_fontTexture);
+    
+     size_t rowPitch, slicePitch;
+     GetSurfaceInfo(width, height, DXGI_FORMAT_R8G8B8A8_UNORM, &slicePitch, &rowPitch, nullptr);
+    
+     D3D12_SUBRESOURCE_DATA subresourceData;
+     subresourceData.pData = pixelData;
+     subresourceData.RowPitch = rowPitch;
+     subresourceData.SlicePitch = slicePitch;
+    
+     commandList->CopyTextureSubresource(m_fontTexture, 0, 1, &subresourceData);
+     commandList->GenerateMips(m_fontTexture);
+    
+     commandQueue->ExecuteCommandList(commandList);
 
     auto d3d12Device = app.GetDevice();
 
