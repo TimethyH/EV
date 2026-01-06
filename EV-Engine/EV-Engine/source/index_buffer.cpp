@@ -29,7 +29,7 @@ IndexBuffer::IndexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
 
 void IndexBuffer::CreateIndexBufferView()
 {
-    UINT bufferSize = m_numIndices * (m_indexFormat == DXGI_FORMAT_R16_UINT ? 2 : 4);
+    UINT bufferSize = static_cast<UINT>(m_numIndices * (m_indexFormat == DXGI_FORMAT_R16_UINT ? 2 : 4));
 
     m_indexBufferView.BufferLocation = m_resource->GetGPUVirtualAddress();
     m_indexBufferView.SizeInBytes = bufferSize;
