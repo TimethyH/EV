@@ -170,14 +170,11 @@ Application::Application(HINSTANCE hInst)
     // be rendered in a DPI sensitive fashion.
     SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
-#if defined(_DEBUG)
-    // Always enable the debug layer before doing anything DX12 related
-    // so all possible errors generated while creating DX12 objects
-    // are caught by the debug layer.
-    ComPtr<ID3D12Debug> debugInterface;
-    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)));
-    debugInterface->EnableDebugLayer();
-#endif
+    // Initializes the COM library for use by the calling thread, sets the thread's concurrency model, and creates a new
+    // apartment for the thread if one is required.
+    // This must be called at least once for each thread that uses the COM library.
+    // @see https://docs.microsoft.com/en-us/windows/win32/api/objbase/nf-objbase-coinitialize
+    ThrowIfFailed(CoInitialize(nullptr));
 
     WNDCLASSEXW wndClass = { 0 };
 
@@ -203,7 +200,6 @@ void Application::Create(HINSTANCE hInst)
     if (!gs_pSingelton)
     {
         gs_pSingelton = new Application(hInst);
-        gs_pSingelton->Initialize();
     }
 }
 
