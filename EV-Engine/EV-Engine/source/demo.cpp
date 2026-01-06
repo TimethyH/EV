@@ -2,6 +2,8 @@
 #include "demo.h"
 #include "demo.h"
 
+#include <Shlwapi.h>
+
 #include "application.h"
 #include "command_queue.h"
 #include "helpers.h"
@@ -194,6 +196,14 @@ void Demo::OnResize(ResizeEventArgs& e)
         m_rendertarget.Resize(m_width, m_height);
         // ResizeDepthBuffer(e.windowWidth, e.windowHeight);
     }
+}
+
+std::wstring Demo::GetModulePath()
+{
+    WCHAR buffer[MAX_PATH];
+    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    PathRemoveFileSpecW(buffer);
+    return std::wstring(buffer);
 }
 
 void Demo::OnUpdate(UpdateEventArgs& e)
@@ -521,14 +531,18 @@ bool Demo::LoadContent()
 
     commandQueue->ExecuteCommandList(commandList);
 
+    // Get the folder of the running executable.
+    std::wstring parentPath = GetModulePath();
+    std::wstring vertexShader = parentPath + L"/vertex.cso";
+    std::wstring pixelShader = parentPath + L"/pixel.cso";
 
     // Load Vertex Shader
     ComPtr<ID3DBlob> vertexShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(L"vertex.cso", &vertexShaderBlob));
+    ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
 
     // Load Pixel Shader
     ComPtr<ID3DBlob> pixelShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(L"pixel.cso", &pixelShaderBlob));
+    ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
 
     // Root Signature
     D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};

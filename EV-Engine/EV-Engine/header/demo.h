@@ -30,6 +30,11 @@ protected:
 	void OnResize(ResizeEventArgs& e) override;
 
 private:
+	/// <summary>
+	/// Gets the file path of the currently running executable.
+	/// </summary>
+	/// <returns>A wide string containing the full path to the running executable.</returns>
+	static std::wstring GetModulePath();
 
 	std::unique_ptr<Mesh> m_cubeMesh;
 	std::unique_ptr<Mesh> m_sphereMesh;
