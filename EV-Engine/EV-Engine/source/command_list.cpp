@@ -874,8 +874,19 @@ void CommandList::CopyTextureSubresource(const std::shared_ptr<Texture>& texture
 
 	if (destinationResource)
 	{
-		// Resource must be in the copy-destination state.
-		TransitionBarrier(texture, D3D12_RESOURCE_STATE_COPY_DEST);
+		// Copy queues can only transition to/from COMMON state
+		// Direct/Compute queues can use COPY_DEST state
+		if (m_commandListType == D3D12_COMMAND_LIST_TYPE_COPY)
+		{
+			// On Copy queues, resources must remain in COMMON state
+			// The COMMON state is implicitly compatible with copy operations
+			TransitionBarrier(texture, D3D12_RESOURCE_STATE_COMMON);
+		}
+		else
+		{
+			// On Direct/Compute queues, we can use the optimal COPY_DEST state
+			TransitionBarrier(texture, D3D12_RESOURCE_STATE_COPY_DEST);
+		}
 		FlushResourceBarriers();
 
 		UINT64 requiredSize =
