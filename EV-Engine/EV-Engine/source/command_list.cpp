@@ -1418,6 +1418,7 @@ void CommandList::Reset()
 	}
 
 	m_rootSignature = nullptr;
+	m_pipelineState = nullptr;
 	m_computeCommandList = nullptr;
 }
 

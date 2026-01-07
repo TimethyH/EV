@@ -24,7 +24,7 @@ protected:
 	friend class Window;
 	
 	virtual void OnUpdate(UpdateEventArgs& e);
-	virtual void OnRender(RenderEventArgs& e);
+	virtual void OnRender();
 	virtual void OnKeyPress(KeyEventArgs& e);
 	virtual void OnKeyRelease(KeyEventArgs& e);
 	virtual void OnMouseMove(MouseMotionEventArgs& e);

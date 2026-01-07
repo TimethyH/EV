@@ -11,6 +11,7 @@
 #include "window.h"
 
 #include "dx12_includes.h"
+#include "material.h"
 #include "render_target.h"
 #include "Scene.h"
 #include "scene_visitor.h"
@@ -214,9 +215,9 @@ void Demo::OnUpdate(UpdateEventArgs& e)
     static uint64_t frameCount = 0;
     static double totalTime = 0.0;
 
-    super::OnUpdate(e);
+    // super::OnUpdate(e);
 
-    totalTime += e.elapsedTime;
+    totalTime += e.deltaTime;
     frameCount++;
 
     if (totalTime > 1.0)
@@ -231,10 +232,12 @@ void Demo::OnUpdate(UpdateEventArgs& e)
         totalTime = 0.0;
     }
 
+    m_swapChain->WaitForSwapChain();
+
     // Update Camera
     float speedMultiplier = (m_shift ? 16.0f : 4.0f);
-    XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.elapsedTime);
-    XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.elapsedTime);
+    XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
+    XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     m_camera.Translate(cameraTranslate, Space::LOCAL);
     m_camera.Translate(cameraPan, Space::LOCAL);
 
@@ -243,6 +246,7 @@ void Demo::OnUpdate(UpdateEventArgs& e)
 
     XMMATRIX viewMatrix = m_camera.GetViewMatrix();
 
+    OnRender();
     
     //
     // // Update Model Matrix
@@ -289,9 +293,9 @@ void Demo::ClearRTV(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandL
     pCommandList->ClearRenderTargetView(RTV, clearColor, 0, nullptr);
 }
 
-void Demo::OnRender(RenderEventArgs& e)
+void Demo:: OnRender()
 {
-    super::OnRender(e);
+    // super::OnRender(e);
 
     auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue.GetCommandList();
@@ -337,8 +341,8 @@ void Demo::OnRender(RenderEventArgs& e)
     Matrices cubeMatrix;
     ComputeMatrices(worldMatrix, viewMatrix, viewProjectionMatrix, cubeMatrix);
     
-    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, cubeMatrix);
-    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, XMFLOAT4(1.0f,1.0f,1.0f,1.0f));
+    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATRICES_CB, cubeMatrix);
+    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, Material::White);
 	commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
     m_cubeMesh->Accept(visitor);
@@ -564,7 +568,7 @@ bool Demo::LoadContent()
 
 	m_cubeMesh = commandList->CreateCube();
 
-    auto whiteTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
+    m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 
     commandQueue.ExecuteCommandList(commandList);
 
@@ -671,7 +675,7 @@ bool Demo::LoadContent()
 
 
     commandQueue.Flush();
-
+	m_pWindow->RegisterCallbacks(shared_from_this());
     m_pWindow->Show();
 
     return true;

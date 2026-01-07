@@ -302,7 +302,7 @@ void Window::OnUpdate(UpdateEventArgs& e)
 
 	if (auto pGame = m_pGame.lock())
 	{
-		m__frameCounter++;
+		m_frameCounter++;
 
 		UpdateEventArgs updateEventArgs(m_updateClock.GetDeltaSeconds(), m_updateClock.GetTotalSeconds());
 		pGame->OnUpdate(updateEventArgs);
@@ -316,7 +316,7 @@ void Window::OnRender(RenderEventArgs&)
 	if (auto pGame = m_pGame.lock())
 	{
 		RenderEventArgs renderEventArgs(m_renderClock.GetDeltaSeconds(), m_renderClock.GetTotalSeconds());
-		pGame->OnRender(renderEventArgs);
+		pGame->OnRender();
 	}
 }
 

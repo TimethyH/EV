@@ -44,7 +44,7 @@ void Game::OnUpdate(UpdateEventArgs& e)
 
 }
 
-void Game::OnRender(RenderEventArgs& e)
+void Game::OnRender()
 {
 
 }

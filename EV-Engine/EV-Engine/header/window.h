@@ -51,6 +51,9 @@ public:
 	bool Initialize();
 
 	UpdateEvent Update;
+
+	// Register a game to this window
+	void RegisterCallbacks(std::shared_ptr<Game> pGame);
 	
 protected:
 	Window() = delete;
@@ -62,8 +65,6 @@ protected:
 	friend class Game;
 	friend class Application;
 
-	// Register a game to this window
-	void RegisterCallbacks(std::shared_ptr<Game> pGame);
 
 	// Update and Draw are only called by he application
 	virtual void OnUpdate(UpdateEventArgs& e);
@@ -103,7 +104,7 @@ private:
 
 	HighResolutionClock m_updateClock = {};
 	HighResolutionClock m_renderClock = {};
-	uint64_t m__frameCounter = {};
+	uint64_t m_frameCounter = {};
 
 	std::weak_ptr<Game> m_pGame;
 

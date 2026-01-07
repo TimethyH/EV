@@ -24,7 +24,7 @@ public:
 
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
-	void OnRender(RenderEventArgs& e) override;
+	void OnRender() override;
 	void OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget);
 	void OnKeyPress(KeyEventArgs& e) override;
 	void OnKeyRelease(KeyEventArgs& e) override;

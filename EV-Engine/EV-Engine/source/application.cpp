@@ -414,9 +414,9 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
     {
         // TODO: Readd these
 		// Currently removed because it breaks when copying textures.
-        // pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-        // pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-        // pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
 
         // Suppress whole categories of messages
         //D3D12_MESSAGE_CATEGORY Categories[] = {};
@@ -699,13 +699,13 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         {
         case WM_PAINT:
         {
-            ++Application::m_frameCount;
+            // ++Application::m_frameCount;
             // Delta time will be filled in by the Window.
             UpdateEventArgs updateEventArgs(0.0f, 0.0f);
             pWindow->OnUpdate(updateEventArgs);
-            RenderEventArgs renderEventArgs(0.0f, 0.0f);
-            // Delta time will be filled in by the Window.
-            pWindow->OnRender(renderEventArgs);
+            // RenderEventArgs renderEventArgs(0.0f, 0.0f);
+            // // Delta time will be filled in by the Window.
+            // pWindow->OnRender(renderEventArgs);
         }
         break;
         case WM_SYSKEYDOWN:

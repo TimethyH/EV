@@ -67,6 +67,10 @@ public:
 	EventArgs() {}
 };
 
+// Define the default event.
+using Event = del::Delegate<void(EventArgs&)>;
+
+
 class KeyEventArgs : public EventArgs
 {
 public:
@@ -210,12 +214,12 @@ class UpdateEventArgs : EventArgs
 public:
 	typedef EventArgs base;
 	UpdateEventArgs(double fDeltaTime, double fTotalTime)
-		:elapsedTime(fDeltaTime)
+		:deltaTime(fDeltaTime)
 		,totalTime(fTotalTime)
 	{}
 
 
-	double elapsedTime = 0.0;
+	double deltaTime = 0.0;
 	double totalTime = 0.0;
 };
 

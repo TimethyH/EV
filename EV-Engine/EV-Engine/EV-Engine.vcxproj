@@ -19,6 +19,7 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="shaders\game_framework.cpp" />
     <ClCompile Include="source\buffer.cpp" />
     <ClCompile Include="source\camera.cpp" />
     <ClCompile Include="source\clock.cpp" />
@@ -75,6 +76,8 @@
     <ClInclude Include="header\dynamic_descriptor_heap.h" />
     <ClInclude Include="header\events.h" />
     <ClInclude Include="header\game.h" />
+    <ClInclude Include="header\game_framework.h" />
+    <ClInclude Include="header\game_framework_includes.h" />
     <ClInclude Include="header\generate_mips_pso.h" />
     <ClInclude Include="header\GUI.h" />
     <ClInclude Include="header\helpers.h" />
