@@ -416,3 +416,6 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+# Libs that are too big
+EV-Engine/EV-Engine/lib/assimp-vc145-mtd.lib
