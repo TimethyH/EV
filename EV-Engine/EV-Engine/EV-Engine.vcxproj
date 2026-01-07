@@ -36,40 +36,24 @@
     <ClCompile Include="source\GUI.cpp" />
     <ClCompile Include="source\index_buffer.cpp" />
     <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\material.cpp" />
     <ClCompile Include="source\pipeline_state_object.cpp" />
     <ClCompile Include="source\render_target.cpp" />
     <ClCompile Include="source\mesh.cpp" />
     <ClCompile Include="source\resource.cpp" />
     <ClCompile Include="source\resource_state_tracker.cpp" />
     <ClCompile Include="source\root_signature.cpp" />
+    <ClCompile Include="source\scene.cpp" />
+    <ClCompile Include="source\scene_node.cpp" />
+    <ClCompile Include="source\scene_visitor.cpp" />
     <ClCompile Include="source\shader_resource_view.cpp" />
     <ClCompile Include="source\swapchain.cpp" />
     <ClCompile Include="source\texture.cpp" />
     <ClCompile Include="source\unordered_access_view.cpp" />
     <ClCompile Include="source\upload_buffer.cpp" />
     <ClCompile Include="source\vertex_buffer.cpp" />
+    <ClCompile Include="source\vertex_types.cpp" />
     <ClCompile Include="source\window.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\BC.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\BC4BC5.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\BC6HBC7.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\BCDirectCompute.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexCompress.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexCompressGPU.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexConvert.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexD3D11.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexD3D12.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexDDS.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexFlipRotate.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexHDR.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexImage.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexMipmaps.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexMisc.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexNormalMaps.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexPMAlpha.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexResize.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexTGA.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexUtil.cpp" />
-    <ClCompile Include="thirdparty\DirectXTex\DirectXTexWIC.cpp" />
     <ClCompile Include="thirdparty\imgui\imgui.cpp" />
     <ClCompile Include="thirdparty\imgui\imgui_demo.cpp" />
     <ClCompile Include="thirdparty\imgui\imgui_draw.cpp" />
@@ -96,6 +80,7 @@
     <ClInclude Include="header\helpers.h" />
     <ClInclude Include="header\index_buffer.h" />
     <ClInclude Include="header\key_codes.h" />
+    <ClInclude Include="header\material.h" />
     <ClInclude Include="header\optional.hpp" />
     <ClInclude Include="header\pipeline_state_object.h" />
     <ClInclude Include="header\render_target.h" />
@@ -103,6 +88,9 @@
     <ClInclude Include="header\resource.h" />
     <ClInclude Include="header\resource_state_tracker.h" />
     <ClInclude Include="header\root_signature.h" />
+    <ClInclude Include="header\scene.h" />
+    <ClInclude Include="header\scene_node.h" />
+    <ClInclude Include="header\scene_visitor.h" />
     <ClInclude Include="header\shader_resource_view.h" />
     <ClInclude Include="header\signals.hpp" />
     <ClInclude Include="header\swapchain.h" />
@@ -112,18 +100,12 @@
     <ClInclude Include="header\unordered_access_view.h" />
     <ClInclude Include="header\upload_buffer.h" />
     <ClInclude Include="header\vertex_buffer.h" />
+    <ClInclude Include="header\vertex_types.h" />
+    <ClInclude Include="header\visitor.h" />
     <ClInclude Include="header\window.h" />
     <ClInclude Include="shaders\GenerateMips_CS.h" />
     <ClInclude Include="shaders\imGUI_PS.h" />
     <ClInclude Include="shaders\imGUI_VS.h" />
-    <ClInclude Include="thirdparty\DirectXTex\BC.h" />
-    <ClInclude Include="thirdparty\DirectXTex\BCDirectCompute.h" />
-    <ClInclude Include="thirdparty\DirectXTex\d3dx12.h" />
-    <ClInclude Include="thirdparty\DirectXTex\DDS.h" />
-    <ClInclude Include="thirdparty\DirectXTex\DirectXTex.h" />
-    <ClInclude Include="thirdparty\DirectXTex\DirectXTexP.h" />
-    <ClInclude Include="thirdparty\DirectXTex\Filters.h" />
-    <ClInclude Include="thirdparty\DirectXTex\scoped.h" />
     <ClInclude Include="thirdparty\imgui\imconfig.h" />
     <ClInclude Include="thirdparty\imgui\imgui.h" />
     <ClInclude Include="thirdparty\imgui\imgui_impl_win32.h" />
@@ -152,14 +134,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="header\descriptor_allocation.h" />
-    <None Include="thirdparty\DirectXTex\DirectXTex.inl" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC6HEncode_EncodeBlockCS.inc" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC6HEncode_TryModeG10CS.inc" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC6HEncode_TryModeLE10CS.inc" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC7Encode_EncodeBlockCS.inc" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC7Encode_TryMode02CS.inc" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC7Encode_TryMode137CS.inc" />
-    <None Include="thirdparty\DirectXTex\Shaders\Compiled\BC7Encode_TryMode456CS.inc" />
   </ItemGroup>
   <PropertyGroup Label="Globals">
     <VCProjectVersion>18.0</VCProjectVersion>
@@ -214,20 +188,20 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;T:\Projects\DX12\EV\EV-Engine\EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;T:\Projects\DX12\EV\EV-Engine\EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;T:\Projects\DX12\EV\EV-Engine\EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;T:\Projects\DX12\EV\EV-Engine\EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
   </PropertyGroup>
@@ -243,7 +217,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mtd.lib;DirectXTexd.lib;zlibstaticd.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)/EV-Engine/lib</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <ShaderModel>6.0</ShaderModel>
@@ -263,7 +238,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mtd.lib;DirectXTexd.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)/EV-Engine/lib</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <ShaderModel>6.0</ShaderModel>
@@ -281,7 +257,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mtd.lib;DirectXTexd.lib;zlibstaticd.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)/EV-Engine/lib</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <ShaderModel>6.0</ShaderModel>
@@ -301,7 +278,8 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;%(AdditionalDependencies)</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mtd.lib;DirectXTexd.lib</AdditionalDependencies>
+      <AdditionalLibraryDirectories>$(SolutionDir)/EV-Engine/lib</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
       <ShaderModel>6.0</ShaderModel>

@@ -5,12 +5,15 @@
 #include <Shlwapi.h>
 
 #include "application.h"
+#include "command_list.h"
 #include "command_queue.h"
 #include "helpers.h"
 #include "window.h"
 
 #include "dx12_includes.h"
 #include "render_target.h"
+#include "Scene.h"
+#include "scene_visitor.h"
 #include "swapchain.h"
 using namespace DirectX;
 
@@ -96,10 +99,10 @@ Demo::Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSyn
 	, m_height(height)
 	, m_vSync(bVSync)
     , m_contentLoaded(false)
-	// TODO: Add VSync initialization
 {
     m_pWindow = Application::Get().CreateRenderWindow(name, width, height);
 
+    m_pWindow->Update += UpdateEvent::slot(&Demo::OnUpdate, this);
     XMVECTOR cameraPos = XMVectorSet(0, 5, -20, 1);
     XMVECTOR cameraTarget = XMVectorSet(0, 5, 0, 1);
     XMVECTOR cameraUp = XMVectorSet(0, 1, 0, 0);
@@ -193,7 +196,7 @@ void Demo::OnResize(ResizeEventArgs& e)
         m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f,
             static_cast<float>(e.windowWidth), static_cast<float>(e.windowHeight));
 
-        m_rendertarget.Resize(m_width, m_height);
+        m_renderTarget.Resize(m_width, m_height);
         // ResizeDepthBuffer(e.windowWidth, e.windowHeight);
     }
 }
@@ -290,8 +293,11 @@ void Demo::OnRender(RenderEventArgs& e)
 {
     super::OnRender(e);
 
-    auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-    auto commandList = commandQueue->GetCommandList();
+    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    auto commandList = commandQueue.GetCommandList();
+
+    // Create a scene visitor that is used to perform the actual rendering of the meshes in the scenes.
+    SceneVisitor visitor(*commandList);
 
     // UINT currentBackBufferID = m_pWindow->GetCurrentBackBufferID();
     // auto backbuffer = m_pWindow->GetCurrentBackBuffer();
@@ -305,17 +311,20 @@ void Demo::OnRender(RenderEventArgs& e)
 
         FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-        commandList->ClearTexture(m_rendertarget.GetTexture(AttachmentPoint::Color0), clearColor);
-        commandList->ClearDepthStencilTexture(m_rendertarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
+        commandList->ClearTexture(m_renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
+        commandList->ClearDepthStencilTexture(m_renderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
 
         // ClearRTV(commandList, rtv, clearColor);
         // ClearDepth(commandList, dsv);
     }
 
+    commandList->SetPipelineState(m_pipelineState);
+    commandList->SetGraphicsRootSignature(m_rootSignature);
+
     commandList->SetViewport(m_viewport);
     commandList->SetScissorRect(m_scissorRect);
 
-    commandList->SetRenderTarget(m_rendertarget);
+    commandList->SetRenderTarget(m_renderTarget);
 
     // Draw Cube
     XMMATRIX translationMatrix = XMMatrixTranslation(4.0f, 4.0f, 4.0f);
@@ -330,16 +339,25 @@ void Demo::OnRender(RenderEventArgs& e)
     
     commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, cubeMatrix);
     commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, XMFLOAT4(1.0f,1.0f,1.0f,1.0f));
-    // TODO: READD !!!
-	// commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 
-    m_cubeMesh->Draw(*commandList);
+    m_cubeMesh->Accept(visitor);
 
-    commandQueue->ExecuteCommandList(commandList);
+    // Resolve the MSAA render target to the swapchain's backbuffer.
+    auto& swapChainRT = m_swapChain->GetRenderTarget();
+    auto  swapChainBackBuffer = swapChainRT.GetTexture(AttachmentPoint::Color0);
+    auto  msaaRenderTarget = m_renderTarget.GetTexture(AttachmentPoint::Color0);
+
+    commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
+
+    // Render the GUI on the render target
+    OnGUI(commandList, swapChainRT);
+
+    commandQueue.ExecuteCommandList(commandList);
 
     // Present
-    m_pWindow->Present(m_rendertarget.GetTexture(AttachmentPoint::Color0));
-
+    // m_pWindow->Present(m_renderTarget.GetTexture(AttachmentPoint::Color0));
+    m_swapChain->Present();
 
     // // prepare rendering pipeline
     // commandList->SetPipelineState(m_pipelineState.Get());
@@ -383,6 +401,20 @@ void Demo::OnRender(RenderEventArgs& e)
     //     commandQueue->WaitForFenceValue(m_fenceValues[currentBackBufferID]);
     // }
 }
+
+void Demo::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget)
+{
+    m_GUI->NewFrame();
+
+    static bool showDemoWindow = false;
+    if (showDemoWindow)
+    {
+        ImGui::ShowDemoWindow(&showDemoWindow);
+    }
+
+    m_GUI->Render(commandList, renderTarget);
+}
+
 
 void Demo::OnKeyPress(KeyEventArgs& e)
 {
@@ -511,7 +543,12 @@ bool Demo::LoadContent()
 {
     auto& app = Application::Get();
     auto device = app.GetDevice();
-    
+
+    // Finds the path to the .exe folder
+    char buffer[1024];
+    DWORD length = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
+    if (length == 0) throw std::runtime_error("Failed to get executable path.");
+    auto exePath = std::filesystem::path(buffer).parent_path();
 
     // Create Swapchain
     m_swapChain = app.CreateSwapchain(m_pWindow->GetWindowHandle(), DXGI_FORMAT_R8G8B8A8_UNORM);
@@ -522,14 +559,14 @@ bool Demo::LoadContent()
     // This magic here allows ImGui to process window messages.(TODO: not sure how this works yet)
 	app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
 
-    auto commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-    auto commandList = commandQueue->GetCommandList();
+    auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto commandList = commandQueue.GetCommandList();
 
-	m_cubeMesh = Mesh::CreateCube(*commandList);
+	m_cubeMesh = commandList->CreateCube();
 
     auto whiteTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 
-    commandQueue->ExecuteCommandList(commandList);
+    commandQueue.ExecuteCommandList(commandList);
 
     // Get the folder of the running executable.
     std::wstring parentPath = GetModulePath();
@@ -544,13 +581,13 @@ bool Demo::LoadContent()
     ComPtr<ID3DBlob> pixelShaderBlob;
     ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
 
-    // Root Signature
-    D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-    featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-    {
-        featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    }
+    // // Root Signature
+    // D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
+    // featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
+    // if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
+    // {
+    //     featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
+    // }
 
     // Allow input but deny unused shader stages
     D3D12_ROOT_SIGNATURE_FLAGS rootFlags =
@@ -587,19 +624,19 @@ bool Demo::LoadContent()
     
 	pipelineStateStream.rootSignature = m_rootSignature->GetRootSignature().Get();
     pipelineStateStream.depthFormat = depthBufferFormat;
-    pipelineStateStream.inputLayout = { VertexPositionNormalTexture::inputElements, VertexPositionNormalTexture::inputElementCount };
+    pipelineStateStream.inputLayout = VertexPositionNormalTangentBitangentTexture::inputLayout;
     pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     pipelineStateStream.renderTargetFormats = rtvFormats;
     pipelineStateStream.pixelShader = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
     pipelineStateStream.vertexShader = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
     pipelineStateStream.sampleDesc = sampleDesc;
 
-    D3D12_PIPELINE_STATE_STREAM_DESC pipelineDesc = {
-	    sizeof(PipelineStateStream), &pipelineStateStream
-    };
+    // D3D12_PIPELINE_STATE_STREAM_DESC pipelineDesc = {
+	   //  sizeof(PipelineStateStream), &pipelineStateStream
+    // };
     
-    ThrowIfFailed(device->CreatePipelineState(&pipelineDesc, IID_PPV_ARGS(&m_pipelineState)));
-	
+    // ThrowIfFailed(device->CreatePipelineState(&pipelineDesc, IID_PPV_ARGS(m_pipelineState)));
+    m_pipelineState = app.CreatePipelineStateObject(pipelineStateStream);
     
 	// offscreen render target
     auto colorDesc = CD3DX12_RESOURCE_DESC::Tex2D(backBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
@@ -626,11 +663,16 @@ bool Demo::LoadContent()
     depthTexture->SetName(L"Depth Render Target");
 
     // attach textures to the render target
-    m_rendertarget.AttachTexture(AttachmentPoint::Color0, colorTexture);
-    m_rendertarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
+    m_renderTarget.AttachTexture(AttachmentPoint::Color0, colorTexture);
+    m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
 	
-    auto fenceValue = commandQueue->ExecuteCommandList(commandList);
-    commandQueue->WaitForFenceValue(fenceValue);
+    // auto fenceValue = commandQueue.ExecuteCommandList(commandList);
+    // commandQueue.WaitForFenceValue(fenceValue);
+
+
+    commandQueue.Flush();
+
+    m_pWindow->Show();
 
     return true;
 	

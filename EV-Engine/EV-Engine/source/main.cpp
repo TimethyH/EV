@@ -748,8 +748,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 [ ]	Solve File loading problem ("No interface")
 [ ]	Read chapter 4 of Jeremiah's Tutorial
 [ ] Read the DX12 samples and understand how they do it.
-[ ]
-[ ]
+[ ] Add Material support
+[ ] Build Assimp
 [ ]
 [ ]
 [ ]

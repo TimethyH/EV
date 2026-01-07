@@ -550,3 +550,9 @@ DXGI_FORMAT Texture::GetSRGBFormat(DXGI_FORMAT format)
 
     return srgbFormat;
 }
+
+size_t Texture::BitsPerPixel() const
+{
+    auto format = GetD3D12ResourceDesc().Format;
+    return DirectX::BitsPerPixel(format);
+}

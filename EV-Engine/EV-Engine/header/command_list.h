@@ -48,7 +48,10 @@
 #include "render_target.h"
 #include "shader_resource_view.h"
 #include "unordered_access_view.h"
+#include "vertex_types.h"
 
+struct VertexPositionNormalTangentBitangentTexture;
+class Scene;
 class PipelineStateObject;
 // class PipelineStateObject;
 class Buffer;
@@ -144,26 +147,28 @@ public:
                             srcSubresource = 0);
 
     /**
-     * Copy the contents to a vertex buffer in GPU memory.
-     */
-    void CopyVertexBuffer(VertexBuffer& vertexBuffer, size_t numVertices, size_t vertexStride, const void* vertexBufferData);
+      * Copy the contents to a vertex buffer in GPU memory.
+      */
+    std::shared_ptr<VertexBuffer> CopyVertexBuffer(size_t numVertices, size_t vertexStride,
+        const void* vertexBufferData);
     template<typename T>
-    void CopyVertexBuffer(VertexBuffer& vertexBuffer, const std::vector<T>& vertexBufferData)
+    std::shared_ptr<VertexBuffer> CopyVertexBuffer(const std::vector<T>& vertexBufferData)
     {
-        CopyVertexBuffer(vertexBuffer, vertexBufferData.size(), sizeof(T), vertexBufferData.data());
+        return CopyVertexBuffer(vertexBufferData.size(), sizeof(T), vertexBufferData.data());
     }
 
     /**
      * Copy the contents to a index buffer in GPU memory.
      */
-    void CopyIndexBuffer(IndexBuffer& indexBuffer, size_t numIndicies, DXGI_FORMAT indexFormat, const void* indexBufferData);
+    std::shared_ptr<IndexBuffer> CopyIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat,
+        const void* indexBufferData);
     template<typename T>
-    void CopyIndexBuffer(IndexBuffer& indexBuffer, const std::vector<T>& indexBufferData)
+    std::shared_ptr<IndexBuffer> CopyIndexBuffer(const std::vector<T>& indexBufferData)
     {
         assert(sizeof(T) == 2 || sizeof(T) == 4);
 
         DXGI_FORMAT indexFormat = (sizeof(T) == 2) ? DXGI_FORMAT_R16_UINT : DXGI_FORMAT_R32_UINT;
-        CopyIndexBuffer(indexBuffer, indexBufferData.size(), indexFormat, indexBufferData.data());
+        return CopyIndexBuffer(indexBufferData.size(), indexFormat, indexBufferData.data());
     }
 
     /**
@@ -339,15 +344,15 @@ public:
     void SetShaderResourceView(uint32_t rootParameterIndex, const std::shared_ptr<Buffer>& buffer,
                                D3D12_RESOURCE_STATES stateAfter, size_t bufferOffset);
 
-    // /**
-    //  * Set an SRV on the graphics pipeline using the default SRV for the texture.
-    //  */
-    // void SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
-    //     const std::shared_ptr<Texture>& texture,
-    //     D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
-    //     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
-    //     UINT firstSubresource = 0,
-    //     UINT numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
+    /**
+     * Set an SRV on the graphics pipeline using the default SRV for the texture.
+     */
+    void SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
+        const std::shared_ptr<Texture>& texture,
+        D3D12_RESOURCE_STATES stateAfter = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE |
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE,
+        UINT firstSubresource = 0,
+        UINT numSubresources = D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES);
 
     /**
     * Set the UAV on the graphics pipeline.
@@ -434,12 +439,29 @@ public:
         return m_computeCommandList;
     }
 
+    /**
+     * Create a cube.
+     *
+     * @param size The size of one side of the cube.
+     * @param reverseWinding Whether to reverse the winding order of the triangles (useful for skyboxes).
+     */
+    std::shared_ptr<Scene> CreateCube(float size = 1.0, bool reverseWinding = false);
+
 protected:
     // friend class CommandQueue;
     // friend class DynamicDescriptorHeap;
     // friend class std::default_delete<CommandList>;
 
 private:
+    // Used for procedural mesh generation.
+    using VertexCollection = std::vector<VertexPositionNormalTangentBitangentTexture>;
+    using IndexCollection = std::vector<uint16_t>;
+
+
+    // Create a scene that contains a single node with a single mesh.
+    std::shared_ptr<Scene> CreateScene(const VertexCollection& vertices, const IndexCollection& indices);
+
+
     // void TrackObject(Microsoft::WRL::ComPtr<ID3D12Object> object);
     void TrackResource(const std::shared_ptr<Resource>& res);
 
@@ -451,8 +473,9 @@ private:
     void GenerateMips_sRGB(Texture& texture);
 
     // Copy the contents of a CPU buffer to a GPU buffer (possibly replacing the previous buffer contents).
-    Microsoft::WRL::ComPtr<ID3D12Resource> CopyBuffer(Buffer& buffer, size_t numElements, size_t elementSize, const void* bufferData,
-                                      D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+    Microsoft::WRL::ComPtr<ID3D12Resource> CopyBuffer(size_t bufferSize, const void* bufferData,
+        D3D12_RESOURCE_FLAGS flags = D3D12_RESOURCE_FLAG_NONE);
+
 
     // Binds the current descriptor heaps to the command list.
     void BindDescriptorHeaps();
@@ -508,4 +531,20 @@ private:
     // Keep track of loaded textures to avoid loading the same texture multiple times.
     static std::map<std::wstring, ID3D12Resource* > m_textureCache;
     static std::mutex m_textureCacheMutex;
+
+    // Inlined helper functions
+
+    inline void ReverseWinding(IndexCollection& indices, VertexCollection& vertices)
+    {
+        assert((indices.size() % 3) == 0);
+        for (auto it = indices.begin(); it != indices.end(); it += 3)
+        {
+            std::swap(*it, *(it + 2));
+        }
+
+        for (auto it = vertices.begin(); it != vertices.end(); ++it)
+        {
+            it->texCoord.x = (1.f - it->texCoord.x);
+        }
+    }
 };

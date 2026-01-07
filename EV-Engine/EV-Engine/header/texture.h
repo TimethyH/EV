@@ -64,16 +64,6 @@ public:
 	Texture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
 		const D3D12_CLEAR_VALUE* clearValue = nullptr);
 
-	TextureUsage GetTextureUsage() const
-	{
-		return m_textureUsage;
-	}
-
-	void SetTextureUsage(TextureUsage textureUsage)
-	{
-		m_textureUsage = textureUsage;
-	}
-
 	/**
 	 * Resize the texture.
 	 */
@@ -86,12 +76,12 @@ public:
 	* @param dxgiFormat The required format of the resource. When accessing a
 	* depth-stencil buffer as a shader resource view, the format will be different.
 	*/
-	virtual D3D12_CPU_DESCRIPTOR_HANDLE GetShaderResourceView() const override;
+	virtual D3D12_CPU_DESCRIPTOR_HANDLE GetShaderResourceView() const;
 
 	/**
 	* Get the UAV for a (sub)resource.
 	*/
-	virtual D3D12_CPU_DESCRIPTOR_HANDLE GetUnorderedAccessView(uint32_t mip) const override;
+	virtual D3D12_CPU_DESCRIPTOR_HANDLE GetUnorderedAccessView(uint32_t mip) const;
 
 	/**
 	 * Get the RTV for the texture.
@@ -135,6 +125,7 @@ public:
 	static DXGI_FORMAT GetUAVCompatableFormat(DXGI_FORMAT format);
 	static DXGI_FORMAT GetSRGBFormat(DXGI_FORMAT format);
 
+	size_t BitsPerPixel() const;
 	/**
 	* Create SRV and UAVs for the resource.
 	*/

@@ -8,11 +8,13 @@
 #include "descriptor_allocation.h"
 #include "descriptor_allocator.h"
 #include "GUI.h"
+#include "index_buffer.h"
 #include "pipeline_state_object.h"
 #include "root_signature.h"
 #include "shader_resource_view.h"
 #include "swapchain.h"
 #include "unordered_access_view.h"
+#include "vertex_buffer.h"
 
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
 
@@ -148,6 +150,75 @@ std::shared_ptr<UnorderedAccessView> Application::CreateUnorderedAccessView(cons
 
     return unorderedAccessView;
 }
+
+
+class MakeVertexBuffer : public VertexBuffer
+{
+public:
+    MakeVertexBuffer(size_t numVertices, size_t vertexStride)
+        : VertexBuffer(numVertices, vertexStride)
+    {
+    }
+
+    MakeVertexBuffer(ComPtr<ID3D12Resource> resource, size_t numVertices, size_t vertexStride)
+        : VertexBuffer(resource, numVertices, vertexStride)
+    {
+    }
+
+    virtual ~MakeVertexBuffer() {}
+};
+
+class MakeIndexBuffer : public IndexBuffer
+{
+public:
+    MakeIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat)
+        : IndexBuffer(numIndices, indexFormat)
+    {
+    }
+
+    MakeIndexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numIndices,
+        DXGI_FORMAT indexFormat)
+        : IndexBuffer(resource, numIndices, indexFormat)
+    {
+    }
+
+    virtual ~MakeIndexBuffer() = default;
+};
+
+std::shared_ptr<IndexBuffer> Application::CreateIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat)
+{
+    std::shared_ptr<IndexBuffer> indexBuffer = std::make_shared<MakeIndexBuffer>(numIndices, indexFormat);
+
+    return indexBuffer;
+}
+
+std::shared_ptr<IndexBuffer>
+Application::CreateIndexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numIndices,
+    DXGI_FORMAT indexFormat)
+{
+    std::shared_ptr<IndexBuffer> indexBuffer =
+        std::make_shared<MakeIndexBuffer>(resource, numIndices, indexFormat);
+
+    return indexBuffer;
+}
+
+std::shared_ptr<VertexBuffer> Application::CreateVertexBuffer(size_t numVertices, size_t vertexStride)
+{
+    std::shared_ptr<VertexBuffer> vertexBuffer = std::make_shared<MakeVertexBuffer>( numVertices, vertexStride);
+
+    return vertexBuffer;
+}
+
+std::shared_ptr<VertexBuffer>
+Application::CreateVertexBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource, size_t numVertices,
+    size_t vertexStride)
+{
+    std::shared_ptr<VertexBuffer> vertexBuffer =
+        std::make_shared<MakeVertexBuffer>(resource, numVertices, vertexStride);
+
+    return vertexBuffer;
+}
+
 
 class MakePipelineStateObject : public PipelineStateObject
 {
@@ -341,9 +412,11 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
     ComPtr<ID3D12InfoQueue> pInfoQueue;
     if (SUCCEEDED(d3d12Device13.As(&pInfoQueue)))
     {
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
-        pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+        // TODO: Readd these
+		// Currently removed because it breaks when copying textures.
+        // pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
+        // pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
+        // pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
 
         // Suppress whole categories of messages
         //D3D12_MESSAGE_CATEGORY Categories[] = {};
@@ -482,6 +555,7 @@ int Application::Run(std::shared_ptr<Game> pGame)
     // if (!pGame->Initialize()) return 1;
     if (!pGame->LoadContent()) return 2;
 
+    
     MSG msg = { 0 };
     while (msg.message != WM_QUIT)
     {
@@ -511,25 +585,25 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::GetDevice() const
     return m_device;
 }
 
-std::shared_ptr<CommandQueue> Application::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
+CommandQueue& Application::GetCommandQueue(D3D12_COMMAND_LIST_TYPE type) const
 {
-    std::shared_ptr<CommandQueue> commandQueue;
+    CommandQueue* commandQueue = nullptr;
     switch (type)
     {
     case D3D12_COMMAND_LIST_TYPE_DIRECT:
-        commandQueue = m_DirectCommandQueue;
+        commandQueue = m_DirectCommandQueue.get();
         break;
     case D3D12_COMMAND_LIST_TYPE_COMPUTE:
-        commandQueue = m_ComputeCommandQueue;
+        commandQueue = m_ComputeCommandQueue.get();
         break;
     case D3D12_COMMAND_LIST_TYPE_COPY:
-        commandQueue = m_CopyCommandQueue;
+        commandQueue = m_CopyCommandQueue.get();
         break;
     default:
         assert(false && "Invalid command queue type.");
     }
 
-    return commandQueue;
+    return *commandQueue;
 }
 
 void Application::Flush()

@@ -49,6 +49,8 @@ public:
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetCurrentBackBuffer() const;
 
 	bool Initialize();
+
+	UpdateEvent Update;
 	
 protected:
 	Window() = delete;

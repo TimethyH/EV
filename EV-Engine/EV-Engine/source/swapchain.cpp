@@ -17,7 +17,7 @@
 
 SwapChain::SwapChain(HWND hWnd, DXGI_FORMAT renderTargetFormat)
     // : m_device(device)
-    : m_commandQueue(*Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT))
+    : m_commandQueue(Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT))
     , m_hWnd(hWnd)
     , m_fenceValues{ 0 }
     , m_width(0u)

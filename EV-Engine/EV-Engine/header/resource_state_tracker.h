@@ -165,22 +165,22 @@ private:
     struct ResourceState
     {
         // Initialize all of the subresources within a resource to the given state.
-        explicit ResourceState(D3D12_RESOURCE_STATES state = D3D12_RESOURCE_STATE_COMMON)
-            : state(state)
+        explicit ResourceState(D3D12_RESOURCE_STATES State = D3D12_RESOURCE_STATE_COMMON)
+            : state(State)
         {
         }
 
         // Set a subresource to a particular state.
-        void SetSubresourceState(UINT subresource, D3D12_RESOURCE_STATES _state)
+        void SetSubresourceState(UINT subresource, D3D12_RESOURCE_STATES State)
         {
             if (subresource == D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
             {
-                state = _state;
+                state = State;
                 subresourceState.clear();
             }
             else
             {
-                subresourceState[subresource] = _state;
+                subresourceState[subresource] = State;
             }
         }
 

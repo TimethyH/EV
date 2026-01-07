@@ -113,23 +113,24 @@ uint64_t CommandQueue::ExecuteCommandLists(const std::vector<std::shared_ptr<Com
     ResourceStateTracker::Lock();
 
     // Command lists that need to put back on the command list queue.
-    std::vector<std::shared_ptr<CommandList> > toBeQueued;
-    toBeQueued.reserve(commandLists.size() * 2);        // 2x since each command list will have a pending command list.
+    std::vector<std::shared_ptr<CommandList>> toBeQueued;
+    toBeQueued.reserve(commandLists.size() * 2);  // 2x since each command list will have a pending command list.
 
     // Generate mips command lists.
-    std::vector<std::shared_ptr<CommandList> > generateMipsCommandLists;
+    std::vector<std::shared_ptr<CommandList>> generateMipsCommandLists;
     generateMipsCommandLists.reserve(commandLists.size());
 
     // Command lists that need to be executed.
     std::vector<ID3D12CommandList*> d3d12CommandLists;
-    d3d12CommandLists.reserve(commandLists.size() * 2); // 2x since each command list will have a pending command list.
+    d3d12CommandLists.reserve(commandLists.size() *
+        2);  // 2x since each command list will have a pending command list.
 
     for (auto commandList : commandLists)
     {
         auto pendingCommandList = GetCommandList();
         bool hasPendingBarriers = commandList->Close(pendingCommandList);
         pendingCommandList->Close();
-        // If there are no pending barriers on the pending command list, there is no reason to 
+        // If there are no pending barriers on the pending command list, there is no reason to
         // execute an empty command list on the command queue.
         if (hasPendingBarriers)
         {
@@ -163,9 +164,9 @@ uint64_t CommandQueue::ExecuteCommandLists(const std::vector<std::shared_ptr<Com
     // after the initial resource command lists have finished.
     if (generateMipsCommandLists.size() > 0)
     {
-        auto computeQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        computeQueue->Wait(*this);
-        computeQueue->ExecuteCommandLists(generateMipsCommandLists);
+        auto& computeQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        computeQueue.Wait(*this);
+        computeQueue.ExecuteCommandLists(generateMipsCommandLists);
     }
 
     return fenceValue;

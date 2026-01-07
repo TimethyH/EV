@@ -29,75 +29,84 @@
   *  @brief A mesh class encapsulates the index and vertex buffers for a geometric primitive.
   */
 
-#include <command_list.h>
-#include <vertex_buffer.h>
-#include <index_buffer.h>
+#include <DirectXCollision.h>  // For BoundingBox
+#include <DirectXMath.h>       // For XMFLOAT3, XMFLOAT2
 
-#include <DirectXMath.h>
-#include <d3d12.h>
+#include <d3d12.h>  // For D3D12_INPUT_LAYOUT_DESC, D3D12_INPUT_ELEMENT_DESC
 
-#include <wrl.h>
+#include <map>     // For std::map
+#include <memory>  // For std::shared_ptr
 
-#include <memory> // For std::unique_ptr
-#include <vector>
+// namespace dx12lib
+// {
 
-  // Vertex struct holding position, normal vector, and texture mapping information.
-struct VertexPositionNormalTexture
-{
-    VertexPositionNormalTexture()
+    class CommandList;
+    class IndexBuffer;
+    class Material;
+    class VertexBuffer;
+    class Visitor;
+
+    class Mesh
     {
-    }
+    public:
+        using BufferMap = std::map<uint32_t, std::shared_ptr<VertexBuffer>>;
 
-    VertexPositionNormalTexture(const DirectX::XMFLOAT3& position, const DirectX::XMFLOAT3& normal, const DirectX::XMFLOAT2& textureCoordinate)
-        : position(position),
-        normal(normal),
-        textureCoordinate(textureCoordinate)
-    {
-    }
+        Mesh();
+        ~Mesh() = default;
 
-    VertexPositionNormalTexture(DirectX::FXMVECTOR position, DirectX::FXMVECTOR normal, DirectX::FXMVECTOR textureCoordinate)
-    {
-        XMStoreFloat3(&this->position, position);
-        XMStoreFloat3(&this->normal, normal);
-        XMStoreFloat2(&this->textureCoordinate, textureCoordinate);
-    }
+        void                     SetPrimitiveTopology(D3D12_PRIMITIVE_TOPOLOGY primitiveToplogy);
+        D3D12_PRIMITIVE_TOPOLOGY GetPrimitiveTopology() const;
 
-    DirectX::XMFLOAT3 position;
-    DirectX::XMFLOAT3 normal;
-    DirectX::XMFLOAT2 textureCoordinate;
+        void                          SetVertexBuffer(uint32_t slotID, const std::shared_ptr<VertexBuffer>& vertexBuffer);
+        std::shared_ptr<VertexBuffer> GetVertexBuffer(uint32_t slotID) const;
+        const BufferMap& GetVertexBuffers() const
+        {
+            return m_vertexBuffers;
+        }
 
-    static const int inputElementCount = 3;
-    static const D3D12_INPUT_ELEMENT_DESC inputElements[inputElementCount];
-};
+        void                         SetIndexBuffer(const std::shared_ptr<IndexBuffer>& indexBuffer);
+        std::shared_ptr<IndexBuffer> GetIndexBuffer();
 
-using VertexCollection = std::vector<VertexPositionNormalTexture>;
-using IndexCollection = std::vector<uint16_t>;
+        /**
+         * Get the number if indices in the index buffer.
+         * If no index buffer is bound to the mesh, this function returns 0.
+         */
+        size_t GetIndexCount() const;
 
-class Mesh
-{
-public:
+        /**
+         * Get the number of vertices in the mesh.
+         * If this mesh does not have a vertex buffer, the function returns 0.
+         */
+        size_t GetVertexCount() const;
 
-    void Draw(CommandList& commandList);
+        void                      SetMaterial(std::shared_ptr<Material> material);
+        std::shared_ptr<Material> GetMaterial() const;
 
-    static std::unique_ptr<Mesh> CreateCube(CommandList& commandList, float size = 1, bool rhcoords = false);
-    static std::unique_ptr<Mesh> CreateSphere(CommandList& commandList, float diameter = 1, size_t tessellation = 16, bool rhcoords = false);
-    static std::unique_ptr<Mesh> CreateCone(CommandList& commandList, float diameter = 1, float height = 1, size_t tessellation = 32, bool rhcoords = false);
-    static std::unique_ptr<Mesh> CreateTorus(CommandList& commandList, float diameter = 1, float thickness = 0.333f, size_t tessellation = 32, bool rhcoords = false);
-    static std::unique_ptr<Mesh> CreatePlane(CommandList& commandList, float width = 1, float height = 1, bool rhcoords = false);
+        /**
+         * Set the AABB bounding volume for the geometry in this mesh.
+         */
+        void                        SetAABB(const DirectX::BoundingBox& aabb);
+        const DirectX::BoundingBox& GetAABB() const;
 
-protected:
+        /**
+         * Draw the mesh to a CommandList.
+         *
+         * @param commandList The command list to draw to.
+         * @param instanceCount The number of instances to draw.
+         * @param startInstance The offset added to the instance ID when reading from the instance buffers.
+         */
+        void Draw(CommandList& commandList, uint32_t instanceCount = 1, uint32_t startInstance = 0);
 
-private:
-    friend struct std::default_delete<Mesh>;
+        /**
+         * Accept a visitor.
+         */
+        void Accept(Visitor& visitor);
 
-    Mesh();
-    Mesh(const Mesh& copy) = delete;
-    virtual ~Mesh();
-
-    void Initialize(CommandList& commandList, VertexCollection& vertices, IndexCollection& indices, bool rhcoords);
-
-	std::shared_ptr<VertexBuffer> m_vertexBuffer;
-    std::shared_ptr<IndexBuffer> m_indexBuffer;
-
-    UINT m_indexCount;
-};
+    private:
+        BufferMap                    m_vertexBuffers;
+        std::shared_ptr<IndexBuffer> m_indexBuffer;
+        std::shared_ptr<Material>    m_material;
+        D3D12_PRIMITIVE_TOPOLOGY     m_primitiveTopology;
+        DirectX::BoundingBox         m_AABB;
+    };
+// }  // namespace dx12lib

@@ -88,19 +88,6 @@ public:
         const D3D12_CLEAR_VALUE* clearValue = nullptr);
 
     /**
-     * Get the SRV for a resource.
-     *
-     */
-    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetShaderResourceView() const = 0;
-
-    /**
-     * Get the UAV for a (sub)resource.
-     *
-     * @param mip
-     */
-    virtual D3D12_CPU_DESCRIPTOR_HANDLE GetUnorderedAccessView(uint32_t mip) const = 0;
-
-    /**
      * Set the name of the resource. Useful for debugging purposes.
      * The name of the resource will persist if the underlying D3D12 resource is
      * replaced with SetD3D12Resource.

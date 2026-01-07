@@ -422,7 +422,7 @@ Microsoft::WRL::ComPtr<IDXGISwapChain4> Window::CreateSwapChain()
 	swapChainDesc.AlphaMode = DXGI_ALPHA_MODE_UNSPECIFIED;
 	// It is recommended to always allow tearing if tearing support is available.
 	swapChainDesc.Flags = m_isTearingSupported ? DXGI_SWAP_CHAIN_FLAG_ALLOW_TEARING : 0;
-	ID3D12CommandQueue* pCommandQueue = app.GetCommandQueue()->GetCommandQueue().Get();
+	ID3D12CommandQueue* pCommandQueue = app.GetCommandQueue().GetCommandQueue().Get();
 
 	ComPtr<IDXGISwapChain1> swapChain1;
 	ThrowIfFailed(dxgiFactory4->CreateSwapChainForHwnd(
@@ -481,8 +481,8 @@ UINT Window::GetCurrentBackBufferID() const
 
 UINT Window::Present(const std::shared_ptr<Texture>& texture)
 {
-	auto commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
-	auto commandList = commandQueue->GetCommandList();
+	auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+	auto commandList = commandQueue.GetCommandList();
 
 	auto& backBuffer = m_backBufferTextures[m_currentBackBufferIndex];
 
@@ -522,18 +522,18 @@ UINT Window::Present(const std::shared_ptr<Texture>& texture)
 	// return m_currentBackBufferIndex;
 
 	commandList->TransitionBarrier(backBuffer, D3D12_RESOURCE_STATE_PRESENT);
-	commandQueue->ExecuteCommandList(commandList);
+	commandQueue.ExecuteCommandList(commandList);
 
 	UINT syncInterval = m_VSync ? 1 : 0;
 	UINT presentFlags = m_isTearingSupported && !m_VSync ? DXGI_PRESENT_ALLOW_TEARING : 0;
 	ThrowIfFailed(m_dxgiSwapChain->Present(syncInterval, presentFlags));
 
-	m_fenceValues[m_currentBackBufferIndex] = commandQueue->Signal();
+	m_fenceValues[m_currentBackBufferIndex] = commandQueue.Signal();
 
 	m_currentBackBufferIndex = m_dxgiSwapChain->GetCurrentBackBufferIndex();
 
 	auto fenceValue = m_fenceValues[m_currentBackBufferIndex];
-	commandQueue->WaitForFenceValue(fenceValue);
+	commandQueue.WaitForFenceValue(fenceValue);
 
 	Application::Get().ReleaseStaleDescriptors();
 

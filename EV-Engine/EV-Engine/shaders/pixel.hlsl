@@ -22,5 +22,6 @@ float4 main(PixelShaderInput IN) : SV_Target
 {
     float4 diffuse = material.albedo; // Reference the member, not the cbuffer name
     float4 texColor = albedoTexture.Sample(linearSampler, IN.TexCoord);
-    return diffuse * texColor; // Removed unnecessary parentheses
+    return float4(1.0, 0.0, 0.0, 1.0);
+	// return diffuse * texColor; // Removed unnecessary parentheses
 }

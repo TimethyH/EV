@@ -58,7 +58,7 @@ public:
 	void Quit(int exitCode = 0);
 
 	Microsoft::WRL::ComPtr<ID3D12Device13> GetDevice() const;
-	std::shared_ptr<CommandQueue> GetCommandQueue(
+	CommandQueue& GetCommandQueue(
 		D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 	void Flush();
 

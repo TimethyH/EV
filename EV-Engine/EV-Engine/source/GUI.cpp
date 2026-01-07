@@ -59,8 +59,8 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
     int            width, height;
     io.Fonts->GetTexDataAsRGBA32(&pixelData, &width, &height);
 
-    auto commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-    auto  commandList = commandQueue->GetCommandList();
+    auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto  commandList = commandQueue.GetCommandList();
 
     auto fontTextureDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, width, height);
 
@@ -80,7 +80,7 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
      commandList->CopyTextureSubresource(m_fontTexture, 0, 1, &subresourceData);
      commandList->GenerateMips(m_fontTexture);
     
-     commandQueue->ExecuteCommandList(commandList);
+     commandQueue.ExecuteCommandList(commandList);
 
     auto d3d12Device = app.GetDevice();
 

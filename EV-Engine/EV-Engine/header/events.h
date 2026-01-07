@@ -219,6 +219,8 @@ public:
 	double totalTime = 0.0;
 };
 
+using UpdateEvent = del::Delegate<void(UpdateEventArgs&)>;
+
 class RenderEventArgs : EventArgs
 {
 public:

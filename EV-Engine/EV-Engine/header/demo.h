@@ -8,6 +8,8 @@
 #include "root_signature.h"
 #include "Texture.h"
 
+class PipelineStateObject;
+class Scene;
 class GUI;
 class SwapChain;
 
@@ -22,7 +24,8 @@ public:
 
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
-	void OnRender(RenderEventArgs& e) override;	
+	void OnRender(RenderEventArgs& e) override;
+	void OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget);
 	void OnKeyPress(KeyEventArgs& e) override;
 	void OnKeyRelease(KeyEventArgs& e) override;
 	void OnMouseMove(MouseMotionEventArgs& e) override;
@@ -36,7 +39,7 @@ private:
 	/// <returns>A wide string containing the full path to the running executable.</returns>
 	static std::wstring GetModulePath();
 
-	std::unique_ptr<Mesh> m_cubeMesh;
+	std::shared_ptr<Scene> m_cubeMesh;
 	std::unique_ptr<Mesh> m_sphereMesh;
 	std::unique_ptr<Mesh> m_coneMesh;
 	std::unique_ptr<Mesh> m_torusMesh;
@@ -46,11 +49,11 @@ private:
 	// TODO: add textures
 	std::shared_ptr<Texture> m_defaultTexture;
 
-	RenderTarget m_rendertarget = {};
+	RenderTarget m_renderTarget = {};
 
 	std::shared_ptr<RootSignature> m_rootSignature = nullptr;
 
-	Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState;
+	std::shared_ptr<PipelineStateObject> m_pipelineState;
 
 	Camera m_camera;
 

@@ -20,10 +20,15 @@
 
 #include "buffer.h"
 #include "generate_mips_pso.h"
+#include "material.h"
+#include "mesh.h"
 #include "pipeline_state_object.h"
+#include "scene.h"
+#include "scene_node.h"
 #include "shader_resource_view.h"
 #include "texture_usage.h"
 #include "vertex_buffer.h"
+#include "vertex_types.h"
 
 std::map<std::wstring, ID3D12Resource* > CommandList::m_textureCache;
 std::mutex CommandList::m_textureCacheMutex;
@@ -174,12 +179,11 @@ void CommandList::ResolveSubresource(const std::shared_ptr<Resource>& dstRes, co
 }
 
 
-ComPtr<ID3D12Resource> CommandList::CopyBuffer(Buffer& buffer, size_t numElements, size_t elementSize,
-	const void* bufferData, D3D12_RESOURCE_FLAGS flags)
+ComPtr<ID3D12Resource> CommandList::CopyBuffer(size_t bufferSize,
+                                               const void* bufferData, D3D12_RESOURCE_FLAGS flags)
 {
 	auto device = Application::Get().GetDevice();
 
-	size_t bufferSize = numElements * elementSize;
 
 	ComPtr<ID3D12Resource> d3d12Resource;
 	if (bufferSize == 0)
@@ -239,14 +243,26 @@ ComPtr<ID3D12Resource> CommandList::CopyBuffer(Buffer& buffer, size_t numElement
 	return d3d12Resource;
 }
 
-void CommandList::CopyVertexBuffer(VertexBuffer& vertexBuffer, size_t numVertices, size_t vertexStride, const void* vertexBufferData)
+std::shared_ptr<VertexBuffer> CommandList::CopyVertexBuffer(size_t numVertices, size_t vertexStride,
+	const void* vertexBufferData)
 {
-	CopyBuffer(vertexBuffer, numVertices, vertexStride, vertexBufferData);
+	auto                          d3d12Resource = CopyBuffer(numVertices * vertexStride, vertexBufferData);
+	std::shared_ptr<VertexBuffer> vertexBuffer =
+		Application::Get().CreateVertexBuffer(d3d12Resource, numVertices, vertexStride);
+
+	return vertexBuffer;
 }
-void CommandList::CopyIndexBuffer(IndexBuffer& indexBuffer, size_t numIndicies, DXGI_FORMAT indexFormat, const void* indexBufferData)
+
+std::shared_ptr<IndexBuffer> CommandList::CopyIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat,
+	const void* indexBufferData)
 {
-	size_t indexSizeInBytes = indexFormat == DXGI_FORMAT_R16_UINT ? 2 : 4;
-	CopyBuffer(indexBuffer, numIndicies, indexSizeInBytes, indexBufferData);
+	size_t elementSize = indexFormat == DXGI_FORMAT_R16_UINT ? 2 : 4;
+
+	auto d3d12Resource = CopyBuffer(numIndices * elementSize, indexBufferData);
+
+	std::shared_ptr<IndexBuffer> indexBuffer = Application::Get().CreateIndexBuffer(d3d12Resource, numIndices, indexFormat);
+
+	return indexBuffer;
 }
 //
 // void CommandList::CopyByteAddressBuffer(ByteAddressBuffer& byteAddressBuffer, size_t bufferSize, const void* bufferData)
@@ -379,7 +395,7 @@ void CommandList::GenerateMips(const std::shared_ptr<Texture>& texture)
 	{
 		if (!m_computeCommandList)
 		{
-			m_computeCommandList = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE)->GetCommandList();
+			m_computeCommandList = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE).GetCommandList();
 		}
 		m_computeCommandList->GenerateMips(texture);
 		return;
@@ -1175,12 +1191,36 @@ void CommandList::SetShaderResourceView(uint32_t rootParameterIndex, const std::
 	}
 }
 
+void CommandList::SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
+	const std::shared_ptr<Texture>& texture, D3D12_RESOURCE_STATES stateAfter, UINT firstSubresource,
+	UINT numSubresources)
+{
+	if (texture)
+	{
+		if (numSubresources < D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
+		{
+			for (uint32_t i = 0; i < numSubresources; ++i)
+			{
+				TransitionBarrier(texture, stateAfter, firstSubresource + i);
+			}
+		}
+		else
+		{
+			TransitionBarrier(texture, stateAfter);
+		}
+
+		TrackResource(texture);
+
+		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
+			rootParameterIndex, descriptorOffset, 1, texture->GetShaderResourceView());
+	}
+}
 
 
 void CommandList::SetUnorderedAccessView(uint32_t rootParameterIndex, uint32_t descriptorOffset,
-	const std::shared_ptr<UnorderedAccessView>& uav,
-	D3D12_RESOURCE_STATES stateAfter, UINT firstSubresource,
-	UINT numSubresources)
+                                         const std::shared_ptr<UnorderedAccessView>& uav,
+                                         D3D12_RESOURCE_STATES stateAfter, UINT firstSubresource,
+                                         UINT numSubresources)
 {
 	assert(uav);
 
@@ -1421,4 +1461,84 @@ void CommandList::BindDescriptorHeaps()
 	}
 
 	m_commandList->SetDescriptorHeaps(numDescriptorHeaps, descriptorHeaps);
+}
+
+std::shared_ptr<Scene> CommandList::CreateCube(float size, bool reverseWinding)
+{
+	// Cube is centered at 0,0,0.
+	float s = size * 0.5f;
+
+	// 8 edges of cube.
+	XMFLOAT3 p[8] = { { s, s, -s }, { s, s, s },   { s, -s, s },   { s, -s, -s },
+					  { -s, s, s }, { -s, s, -s }, { -s, -s, -s }, { -s, -s, s } };
+	// 6 face normals
+	XMFLOAT3 n[6] = { { 1, 0, 0 }, { -1, 0, 0 }, { 0, 1, 0 }, { 0, -1, 0 }, { 0, 0, 1 }, { 0, 0, -1 } };
+	// 4 unique texture coordinates
+	XMFLOAT3 t[4] = { { 0, 0, 0 }, { 1, 0, 0 }, { 1, 1, 0 }, { 0, 1, 0 } };
+
+	// Indices for the vertex positions.
+	uint16_t i[24] = {
+		0, 1, 2, 3,  // +X
+		4, 5, 6, 7,  // -X
+		4, 1, 0, 5,  // +Y
+		2, 7, 6, 3,  // -Y
+		1, 4, 7, 2,  // +Z
+		5, 0, 3, 6   // -Z
+	};
+
+	VertexCollection vertices;
+	IndexCollection  indices;
+
+	for (uint16_t f = 0; f < 6; ++f)  // For each face of the cube.
+	{
+		// Four vertices per face.
+		vertices.emplace_back(p[i[f * 4 + 0]], n[f], t[0]);
+		vertices.emplace_back(p[i[f * 4 + 1]], n[f], t[1]);
+		vertices.emplace_back(p[i[f * 4 + 2]], n[f], t[2]);
+		vertices.emplace_back(p[i[f * 4 + 3]], n[f], t[3]);
+
+		// First triangle.
+		indices.emplace_back(f * 4 + 0);
+		indices.emplace_back(f * 4 + 1);
+		indices.emplace_back(f * 4 + 2);
+
+		// Second triangle
+		indices.emplace_back(f * 4 + 2);
+		indices.emplace_back(f * 4 + 3);
+		indices.emplace_back(f * 4 + 0);
+	}
+
+	if (reverseWinding)
+	{
+		ReverseWinding(indices, vertices);
+	}
+
+	return CreateScene(vertices, indices);
+}
+
+std::shared_ptr<Scene> CommandList::CreateScene(const VertexCollection& vertices, const IndexCollection& indices)
+{
+	if (vertices.empty())
+	{
+		return nullptr;
+	}
+
+	auto vertexBuffer = CopyVertexBuffer(vertices);
+	auto indexBuffer = CopyIndexBuffer(indices);
+
+	auto mesh = std::make_shared<Mesh>();
+	// Create a default white material for new meshes.
+	auto material = std::make_shared<Material>(Material::White);
+
+	mesh->SetVertexBuffer(0, vertexBuffer);
+	mesh->SetIndexBuffer(indexBuffer);
+	mesh->SetMaterial(material);
+
+	auto node = std::make_shared<SceneNode>();
+	node->AddMesh(mesh);
+
+	auto scene = std::make_shared<Scene>();
+	scene->SetRootNode(node);
+
+	return scene;
 }
