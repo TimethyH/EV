@@ -26,6 +26,8 @@ static Application* gs_pSingelton = nullptr;
 static WindowMap gs_Windows;
 static WindowNameMap gs_WindowByName;
 
+static std::mutex gs_WindowHandlesMutex;
+
 uint64_t Application::m_frameCount = 0;
 
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -682,6 +684,29 @@ MouseButtonEventArgs::MouseButton DecodeMouseButton(UINT messageID)
     return mouseButton;
 }
 
+// Convert wParam of the WM_SIZE events to a WindowState.
+static WindowState DecodeWindowState(WPARAM wParam)
+{
+    WindowState windowState = WindowState::Restored;
+
+    switch (wParam)
+    {
+    case SIZE_RESTORED:
+        windowState = WindowState::Restored;
+        break;
+    case SIZE_MINIMIZED:
+        windowState = WindowState::Minimized;
+        break;
+    case SIZE_MAXIMIZED:
+        windowState = WindowState::Maximized;
+        break;
+    default:
+        break;
+    }
+
+    return windowState;
+}
+
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
     WindowPtr pWindow;
@@ -839,23 +864,37 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
         break;
         case WM_SIZE:
         {
+            WindowState windowState = DecodeWindowState(wParam);
+
             int width = ((int)(short)LOWORD(lParam));
             int height = ((int)(short)HIWORD(lParam));
 
-            ResizeEventArgs resizeEventArgs(width, height);
+            ResizeEventArgs resizeEventArgs(width, height, windowState);
             pWindow->OnResize(resizeEventArgs);
+        }
+        break;
+        case WM_CLOSE:
+        {
+            WindowCloseEventArgs windowCloseEventArgs;
+            pWindow->OnClose(windowCloseEventArgs);
+
+            // Check to see if the user canceled the close event.
+            if (windowCloseEventArgs.confirmClose)
+            {
+                // DestroyWindow( hwnd );
+                // Just hide the window.
+                // Windows will be destroyed when the application quits.
+                pWindow->Hide();
+            }
         }
         break;
         case WM_DESTROY:
         {
-            // If a window is being destroyed, remove it from the 
-            // window maps.
-            RemoveWindow(hwnd);
-
-            if (gs_Windows.empty())
+            std::lock_guard<std::mutex> lock(gs_WindowHandlesMutex);
+            WindowMap::iterator         iter = gs_Windows.find(hwnd);
+            if (iter != gs_Windows.end())
             {
-                // If there are no more windows, quit the application.
-                PostQuitMessage(0);
+                gs_Windows.erase(iter);
             }
         }
         break;

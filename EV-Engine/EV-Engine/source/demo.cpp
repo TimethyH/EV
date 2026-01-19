@@ -104,6 +104,15 @@ Demo::Demo(const std::wstring& name, uint32_t width, uint32_t height, bool bVSyn
     m_pWindow = Application::Get().CreateRenderWindow(name, width, height);
 
     m_pWindow->Update += UpdateEvent::slot(&Demo::OnUpdate, this);
+
+    // Hookup Window callbacks.
+    m_pWindow->Update += UpdateEvent::slot(&Demo::OnUpdate, this);
+    m_pWindow->Resize += ResizeEvent::slot(&Demo::OnResize, this);
+    // m_pWindow->DPIScaleChanged += DPIScaleEvent::slot(&Tutorial5::OnDPIScaleChanged, this);
+    m_pWindow->KeyPressed += KeyboardEvent::slot(&Demo::OnKeyPress, this);
+    m_pWindow->KeyReleased += KeyboardEvent::slot(&Demo::OnKeyRelease, this);
+    m_pWindow->MouseMoved += MouseMotionEvent::slot(&Demo::OnMouseMove, this);
+
     XMVECTOR cameraPos = XMVectorSet(0, 5, -20, 1);
     XMVECTOR cameraTarget = XMVectorSet(0, 5, 0, 1);
     XMVECTOR cameraUp = XMVectorSet(0, 1, 0, 0);
@@ -186,8 +195,8 @@ void Demo::ResizeDepthBuffer(uint32_t width, uint32_t height)
 
 void Demo::OnResize(ResizeEventArgs& e)
 {
-    m_width = std::max(1, e.windowWidth);
-    m_height = std::max(1, e.windowHeight);
+    m_width = std::max(1, e.width);
+    m_height = std::max(1, e.height);
 
     m_swapChain->Resize(m_width, m_height);
 

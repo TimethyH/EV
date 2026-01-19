@@ -22,7 +22,7 @@ public:
 	void Destroy();
 
 	const std::wstring& GetWindowName() const;
-	
+
 	uint32_t GetScreenWidth() const;
 	uint32_t GetScreenHeight() const;
 
@@ -48,18 +48,92 @@ public:
 	D3D12_CPU_DESCRIPTOR_HANDLE GetCurrentRTV() const;
 	Microsoft::WRL::ComPtr<ID3D12Resource> GetCurrentBackBuffer() const;
 
-	bool Initialize();
-
 	UpdateEvent Update;
+
+	/**
+	* Invoked when the window is resized.
+	*/
+	ResizeEvent Resize;
+
+	/**
+	* Window close event is fired when the window is about to be closed.
+	*/
+	WindowCloseEvent Close;
+
+	/**
+	* Invoked when the window is minimized.
+	*/
+	ResizeEvent Minimized;
+
+	/**
+	 * Invoked when the window is maximized.
+	 */
+	ResizeEvent Maximized;
+
+	/**
+	 * Invoked when the window is restored.
+	 */
+	ResizeEvent Restored;
+
+	/**
+	 * Invoked when a keyboard key is pressed while the window has focus.
+	 */
+	KeyboardEvent KeyPressed;
+
+	/**
+	 * Invoked when a keyboard key is released while the window has focus.
+	 */
+	KeyboardEvent KeyReleased;
+
+	/**
+	 * Invoked when the mouse is moved over the window.
+	 */
+	MouseMotionEvent MouseMoved;
+
+	/**
+	 * Invoked when the mouse enters the client area.
+	 */
+	MouseMotionEvent MouseEnter;
+
+	/**
+	 * Invoked when the mouse button is pressed over the window.
+	 */
+	MouseButtonEvent MouseButtonPressed;
+
+	/**
+	 * Invoked when the mouse button is released over the window.
+	 */
+	MouseButtonEvent MouseButtonReleased;
+
+	/**
+	 * Invoked when the mouse wheel is scrolled over the window.
+	 */
+	MouseWheelEvent MouseWheel;
+
+	/**
+	 * Invoked when the mouse cursor leaves the client area.
+	 */
+	Event MouseLeave;
+
+	/**
+	 * Invoked when the window gains mouse focus.
+	 */
+	Event MouseFocus;
+
+	/**
+	 * Invoked when the window looses mouse focus.
+	 */
+	Event MouseBlur;
+
 
 	// Register a game to this window
 	void RegisterCallbacks(std::shared_ptr<Game> pGame);
-	
+
 protected:
 	Window() = delete;
 	Window(HWND hWnd, const std::wstring& windowName, uint32_t windowWidth, uint32_t windowHeight, bool bVSync);
 	virtual ~Window();
-	
+
 	// Declare friend function/classes to gain access to private/protected data
 	friend LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wparam, LPARAM lparam);
 	friend class Game;
@@ -79,6 +153,7 @@ protected:
 	virtual void OnMouseWheel(MouseWheelEventArgs& e);
 
 	virtual void OnResize(ResizeEventArgs& e);
+	void OnClose(WindowCloseEventArgs& e);
 
 	// Swapchain Creation
 	Microsoft::WRL::ComPtr<IDXGISwapChain4> CreateSwapChain();

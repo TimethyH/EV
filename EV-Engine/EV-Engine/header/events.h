@@ -97,6 +97,7 @@ public:
 	bool shift = {};
 	bool alt = {};
 };
+using KeyboardEvent = del::Delegate<void(KeyEventArgs&)>;
 
 class MouseMotionEventArgs : public EventArgs
 {
@@ -125,6 +126,8 @@ public:
 	int deltaX = 0;
 	int deltaY = 0;
 };
+using MouseMotionEvent = del::Delegate<void(MouseMotionEventArgs&)>;
+
 
 class MouseButtonEventArgs : EventArgs
 {
@@ -168,6 +171,7 @@ public:
 	int xPos = 0;
 	int yPos = 0;
 };
+using MouseButtonEvent = del::Delegate<void(MouseButtonEventArgs&)>;
 
 class MouseWheelEventArgs : public EventArgs
 {
@@ -195,19 +199,38 @@ public:
 	int xPos = 0;
 	int yPos = 0;
 };
+using MouseWheelEvent = del::Delegate<void(MouseWheelEventArgs&)>;
 
-class ResizeEventArgs : EventArgs
+enum class WindowState
+{
+	Restored = 0,  // The window has been resized.
+	Minimized = 1,  // The window has been minimized.
+	Maximized = 2,  // The window has been maximized.
+};
+
+/**
+ * Event args to indicate the window has been resized.
+ */
+class ResizeEventArgs : public EventArgs
 {
 public:
-	typedef EventArgs base;
-	ResizeEventArgs(int width, int height)
-		:windowWidth(width)
-		,windowHeight(height)
-	{}
+	using base = EventArgs;
 
-	int windowWidth = 0;
-	int windowHeight = 0;
+	ResizeEventArgs(int _width, int _height, WindowState _state)
+		: width(_width)
+		, height(_height)
+		, state(_state)
+	{
+	}
+
+	// The new width of the window
+	int width;
+	// The new height of the window.
+	int height;
+	// If the window was minimized or maximized.
+	WindowState state;
 };
+using ResizeEvent = del::Delegate<void(ResizeEventArgs&)>;
 
 class UpdateEventArgs : EventArgs
 {
@@ -254,3 +277,27 @@ public:
 	void* data1;
 	void* data2;
 };
+
+/**
+ * EventArgs for a WindowClosing event.
+ */
+class WindowCloseEventArgs : public EventArgs
+{
+public:
+	using base = EventArgs;
+	WindowCloseEventArgs()
+		: confirmClose(true)
+	{
+	}
+
+	/**
+	 * The user can cancel a window closing operation by registering for the
+	 * Window::Close event on the Window and setting the
+	 * WindowCloseEventArgs::ConfirmClose property to false if the window should
+	 * be kept open (for example, if closing the window would cause unsaved
+	 * file changes to be lost).
+	 */
+	bool confirmClose;
+};
+
+using WindowCloseEvent = del::Delegate<void(WindowCloseEventArgs&)>;

@@ -250,6 +250,11 @@ void Window::OnResize(ResizeEventArgs& e)
 	// }
 }
 
+void Window::OnClose(WindowCloseEventArgs& e)
+{
+	Close(e);
+}
+
 Microsoft::WRL::ComPtr<IDXGISwapChain4> Window::CreateSwapChain()
 {
 	Application& app = Application::Get();

@@ -419,10 +419,3 @@ FodyWeavers.xsd
 
 # Libs that are too big
 EV-Engine/EV-Engine/lib/assimp-vc145-mtd.lib
-
-# Files that should not be pushed!
-EV-Engine/EV-Engine/header/demoMesh.h
-EV-Engine/EV-Engine/header/demoModel.h
-EV-Engine/EV-Engine/header/demoRenderComponents.h
-EV-Engine/EV-Engine/source/demoModel.cpp
-EV-Engine/EV-Engine/source/demoRenderComponents.cpp
