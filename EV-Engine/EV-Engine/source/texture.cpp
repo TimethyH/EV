@@ -111,6 +111,10 @@ Texture::Texture(ComPtr<ID3D12Resource> resource,
     CreateViews();
 }
 
+// Texture::Texture(const std::wstring& name) : Resource(name)
+// {
+// }
+
 // Texture& Texture::operator=(const Texture& other)
 // {
 //     Resource::operator=(other);

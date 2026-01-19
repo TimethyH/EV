@@ -63,7 +63,7 @@ public:
 	Texture(const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_CLEAR_VALUE* clearValue = nullptr);
 	Texture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
 		const D3D12_CLEAR_VALUE* clearValue = nullptr);
-
+	// explicit Texture(const std::wstring& name = L"");
 	/**
 	 * Resize the texture.
 	 */

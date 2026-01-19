@@ -186,20 +186,17 @@ void Demo::ResizeDepthBuffer(uint32_t width, uint32_t height)
 
 void Demo::OnResize(ResizeEventArgs& e)
 {
-    if (e.windowWidth != GetScreenWidth() || e.windowHeight!= GetScreenHeight())
-    {
-        super::OnResize(e);
+    m_width = std::max(1, e.windowWidth);
+    m_height = std::max(1, e.windowHeight);
 
-        float aspectRatio = static_cast<float>(m_width) / static_cast<float>(m_height);
-        m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 100.0f);
+    m_swapChain->Resize(m_width, m_height);
 
+    float aspectRatio = m_width / (float)m_height;
+    m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 100.0f);
 
-        m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f,
-            static_cast<float>(e.windowWidth), static_cast<float>(e.windowHeight));
+    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height));
 
-        m_renderTarget.Resize(m_width, m_height);
-        // ResizeDepthBuffer(e.windowWidth, e.windowHeight);
-    }
+    m_renderTarget.Resize(m_width, m_height);
 }
 
 std::wstring Demo::GetModulePath()
@@ -514,20 +511,37 @@ void Demo::OnKeyRelease(KeyEventArgs& e)
 void Demo::OnMouseMove(MouseMotionEventArgs& e)
 {
 	Game::OnMouseMove(e);
+
+    const float mouseSpeed = 0.1f;
+
+    if (!ImGui::GetIO().WantCaptureMouse)
+    {
+        if (e.leftButton)
+        {
+            m_pitch += e.deltaY * mouseSpeed;
+
+            m_pitch = std::clamp(m_pitch, -90.0f, 90.0f);
+
+            m_yaw += e.deltaX * mouseSpeed;
+        }
+    }
 }
 
 void Demo::OnMouseWheel(MouseWheelEventArgs& e)
 {
-    auto fov = m_camera.GetFov();
+    if (!ImGui::GetIO().WantCaptureMouse)
+    {
+        auto fov = m_camera.GetFov();
 
-    fov -= e.wheelDelta;
-    fov = std::clamp(fov, 12.0f, 90.0f);
+        fov -= e.wheelDelta;
+        fov = std::clamp(fov, 12.0f, 90.0f);
 
-    m_camera.SetFov(fov);
+        m_camera.SetFov(fov);
 
-    char buffer[256];
-    sprintf_s(buffer, "FoV: %f\n", fov);
-    OutputDebugStringA(buffer);
+        char buffer[256];
+        sprintf_s(buffer, "FoV: %f\n", fov);
+        OutputDebugStringA(buffer);
+    }
 }
 
 struct PipelineStateStream

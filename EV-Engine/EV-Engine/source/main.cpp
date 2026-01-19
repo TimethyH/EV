@@ -741,16 +741,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												GENERAL
 
+[ ] Fix window resizing.
+[ ] Add custom model loader
 [ ] Understand ins and outs of the engine, how it works in its entirety.
 [ ] Find all TODOs in the engine and adres them
-[ ] Add ImGui to the project.
-[ ] Solve Resource State tracking problem
-[ ]	Solve File loading problem ("No interface")
-[ ]	Read chapter 4 of Jeremiah's Tutorial
 [ ] Read the DX12 samples and understand how they do it.
-[ ] Add Material support
-[ ] Build Assimp
-[ ]
+[ ] 
 [ ]
 [ ]
 

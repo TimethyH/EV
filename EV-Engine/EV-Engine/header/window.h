@@ -116,5 +116,8 @@ private:
 
 	RECT m_windowRect;
 	bool m_isTearingSupported;
+
+	int m_previousMouseX;
+	int m_previousMouseY;
 };
 
