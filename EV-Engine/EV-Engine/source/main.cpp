@@ -741,14 +741,14 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												GENERAL
 
-[ ] Fix window resizing.
 [ ] Add custom model loader
+[ ] After model implementation, remove demo files
+[ ] Add ECS support.
+[ ] Compile EV as a lib and build functionality on top.
 [ ] Understand ins and outs of the engine, how it works in its entirety.
 [ ] Find all TODOs in the engine and adres them
 [ ] Read the DX12 samples and understand how they do it.
-[ ] 
-[ ]
-[ ]
+[ ] Structure the folders into Core, Rendering and utility folders for clarity.
 
 
 												SPECIFIC

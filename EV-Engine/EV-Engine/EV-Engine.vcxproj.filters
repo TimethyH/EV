@@ -138,6 +138,9 @@
     <ClCompile Include="shaders\game_framework.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\model.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -300,6 +303,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\game_framework_includes.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\model.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

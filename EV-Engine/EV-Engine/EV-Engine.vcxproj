@@ -38,6 +38,7 @@
     <ClCompile Include="source\index_buffer.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\material.cpp" />
+    <ClCompile Include="source\model.cpp" />
     <ClCompile Include="source\pipeline_state_object.cpp" />
     <ClCompile Include="source\render_target.cpp" />
     <ClCompile Include="source\mesh.cpp" />
@@ -84,6 +85,7 @@
     <ClInclude Include="header\index_buffer.h" />
     <ClInclude Include="header\key_codes.h" />
     <ClInclude Include="header\material.h" />
+    <ClInclude Include="header\model.h" />
     <ClInclude Include="header\optional.hpp" />
     <ClInclude Include="header\pipeline_state_object.h" />
     <ClInclude Include="header\render_target.h" />
