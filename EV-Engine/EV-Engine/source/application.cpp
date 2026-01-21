@@ -896,6 +896,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM l
             {
                 gs_Windows.erase(iter);
             }
+            // Application::Get().Quit();
         }
         break;
         default:

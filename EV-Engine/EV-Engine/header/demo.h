@@ -1,4 +1,6 @@
 #pragma once
+#include <future>
+
 #include "camera.h"
 #include "game.h"
 #include "window.h"
@@ -38,13 +40,17 @@ private:
 	/// </summary>
 	/// <returns>A wide string containing the full path to the running executable.</returns>
 	static std::wstring GetModulePath();
+	bool LoadingProgress(float loadingProgress);
+	bool LoadScene(const std::wstring& sceneFile);
 
 	std::shared_ptr<Scene> m_cubeMesh;
-	std::unique_ptr<Mesh> m_sphereMesh;
-	std::unique_ptr<Mesh> m_coneMesh;
-	std::unique_ptr<Mesh> m_torusMesh;
-	std::unique_ptr<Mesh> m_planeMesh;
 
+	std::shared_ptr<Scene> m_scene;
+
+	std::atomic_bool  m_isLoading;
+	bool m_cancelLoading;
+	std::string m_loadingText;
+	float m_loadingProgress;
 
 	// TODO: add textures
 	std::shared_ptr<Texture> m_defaultTexture;
@@ -115,5 +121,7 @@ private:
 	std::shared_ptr<Window> m_pWindow = nullptr;
 	std::shared_ptr<SwapChain> m_swapChain = nullptr;
 	std::shared_ptr<GUI> m_GUI = nullptr;
+
+	std::future<bool> m_loadingTask;
 
 };

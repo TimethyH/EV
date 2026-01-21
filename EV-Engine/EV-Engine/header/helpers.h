@@ -1,4 +1,6 @@
 #pragma once
+#include <string>
+#include <Windows.h>
 
 inline void ThrowIfFailed(HRESULT hr)
 {
@@ -7,6 +9,84 @@ inline void ThrowIfFailed(HRESULT hr)
 		throw std::exception();
 	}
 }
+
+// Convert a multi-byte character string (UTF-8) to a wide (UTF-16) encoded string.
+inline std::wstring ConvertString(const std::string& utf8)
+{
+    if (utf8.empty())
+        return {};
+
+    int size_needed = MultiByteToWideChar(
+        CP_UTF8,
+        0,
+        utf8.data(),
+        static_cast<int>(utf8.size()),
+        nullptr,
+        0
+    );
+
+    std::wstring result(size_needed, 0);
+
+    MultiByteToWideChar(
+        CP_UTF8,
+        0,
+        utf8.data(),
+        static_cast<int>(utf8.size()),
+        result.data(),
+        size_needed
+    );
+
+    return result;
+}
+inline std::string ConvertString(const std::wstring& utf16)
+{
+    if (utf16.empty())
+        return {};
+
+    int size_needed = WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        utf16.data(),
+        static_cast<int>(utf16.size()),
+        nullptr,
+        0,
+        nullptr,
+        nullptr
+    );
+
+    std::string result(size_needed, 0);
+
+    WideCharToMultiByte(
+        CP_UTF8,
+        0,
+        utf16.data(),
+        static_cast<int>(utf16.size()),
+        result.data(),
+        size_needed,
+        nullptr,
+        nullptr
+    );
+
+    return result;
+}
+
+
+inline std::wstring to_wstring(const std::string& s)
+{
+    return ConvertString(s);
+}
+
+inline const std::wstring& to_wstring(const std::wstring& s)
+{
+    return s;
+}
+
+inline std::wstring to_wstring(char c)
+{
+    return to_wstring(std::string(1, c));
+}
+
+
 
 // Currently FULLY copy pasted from Jeremiah van Oosten's DX12 tutorial:
 namespace Math

@@ -185,5 +185,5 @@ private:
 
 	std::unique_ptr<DescriptorAllocator> m_descriptorAllocators[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 	D3D_ROOT_SIGNATURE_VERSION m_highestRootSignatureVersion;
-
+	
 };

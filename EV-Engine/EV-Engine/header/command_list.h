@@ -44,6 +44,7 @@
 #include <memory> // for std::unique_ptr
 #include <mutex> // for std::mutex
 #include <vector> // for std::vector
+#include <functional>
 
 #include "render_target.h"
 #include "shader_resource_view.h"
@@ -446,6 +447,11 @@ public:
      * @param reverseWinding Whether to reverse the winding order of the triangles (useful for skyboxes).
      */
     std::shared_ptr<Scene> CreateCube(float size = 1.0, bool reverseWinding = false);
+
+    std::shared_ptr<Scene>
+        LoadSceneFromFile(const std::wstring& fileName,
+            const std::function<bool(float)>& loadingProgres = std::function<bool(float)>());
+
 
 protected:
     // friend class CommandQueue;

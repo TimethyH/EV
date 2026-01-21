@@ -744,17 +744,17 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 [ ] Add custom model loader
 [ ] After model implementation, remove demo files
 [ ] Add ECS support.
+[ ] Stop running application when window is closed.
 [ ] Compile EV as a lib and build functionality on top.
 [ ] Understand ins and outs of the engine, how it works in its entirety.
 [ ] Find all TODOs in the engine and adres them
 [ ] Read the DX12 samples and understand how they do it.
 [ ] Structure the folders into Core, Rendering and utility folders for clarity.
+[ ] Re-Organize flow of code/functions in Demo.cpp. (logical placement where function calls are followed by implementation)
 
 
 												SPECIFIC
 [ ] Compile DirectXTex and build it as a separate library, so this project can simply include it and link to it.
-[ ] 
-[ ]
 [ ]
 [ ]
 [ ]

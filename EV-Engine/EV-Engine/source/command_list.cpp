@@ -1517,6 +1517,19 @@ std::shared_ptr<Scene> CommandList::CreateCube(float size, bool reverseWinding)
 	return CreateScene(vertices, indices);
 }
 
+std::shared_ptr<Scene> CommandList::LoadSceneFromFile(const std::wstring& fileName,
+	const std::function<bool(float)>& loadingProgress)
+{
+	auto scene = std::make_shared<Scene>();
+
+	if (scene->LoadSceneFromFile(*this, fileName, loadingProgress))
+	{
+		return scene;
+	}
+
+	return nullptr;
+}
+
 std::shared_ptr<Scene> CommandList::CreateScene(const VertexCollection& vertices, const IndexCollection& indices)
 {
 	if (vertices.empty())

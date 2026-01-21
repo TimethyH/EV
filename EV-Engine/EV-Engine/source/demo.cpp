@@ -14,6 +14,7 @@
 #include "material.h"
 #include "render_target.h"
 #include "Scene.h"
+#include "scene_node.h"
 #include "scene_visitor.h"
 #include "swapchain.h"
 using namespace DirectX;
@@ -216,6 +217,66 @@ std::wstring Demo::GetModulePath()
     return std::wstring(buffer);
 }
 
+bool Demo::LoadingProgress(float loadingProgress)
+{
+    m_loadingProgress = loadingProgress;
+
+    // This function should return false to cancel the loading process.
+    return !m_cancelLoading;
+}
+
+bool Demo::LoadScene(const std::wstring& sceneFile)
+{
+    using namespace std::placeholders;  // For _1 used to denote a placeholder argument for std::bind.
+
+    m_isLoading = true;
+    m_cancelLoading = false;
+
+    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto  commandList = commandQueue.GetCommandList();
+
+    // Load a scene, passing an optional function object for receiving loading progress events.
+    m_loadingText = std::string("Loading ") + ConvertString(sceneFile) + "...";
+    auto scene = commandList->LoadSceneFromFile(sceneFile, std::bind(&Demo::LoadingProgress, this, _1));
+
+    if (scene)
+    {
+        // Scale the scene so it fits in the camera frustum.
+        DirectX::BoundingSphere s;
+        BoundingSphere::CreateFromBoundingBox(s, scene->GetAABB());
+        auto scale = 50.0f / (s.Radius * 2.0f);
+        s.Radius *= scale;
+
+        scene->GetRootNode()->SetLocalTransform(XMMatrixScaling(scale, scale, scale));
+
+        // Position the camera so that it is looking at the loaded scene.
+        auto cameraRotation = m_camera.GetRotation();
+        auto cameraFoV = m_camera.GetFov();
+        auto distanceToObject = s.Radius / std::tanf(XMConvertToRadians(cameraFoV) / 2.0f);
+
+        auto cameraPosition = XMVectorSet(0, 0, -distanceToObject, 1);
+        //        cameraPosition      = XMVector3Rotate( cameraPosition, cameraRotation );
+        auto focusPoint = XMVectorSet(s.Center.x * scale, s.Center.y * scale, s.Center.z * scale, 1.0f);
+        cameraPosition = cameraPosition + focusPoint;
+
+        // TODO: Make cam look a .
+        // m_camera.SetTranslation(cameraPosition);
+        // m_camera.SetLookAt(focusPoint);
+
+        m_scene = scene;
+    }
+
+    commandQueue.ExecuteCommandList(commandList);
+
+    // Ensure that the scene is completely loaded before rendering.
+    commandQueue.Flush();
+
+    // Loading is finished.
+    m_isLoading = false;
+
+    return scene != nullptr;
+}
+
 void Demo::OnUpdate(UpdateEventArgs& e)
 {
     static uint64_t frameCount = 0;
@@ -306,68 +367,80 @@ void Demo:: OnRender()
     auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue.GetCommandList();
 
-    // Create a scene visitor that is used to perform the actual rendering of the meshes in the scenes.
-    SceneVisitor visitor(*commandList);
+    const auto& renderTarget = m_isLoading ? m_swapChain->GetRenderTarget() : m_renderTarget;
 
-    // UINT currentBackBufferID = m_pWindow->GetCurrentBackBufferID();
-    // auto backbuffer = m_pWindow->GetCurrentBackBuffer();
-    // auto rtv = m_pWindow->GetCurrentRTV();
-    // auto dsv = m_depthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
-
-    // Clear the render targets.
+    if (m_isLoading)
     {
-        // TransitionResource(commandList, backbuffer,
-        //     D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
+	    // Clear the render targets.
+	        // TransitionResource(commandList, backbuffer,
+	        //     D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-        FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+	        FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-        commandList->ClearTexture(m_renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
-        commandList->ClearDepthStencilTexture(m_renderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
+	        commandList->ClearTexture(m_renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
+	        commandList->ClearDepthStencilTexture(m_renderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
 
-        // ClearRTV(commandList, rtv, clearColor);
-        // ClearDepth(commandList, dsv);
+	        // ClearRTV(commandList, rtv, clearColor);
+	        // ClearDepth(commandList, dsv);
     }
+    else
+    {
+		SceneVisitor visitor(*commandList);
 
-    commandList->SetPipelineState(m_pipelineState);
-    commandList->SetGraphicsRootSignature(m_rootSignature);
+	    // Create a scene visitor that is used to perform the actual rendering of the meshes in the scenes.
 
-    commandList->SetViewport(m_viewport);
-    commandList->SetScissorRect(m_scissorRect);
+	    // UINT currentBackBufferID = m_pWindow->GetCurrentBackBufferID();
+	    // auto backbuffer = m_pWindow->GetCurrentBackBuffer();
+	    // auto rtv = m_pWindow->GetCurrentRTV();
+	    // auto dsv = m_depthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
-    commandList->SetRenderTarget(m_renderTarget);
 
-    // Draw Cube
-    XMMATRIX translationMatrix = XMMatrixTranslation(4.0f, 4.0f, 4.0f);
-    XMMATRIX rotationMatrix = XMMatrixIdentity();
-    XMMATRIX scaleMatrix = XMMatrixScaling(4.0f, 4.0f, 4.0f);
-    XMMATRIX worldMatrix = scaleMatrix * rotationMatrix * translationMatrix;
-    XMMATRIX viewMatrix = m_camera.GetViewMatrix();
-    XMMATRIX viewProjectionMatrix = viewMatrix * m_camera.GetProjectionMatrix();
+	    commandList->SetPipelineState(m_pipelineState);
+	    commandList->SetGraphicsRootSignature(m_rootSignature);
 
-    Matrices cubeMatrix;
-    ComputeMatrices(worldMatrix, viewMatrix, viewProjectionMatrix, cubeMatrix);
-    
-    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATRICES_CB, cubeMatrix);
-    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, Material::White);
-	commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	    commandList->SetViewport(m_viewport);
+	    commandList->SetScissorRect(m_scissorRect);
 
-    m_cubeMesh->Accept(visitor);
+	    commandList->SetRenderTarget(m_renderTarget);
 
-    // Resolve the MSAA render target to the swapchain's backbuffer.
-    auto& swapChainRT = m_swapChain->GetRenderTarget();
-    auto  swapChainBackBuffer = swapChainRT.GetTexture(AttachmentPoint::Color0);
-    auto  msaaRenderTarget = m_renderTarget.GetTexture(AttachmentPoint::Color0);
+        m_scene->Accept(visitor);
 
-    commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
 
-    // Render the GUI on the render target
-    OnGUI(commandList, swapChainRT);
+        // TODO: Look into EffectsPSO. think this is what you're missing.
 
-    commandQueue.ExecuteCommandList(commandList);
+	 //    // Draw Cube
+	 //    XMMATRIX translationMatrix = XMMatrixTranslation(4.0f, 4.0f, 4.0f);
+	 //    XMMATRIX rotationMatrix = XMMatrixIdentity();
+	 //    XMMATRIX scaleMatrix = XMMatrixScaling(4.0f, 4.0f, 4.0f);
+	 //    XMMATRIX worldMatrix = scaleMatrix * rotationMatrix * translationMatrix;
+	 //    XMMATRIX viewMatrix = m_camera.GetViewMatrix();
+	 //    XMMATRIX viewProjectionMatrix = viewMatrix * m_camera.GetProjectionMatrix();
+	 //
+	 //    Matrices cubeMatrix;
+	 //    ComputeMatrices(worldMatrix, viewMatrix, viewProjectionMatrix, cubeMatrix);
+	 //    
+	 //    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATRICES_CB, cubeMatrix);
+	 //    commandList->SetGraphicsDynamicConstantBuffer(RootParameters::MATERIAL_CB, Material::White);
+		// commandList->SetShaderResourceView(RootParameters::TEXTURES, 0, m_defaultTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+	 //
+	 //    m_cubeMesh->Accept(visitor);
 
-    // Present
-    // m_pWindow->Present(m_renderTarget.GetTexture(AttachmentPoint::Color0));
-    m_swapChain->Present();
+	    // Resolve the MSAA render target to the swapchain's backbuffer.
+	    auto& swapChainRT = m_swapChain->GetRenderTarget();
+	    auto  swapChainBackBuffer = swapChainRT.GetTexture(AttachmentPoint::Color0);
+	    auto  msaaRenderTarget = m_renderTarget.GetTexture(AttachmentPoint::Color0);
+
+	    commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
+
+    }
+	    // Render the GUI on the render target
+	    OnGUI(commandList, m_swapChain->GetRenderTarget());
+
+	    commandQueue.ExecuteCommandList(commandList);
+
+	    // Present
+	    // m_pWindow->Present(m_renderTarget.GetTexture(AttachmentPoint::Color0));
+	    m_swapChain->Present();
 
     // // prepare rendering pipeline
     // commandList->SetPipelineState(m_pipelineState.Get());
@@ -585,6 +658,12 @@ bool Demo::LoadContent()
    
     // This magic here allows ImGui to process window messages.(TODO: not sure how this works yet)
 	app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
+
+
+    // Start the loading task to perform async loading of the scene file.
+	m_loadingTask = std::async(std::launch::async, std::bind(&Demo::LoadScene, this,
+        L"assets/sponza/sponza_nobanner.obj"));
+
 
     auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue.GetCommandList();
