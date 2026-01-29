@@ -2,6 +2,7 @@
 #include "demo.h"
 #include "demo.h"
 
+#include <iostream>
 #include <Shlwapi.h>
 
 #include "application.h"
@@ -11,6 +12,7 @@
 #include "window.h"
 
 #include "dx12_includes.h"
+#include "effect_pso.h"
 #include "material.h"
 #include "render_target.h"
 #include "Scene.h"
@@ -19,30 +21,30 @@
 #include "swapchain.h"
 using namespace DirectX;
 
-struct Matrices
-{
-    XMMATRIX ModelMatrix;
-    XMMATRIX ModelViewMatrix;
-    XMMATRIX InverseTransposeModelView;
-    XMMATRIX MVP;
-};
+// struct Matrices
+// {
+//     XMMATRIX ModelMatrix;
+//     XMMATRIX ModelViewMatrix;
+//     XMMATRIX InverseTransposeModelView;
+//     XMMATRIX MVP;
+// };
+//
+// struct VertexData
+// {
+// 	XMFLOAT3 position;
+// 	XMFLOAT3 color;
+// };
 
-struct VertexData
-{
-	XMFLOAT3 position;
-	XMFLOAT3 color;
-};
-
-enum RootParameters
-{
-	MATRICES_CB,
-    MATERIAL_CB, // is in space 1, not sure why..
-    // LIGHT_PROPERTIES_CB,
-    // POINTLIGHTS,
-    // SPOTLIGHTS,
-    TEXTURES,
-    NUM_PARAMETERS
-};
+// enum RootParameters
+// {
+// 	MATRICES_CB,
+//     MATERIAL_CB, // is in space 1, not sure why..
+//     // LIGHT_PROPERTIES_CB,
+//     // POINTLIGHTS,
+//     // SPOTLIGHTS,
+//     TEXTURES,
+//     NUM_PARAMETERS
+// };
 
 XMMATRIX XM_CALLCONV LookAtMatrix(FXMVECTOR position, FXMVECTOR direction, FXMVECTOR up)
 {
@@ -307,11 +309,10 @@ void Demo::OnUpdate(UpdateEventArgs& e)
     XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     m_camera.Translate(cameraTranslate, Space::LOCAL);
     m_camera.Translate(cameraPan, Space::LOCAL);
-
     XMVECTOR cameraRotation = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(m_pitch), XMConvertToRadians(m_yaw), 0.0f);
     m_camera.SetRotation(cameraRotation);
 
-    XMMATRIX viewMatrix = m_camera.GetViewMatrix();
+    // XMMATRIX viewMatrix = m_camera.GetViewMatrix();
 
     OnRender();
     
@@ -333,13 +334,13 @@ void Demo::OnUpdate(UpdateEventArgs& e)
 
 }
 
-void XM_CALLCONV ComputeMatrices( FXMMATRIX model, CXMMATRIX view, CXMMATRIX viewProj, Matrices& mat)
-{
-    mat.ModelMatrix = model;
-    mat.ModelViewMatrix = model * view;
-    mat.InverseTransposeModelView = XMMatrixTranspose(XMMatrixInverse(nullptr, mat.ModelViewMatrix));
-    mat.MVP = model * viewProj;
-}
+// void XM_CALLCONV ComputeMatrices( FXMMATRIX model, CXMMATRIX view, CXMMATRIX viewProj, Matrices& mat)
+// {
+//     mat.ModelMatrix = model;
+//     mat.ModelViewMatrix = model * view;
+//     mat.InverseTransposeModelView = XMMatrixTranspose(XMMatrixInverse(nullptr, mat.ModelViewMatrix));
+//     mat.MVP = model * viewProj;
+// }
 
 void Demo::TransitionResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, Microsoft::WRL::ComPtr<ID3D12Resource> pResource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after)
 {
@@ -377,15 +378,15 @@ void Demo:: OnRender()
 
 	        FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-	        commandList->ClearTexture(m_renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
-	        commandList->ClearDepthStencilTexture(m_renderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
+	        commandList->ClearTexture(renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
+	        // commandList->ClearDepthStencilTexture(renderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
 
 	        // ClearRTV(commandList, rtv, clearColor);
 	        // ClearDepth(commandList, dsv);
     }
     else
     {
-		SceneVisitor visitor(*commandList);
+        SceneVisitor visitor(*commandList, m_camera, *m_unlitPSO, false);
 
 	    // Create a scene visitor that is used to perform the actual rendering of the meshes in the scenes.
 
@@ -394,13 +395,20 @@ void Demo:: OnRender()
 	    // auto rtv = m_pWindow->GetCurrentRTV();
 	    // auto dsv = m_depthDescriptorHeap->GetCPUDescriptorHandleForHeapStart();
 
+         // Clear the render targets.
+        {
+            FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
 
-	    commandList->SetPipelineState(m_pipelineState);
-	    commandList->SetGraphicsRootSignature(m_rootSignature);
+            commandList->ClearTexture(renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
+            commandList->ClearDepthStencilTexture(renderTarget.GetTexture(AttachmentPoint::DepthStencil),
+                D3D12_CLEAR_FLAG_DEPTH);
+        }
+
+	    // commandList->SetPipelineState(m_pipelineState);
+	    // commandList->SetGraphicsRootSignature(m_rootSignature);
 
 	    commandList->SetViewport(m_viewport);
 	    commandList->SetScissorRect(m_scissorRect);
-
 	    commandList->SetRenderTarget(m_renderTarget);
 
         m_scene->Accept(visitor);
@@ -527,6 +535,7 @@ void Demo::OnKeyPress(KeyEventArgs& e)
         break;
     case KeyCode::Up:
     case KeyCode::W:
+        // m_camera // TODO: switch to camera class movement.
         m_forward = 1.0f;
         break;
     case KeyCode::Left:
@@ -644,12 +653,6 @@ bool Demo::LoadContent()
     auto& app = Application::Get();
     auto device = app.GetDevice();
 
-    // Finds the path to the .exe folder
-    char buffer[1024];
-    DWORD length = GetModuleFileNameA(nullptr, buffer, sizeof(buffer));
-    if (length == 0) throw std::runtime_error("Failed to get executable path.");
-    auto exePath = std::filesystem::path(buffer).parent_path();
-
     // Create Swapchain
     m_swapChain = app.CreateSwapchain(m_pWindow->GetWindowHandle(), DXGI_FORMAT_R8G8B8A8_UNORM);
     m_swapChain->SetVSync(m_vSync);
@@ -658,7 +661,6 @@ bool Demo::LoadContent()
    
     // This magic here allows ImGui to process window messages.(TODO: not sure how this works yet)
 	app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
-
 
     // Start the loading task to perform async loading of the scene file.
 	m_loadingTask = std::async(std::launch::async, std::bind(&Demo::LoadScene, this,
@@ -670,80 +672,17 @@ bool Demo::LoadContent()
 
 	m_cubeMesh = commandList->CreateCube();
 
-    m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
+    // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 
-    commandQueue.ExecuteCommandList(commandList);
+    auto fence = commandQueue.ExecuteCommandList(commandList);
 
-    // Get the folder of the running executable.
-    std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + L"/vertex.cso";
-    std::wstring pixelShader = parentPath + L"/pixel.cso";
+    m_unlitPSO = std::make_shared<EffectPSO>(false, false);
 
-    // Load Vertex Shader
-    ComPtr<ID3DBlob> vertexShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-
-    // Load Pixel Shader
-    ComPtr<ID3DBlob> pixelShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
-
-    // // Root Signature
-    // D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData = {};
-    // featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-    // if (FAILED(device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData, sizeof(featureData))))
-    // {
-    //     featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
-    // }
-
-    // Allow input but deny unused shader stages
-    D3D12_ROOT_SIGNATURE_FLAGS rootFlags =
-        D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
-        D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
-
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
-
-    CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NUM_PARAMETERS];
-    rootParameters[RootParameters::MATRICES_CB].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
-    rootParameters[RootParameters::MATERIAL_CB].InitAsConstantBufferView(0, 1, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[RootParameters::TEXTURES].InitAsDescriptorTable(1, &descriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
- 
-    // Samplers (anisotropic is for stretched textures for example a street going into distance)
-    CD3DX12_STATIC_SAMPLER_DESC linearRepeatSampler(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
-    CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
-	
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDesc;
-    rootSignatureDesc.Init_1_1(RootParameters::NUM_PARAMETERS, rootParameters, 1, &linearRepeatSampler, rootFlags);
-	
-    // m_rootSignature.SetRootSignatureDesc(rootSignatureDesc.Desc_1_1, featureData.HighestVersion);
-    m_rootSignature = app.CreateRootSignature(rootSignatureDesc.Desc_1_1);
-	
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 
-    D3D12_RT_FORMAT_ARRAY rtvFormats = {};
-    rtvFormats.NumRenderTargets = 1;
-    rtvFormats.RTFormats[0] = backBufferFormat;
-
     DXGI_SAMPLE_DESC sampleDesc = app.GetMultisampleQualityLevels(backBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
-    
-	pipelineStateStream.rootSignature = m_rootSignature->GetRootSignature().Get();
-    pipelineStateStream.depthFormat = depthBufferFormat;
-    pipelineStateStream.inputLayout = VertexPositionNormalTangentBitangentTexture::inputLayout;
-    pipelineStateStream.primitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineStateStream.renderTargetFormats = rtvFormats;
-    pipelineStateStream.pixelShader = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-    pipelineStateStream.vertexShader = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-    pipelineStateStream.sampleDesc = sampleDesc;
 
-    // D3D12_PIPELINE_STATE_STREAM_DESC pipelineDesc = {
-	   //  sizeof(PipelineStateStream), &pipelineStateStream
-    // };
-    
-    // ThrowIfFailed(device->CreatePipelineState(&pipelineDesc, IID_PPV_ARGS(m_pipelineState)));
-    m_pipelineState = app.CreatePipelineStateObject(pipelineStateStream);
-    
 	// offscreen render target
     auto colorDesc = CD3DX12_RESOURCE_DESC::Tex2D(backBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 	
@@ -776,7 +715,7 @@ bool Demo::LoadContent()
     // commandQueue.WaitForFenceValue(fenceValue);
 
 
-    commandQueue.Flush();
+    commandQueue.WaitForFenceValue(fence);
 	m_pWindow->RegisterCallbacks(shared_from_this());
     m_pWindow->Show();
 

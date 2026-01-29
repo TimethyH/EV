@@ -141,6 +141,9 @@
     <ClCompile Include="source\model.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\effect_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\helpers.h">
@@ -306,6 +309,12 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\model.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\effect_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\light.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

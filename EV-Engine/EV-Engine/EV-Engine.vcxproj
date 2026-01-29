@@ -32,6 +32,7 @@
     <ClCompile Include="source\descriptor_allocator_page.cpp" />
     <ClCompile Include="source\dx12_includes.cpp" />
     <ClCompile Include="source\dynamic_descriptor_heap.cpp" />
+    <ClCompile Include="source\effect_pso.cpp" />
     <ClCompile Include="source\game..cpp" />
     <ClCompile Include="source\generate_mips_pso.cpp" />
     <ClCompile Include="source\GUI.cpp" />
@@ -75,6 +76,7 @@
     <ClInclude Include="header\descriptor_allocator_page.h" />
     <ClInclude Include="header\dx12_includes.h" />
     <ClInclude Include="header\dynamic_descriptor_heap.h" />
+    <ClInclude Include="header\effect_pso.h" />
     <ClInclude Include="header\events.h" />
     <ClInclude Include="header\game.h" />
     <ClInclude Include="header\game_framework.h" />
@@ -84,6 +86,7 @@
     <ClInclude Include="header\helpers.h" />
     <ClInclude Include="header\index_buffer.h" />
     <ClInclude Include="header\key_codes.h" />
+    <ClInclude Include="header\light.h" />
     <ClInclude Include="header\material.h" />
     <ClInclude Include="header\model.h" />
     <ClInclude Include="header\optional.hpp" />

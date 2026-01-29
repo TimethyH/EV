@@ -33,6 +33,8 @@
 
 #include <visitor.h>
 
+class EffectPSO;
+class Camera;
 // namespace dx12lib
 // {
     class CommandList;
@@ -45,15 +47,18 @@ public:
      * Constructor for the SceneVisitor.
      * @param commandList The CommandList that is used to render the meshes in the scene.
      */
-    SceneVisitor(CommandList& commandList);
+    SceneVisitor(CommandList& commandList, const Camera& camera, EffectPSO& pso, bool transparent);
 
     // For this sample, we don't need to do anything when visiting the Scene.
-    virtual void Visit(Scene& scene) override {}
-    // For this sample, we don't need to do anything when visiting the SceneNode.
-    virtual void Visit(SceneNode& sceneNode) override {}
+    virtual void Visit(Scene& scene) override;
+	// For this sample, we don't need to do anything when visiting the SceneNode.
+	virtual void Visit(SceneNode& sceneNode) override;
     // When visiting a mesh, the mesh must be rendered.
     virtual void Visit(Mesh& mesh) override;
 
 private:
-    CommandList& m_CommandList;
+    CommandList& m_commandList;
+    const Camera& m_camera;
+    EffectPSO& m_lightingPSO;
+    bool m_transparentPass;
 };

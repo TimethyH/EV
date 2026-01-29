@@ -10,6 +10,7 @@
 #include "root_signature.h"
 #include "Texture.h"
 
+class EffectPSO;
 class PipelineStateObject;
 class Scene;
 class GUI;
@@ -121,6 +122,8 @@ private:
 	std::shared_ptr<Window> m_pWindow = nullptr;
 	std::shared_ptr<SwapChain> m_swapChain = nullptr;
 	std::shared_ptr<GUI> m_GUI = nullptr;
+	
+	std::shared_ptr<EffectPSO> m_unlitPSO;
 
 	std::future<bool> m_loadingTask;
 

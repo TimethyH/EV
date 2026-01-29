@@ -44,6 +44,8 @@ public:
 
 	void XM_CALLCONV SetRotation(const DirectX::FXMVECTOR& rotation) const;
 	DirectX::XMVECTOR GetRotation() const;
+	void __vectorcall SetFocalPoint(DirectX::FXMVECTOR focalPoint);
+	DirectX::XMVECTOR GetFocalPoint() const;
 
 	void XM_CALLCONV Translate(const DirectX::FXMVECTOR& translation, Space space = Space::LOCAL) const;
 	void XM_CALLCONV Rotate(const DirectX::FXMVECTOR& quaternion) const;
@@ -63,6 +65,9 @@ protected:
 		DirectX::XMMATRIX m_inverseViewMatrix;
 		DirectX::XMMATRIX m_projectionMatrix;
 		DirectX::XMMATRIX m_inverseProjectionMatrix;
+
+		// World-space position of the focus object.
+		DirectX::XMVECTOR m_focalPoint;
 	};
 
 	AlignedData* pData = nullptr; // TODO: make this a smart pointer?

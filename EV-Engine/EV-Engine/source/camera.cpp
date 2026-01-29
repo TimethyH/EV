@@ -121,6 +121,18 @@ DirectX::XMVECTOR Camera::GetRotation() const
 	return pData->m_rotation;
 }
 
+void XM_CALLCONV Camera::SetFocalPoint(DirectX::FXMVECTOR focalPoint)
+{
+	pData->m_focalPoint = focalPoint;
+	m_viewDirty = true;
+}
+
+DirectX::XMVECTOR Camera::GetFocalPoint() const
+{
+	return pData->m_focalPoint;
+}
+
+
 void XM_CALLCONV Camera::Translate(const DirectX::FXMVECTOR& translation, Space space) const
 {
 	switch (space)

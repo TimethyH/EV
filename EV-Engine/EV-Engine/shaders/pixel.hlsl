@@ -44,13 +44,22 @@ cbuffer MaterialCB : register(b0, space1)
     Material material; // Need to declare the actual member inside the cbuffer
 };
 
-Texture2D albedoTexture : register(t2);
+// Textures
+Texture2D AmbientTexture : register(t3);
+Texture2D EmissiveTexture : register(t4);
+Texture2D DiffuseTexture : register(t5);
+Texture2D SpecularTexture : register(t6);
+Texture2D SpecularPowerTexture : register(t7);
+Texture2D NormalTexture : register(t8);
+Texture2D BumpTexture : register(t9);
+Texture2D OpacityTexture : register(t10);
+
 SamplerState linearSampler : register(s0);
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
     float4 diffuse = material.Diffuse; // Reference the member, not the cbuffer name
-    float4 texColor = albedoTexture.Sample(linearSampler, IN.TexCoord);
+    float4 texColor = AmbientTexture.Sample(linearSampler, IN.TexCoord);
     // return float4(1.0, 0.0, 0.0, 1.0);
 	return texColor; // Removed unnecessary parentheses
 }
