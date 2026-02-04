@@ -10,6 +10,7 @@
 #include "root_signature.h"
 #include "Texture.h"
 
+
 class EffectPSO;
 class PipelineStateObject;
 class Scene;
@@ -25,6 +26,7 @@ public:
 	bool LoadContent() override;
 	void UnloadContent() override;
 
+	static DirectX::XMVECTOR GetCameraPosition() { return m_camera.GetTranslation(); } // TODO: remove. find a better solution than polluding demo.
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender() override;
@@ -64,7 +66,7 @@ private:
 
 	std::shared_ptr<PipelineStateObject> m_pipelineState;
 
-	Camera m_camera;
+	static Camera m_camera;
 
 	struct alignas(16) CameraData
 	{

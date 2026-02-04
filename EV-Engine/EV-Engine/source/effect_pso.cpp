@@ -1,3 +1,5 @@
+#include "effect_pso.h"
+
 #include <effect_pso.h>
 
 #include <command_list.h>
@@ -13,6 +15,7 @@
 #include <wrl/client.h>
 
 #include "application.h"
+#include "demo.h"
 
 using namespace Microsoft::WRL;
 
@@ -64,6 +67,7 @@ EffectPSO::EffectPSO(bool enableLighting, bool enableDecal)
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
     rootParameters[RootParameters::MatricesCB].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
     rootParameters[RootParameters::MaterialCB].InitAsConstantBufferView(0, 1, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::Camera].InitAsConstantBufferView(1,0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::LightPropertiesCB].InitAsConstants(sizeof(LightProperties) / 4, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
@@ -189,7 +193,11 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
         }
     }
-
+    if (m_dirtyFlags & DF_Camera)
+    {
+        auto position = Demo::GetCameraPosition();
+        commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, position);
+    }
     // if (m_dirtyFlags & DF_PointLights)
     // {
     //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);

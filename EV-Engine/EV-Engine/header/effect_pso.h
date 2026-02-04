@@ -92,6 +92,7 @@ public:
         // Texture2D NormalTexture : register( t8 );
         // Texture2D BumpTexture : register( t9 );
         // Texture2D OpacityTexture : register( t10 );
+        Camera, // just its position
         NumRootParameters
     };
 
@@ -182,6 +183,7 @@ private:
         DF_DirectionalLights = (1 << 2),
         DF_Material = (1 << 3),
         DF_Matrices = (1 << 4),
+        DF_Camera = (1 << 5),
         DF_All = DF_PointLights | DF_SpotLights | DF_DirectionalLights | DF_Material | DF_Matrices
     };
 

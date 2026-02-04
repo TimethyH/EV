@@ -46,6 +46,8 @@ using namespace DirectX;
 //     NUM_PARAMETERS
 // };
 
+Camera Demo::m_camera; // Staticly defined in .h to get its position for the effectsPSO -> to shader
+
 XMMATRIX XM_CALLCONV LookAtMatrix(FXMVECTOR position, FXMVECTOR direction, FXMVECTOR up)
 {
     assert(!XMVector3Equal(direction, XMVectorZero()));
