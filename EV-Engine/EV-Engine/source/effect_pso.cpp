@@ -193,7 +193,7 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
         }
     }
-    if (m_dirtyFlags & DF_Camera)
+    // if (m_dirtyFlags & DF_Camera)
     {
         auto position = Demo::GetCameraPosition();
         CameraData cameraData;

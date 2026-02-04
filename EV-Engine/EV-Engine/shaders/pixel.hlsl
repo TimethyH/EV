@@ -5,15 +5,7 @@ struct PixelShaderInput
     float2 TexCoord : TEXCOORD;
 };
 
-struct Camera
-{
-    float3 Position;
-};
 
-cbuffer CameraCB: register(b1,space0)
-{
-    Camera camera;
-}
 struct Material
 {
     float4 Diffuse;
@@ -53,6 +45,15 @@ cbuffer MaterialCB : register(b0, space1)
     Material material; // Need to declare the actual member inside the cbuffer
 };
 
+struct Camera
+{
+    float3 Position;
+};
+
+cbuffer CameraCB : register(b1, space0)
+{
+    Camera camera;
+}
 // Textures
 Texture2D AmbientTexture : register(t3);
 Texture2D EmissiveTexture : register(t4);
