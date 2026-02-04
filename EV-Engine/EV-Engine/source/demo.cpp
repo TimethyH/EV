@@ -458,7 +458,7 @@ void Demo:: OnRender()
         XMMATRIX translation = XMMatrixTranslation(0.0f,-12.0f, 0.0f);
         
     	// m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
-        m_scene->Accept(visitor);
+        // m_scene->Accept(visitor);
         
 
     	XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);

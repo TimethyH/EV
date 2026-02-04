@@ -182,14 +182,14 @@ float3 fresnelSchlick(float cosTheta, float3 F0, float roughness)
    // return F0 + (float3(1.0f) - F0) * pow(1.0f - cosTheta, 5.0f);
 }
 
-float3 PBRCalculateFresnel(const float3 view, const float3 normal, float3 F0, float roughness)
+float3 PBRCalculateFresnel(const float cosTheta, float3 F0, float roughness)
 {
 
 	//float3 F0 = float3(0.04f);  // Base reflectivity for dielectrics
 
     // Calculate dot product between the half vector and view direction
-    float HdotV = max(dot(view, normal), 0.0f);
-    float3 fresnel = fresnelSchlick(HdotV, F0, roughness);
+    // float HdotV = max(dot(view, normal), 0.0f);
+    float3 fresnel = fresnelSchlick(cosTheta, F0, roughness);
 
     return fresnel;
 }
@@ -245,9 +245,9 @@ float4 main(PixelShaderInput IN) : SV_Target
     float roughness = metallicRough.g;
     float metallic = metallicRough.b;
 		
-    float3 viewDir = normalize(camera.Position - IN.PositionVS.xyz);
+    float3 viewDir = normalize(-IN.PositionVS.xyz);
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
-    F0 = F0 * (1.0f - metallic) + diffuse * metallic;
+    F0 = F0 * (1.0f - metallic) + diffuse.rgb * metallic;
  
     //  // -------------------------------
     //      // Point Light Contribution
@@ -271,10 +271,11 @@ float4 main(PixelShaderInput IN) : SV_Target
     // -------------------------------
     float3 dirLightDir = normalize(-DirectionalLights[0].DirectionVS.xyz);
     float3 halfVec = normalize(viewDir + dirLightDir);
+    float HdotV = max(dot(halfVec, viewDir), 0.0);
     
     float normDist = PBRCalculateNormalDistribution(roughness, normalTex, halfVec);
     float geometryFunc = PBRCalculateGeometry(normalTex, viewDir, dirLightDir, roughness);
-    float3 fresnel = PBRCalculateFresnel(viewDir, normalTex, F0, roughness);
+    float3 fresnel = PBRCalculateFresnel(HdotV, F0, roughness);
     float3 kd = float3(1.0f,1.0f,1.0f) - fresnel;
     kd *= float3(1.0f,1.0f,1.0f) - metallic;
     float intensity = 1.0f;
@@ -283,7 +284,7 @@ float4 main(PixelShaderInput IN) : SV_Target
                                 * DirectionalLights[0].Color * intensity * max(dot(dirLightDir, normalTex), 0.0f);
  
  
-    // return float4(normalTex,1.0f);
+    // return float4(roughness, roughness, roughness, roughness);
 
     // return float4(normalTex * 0.5 + 0.5, 1.0);
 
