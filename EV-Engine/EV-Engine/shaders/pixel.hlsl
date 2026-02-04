@@ -58,8 +58,8 @@ SamplerState linearSampler : register(s0);
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float4 diffuse = material.Diffuse; // Reference the member, not the cbuffer name
+    float4 diffuse = DiffuseTexture.Sample(linearSampler, IN.TexCoord);
     float4 texColor = AmbientTexture.Sample(linearSampler, IN.TexCoord);
     // return float4(1.0, 0.0, 0.0, 1.0);
-	return texColor; // Removed unnecessary parentheses
+	return diffuse; // Removed unnecessary parentheses
 }

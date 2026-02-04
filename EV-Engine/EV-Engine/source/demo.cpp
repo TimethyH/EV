@@ -376,7 +376,7 @@ void Demo:: OnRender()
 	        // TransitionResource(commandList, backbuffer,
 	        //     D3D12_RESOURCE_STATE_PRESENT, D3D12_RESOURCE_STATE_RENDER_TARGET);
 
-	        FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
+	        FLOAT clearColor[] = { 0.9f, 0.2f, 0.4f, 1.0f };
 
 	        commandList->ClearTexture(renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
 	        // commandList->ClearDepthStencilTexture(renderTarget.GetTexture(AttachmentPoint::DepthStencil), D3D12_CLEAR_FLAG_DEPTH);
@@ -411,8 +411,21 @@ void Demo:: OnRender()
 	    commandList->SetScissorRect(m_scissorRect);
 	    commandList->SetRenderTarget(m_renderTarget);
 
+        // REMINDER: Transform is built with Scale * Rotation * Translation (SRT)
+        XMMATRIX scale = XMMatrixScaling(10.0f, 10.0f, 10.0f);
+        XMMATRIX rotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(-90.0f), 0.0f, 0.0f);
+        XMMATRIX translation = XMMatrixTranslation(0.0f,-12.0f, 0.0f);
+        
+    	// m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
         m_scene->Accept(visitor);
+        
 
+    	XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);
+    	m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
+        m_helmet->Accept(visitor);
+
+        m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
+        m_chessboard->Accept(visitor);
 
         // TODO: Look into EffectsPSO. think this is what you're missing.
 
@@ -667,10 +680,13 @@ bool Demo::LoadContent()
         L"assets/sponza/sponza_nobanner.obj"));
 
 
+
     auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue.GetCommandList();
 
-	m_cubeMesh = commandList->CreateCube();
+	// m_cubeMesh = commandList->CreateCube();
+    m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
+    m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 

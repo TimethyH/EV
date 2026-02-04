@@ -770,3 +770,61 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 */
 /////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+///
+///
+////////////////////////////////////////////////////////////////////////////// TODOs /////////////////////////////////////////////////////////////
+/*
+
+												GENERAL
+
+[ ] Understand ins and outs of the engine, how it works in its entirety. (Make a good mindmap)
+[ ] Find all TODOs in the engine and adres them
+[ ]	Read chapter 4 of Jeremiah's Tutorial
+[ ] Read the DX12 samples and understand how they do it.
+[ ] Add Material support
+[ ] Code cleanup. Remove all unused comments, structure the layout of demo, cleanup the class instantiation functions in Application.cpp (all in the top)
+[ ] Structure project folders better, seperate files into these
+[ ] use namespaces? like dx12lib. These are nice to know what is part of engine initialization.
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+
+
+												SPECIFIC
+
+Window
+	[ ] Create proper camera movement (WASD and Mouse click for rotation)
+	[ ] Handle closing gracefully
+	[ ] Handle window resizing
+	[ ]
+
+Scene
+	[ ] Implement own model loader (Y2)
+	[ ]
+	[ ]
+	[ ]
+
+Engine
+	[ ] ECS oriented engine
+	[ ] Add custom profiler. (Y3)
+	[ ] Setup ImGUI in a way, so it can adjust metrics of the scene at runtime (so you dont have to reload for every iteration)
+	[ ]
+
+
+Features
+	[ ] PBR
+	[ ] IBL
+	[ ] Cascaded Shadowmaps
+	[ ] Viewfinder picture placement
+	[ ]
+
+
+
+
+
+*/
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////

@@ -47,6 +47,8 @@ private:
 	std::shared_ptr<Scene> m_cubeMesh;
 
 	std::shared_ptr<Scene> m_scene;
+	std::shared_ptr<Scene> m_helmet;
+	std::shared_ptr<Scene> m_chessboard;
 
 	std::atomic_bool  m_isLoading;
 	bool m_cancelLoading;
