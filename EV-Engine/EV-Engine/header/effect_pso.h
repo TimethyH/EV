@@ -87,7 +87,7 @@ public:
 
         // PointLights,        // StructuredBuffer<PointLight> PointLights : register( t0 );
         // SpotLights,         // StructuredBuffer<SpotLight> SpotLights : register( t1 );
-        // DirectionalLights,  // StructuredBuffer<DirectionalLight> DirectionalLights : register( t2 )
+        DirectionalLights,  // StructuredBuffer<DirectionalLight> DirectionalLights : register( t2 )
 
         Textures,  // Texture2D AmbientTexture       : register( t3 );
         // Texture2D EmissiveTexture : register( t4 );

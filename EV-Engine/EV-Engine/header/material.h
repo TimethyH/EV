@@ -52,6 +52,8 @@
             const DirectX::XMFLOAT4 ambient = { 0, 0, 0, 1 },
             const DirectX::XMFLOAT4 emissive = { 0, 0, 0, 1 },
             const DirectX::XMFLOAT4 reflectance = { 0, 0, 0, 0 }, const float opacity = 1.0f,
+            const float roughness = 0.0f,
+            const float metallic = 0.0f,
             const float indexOfRefraction = 0.0f, const float bumpIntensity = 1.0f,
             const float alphaThreshold = 0.1f
         )
@@ -60,6 +62,8 @@
             , emissive(emissive)
             , ambient(ambient)
             , reflectance(reflectance)
+			, roughness(roughness)
+			, metallic(metallic)
             , opacity(opacity)
             , specularPower(specularPower)
             , indexOfRefraction(indexOfRefraction)
@@ -85,6 +89,8 @@
         //------------------------------------ ( 16 bytes )
         DirectX::XMFLOAT4 reflectance;
         //------------------------------------ ( 16 bytes )
+        float metallic;
+        float roughness;
         float opacity;                       // If opacity < 1, then the material is transparent.
         float specularPower;
         float indexOfRefraction;             // For transparent materials, IOR > 0.
@@ -100,6 +106,7 @@
         uint32_t hasNormalTexture;
         uint32_t hasBumpTexture;
         uint32_t hasOpacityTexture;
+        uint32_t hasMetallicRoughnessTexture;
         //------------------------------------ ( 16 bytes )
         // Total:                              ( 16 * 8 = 128 bytes )
     };
@@ -119,6 +126,7 @@
             Normal,
             Bump,
             Opacity,
+            MetallicRoughness,
             NumTypes,
         };
 
@@ -150,6 +158,9 @@
 
         float GetIndexOfRefraction() const;
         void  SetIndexOfRefraction(float indexOfRefraction);
+
+        const void SetMetallic(float metallic);
+        const void SetRoughness(float roughness);
 
         // When using bump maps, we can adjust the "intensity" of the normals generated
         // from the bump maps. We can even inverse the normals by using a negative intensity.

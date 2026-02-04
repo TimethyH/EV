@@ -11,6 +11,9 @@
 #include "Texture.h"
 
 
+struct DirectionalLight;
+struct SpotLight;
+struct PointLight;
 class EffectPSO;
 class PipelineStateObject;
 class Scene;
@@ -74,6 +77,10 @@ private:
 		DirectX::XMVECTOR m_initialRotation;
 	};
 	CameraData* m_pAlignedCameraData;
+
+	std::vector<PointLight> m_pointLights;
+	// std::vector<SpotLight>  m_spotLights;
+	std::vector<DirectionalLight> m_directionalLights;
 
 	// Camera Controls
 	float m_forward;

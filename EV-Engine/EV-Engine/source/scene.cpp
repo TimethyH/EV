@@ -172,6 +172,8 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
     float       reflectivity;
     float       shininess;
     float       bumpIntensity;
+    float       metallic = 0.0f;
+    float       roughness = 1.0f;
 
     std::shared_ptr<Material> pMaterial = std::make_shared<Material>();
 
@@ -210,6 +212,15 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
     if (material.Get(AI_MATKEY_BUMPSCALING, bumpIntensity) == aiReturn_SUCCESS)
     {
         pMaterial->SetBumpIntensity(bumpIntensity);
+    }
+    if (material.Get(AI_MATKEY_METALLIC_FACTOR, metallic) == aiReturn_SUCCESS)
+    {
+        pMaterial->SetMetallic(metallic);
+    }
+
+    if (material.Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == aiReturn_SUCCESS)
+    {
+        pMaterial->SetRoughness(roughness);
     }
 
     // Load ambient textures.
@@ -261,6 +272,17 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
         auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, false);
         pMaterial->SetTexture(Material::TextureType::SpecularPower, texture);
     }
+
+    // Load MetallicRoughness texture.
+    if (material.GetTextureCount(aiTextureType_GLTF_METALLIC_ROUGHNESS) > 0 &&
+        material.GetTexture(aiTextureType_GLTF_METALLIC_ROUGHNESS, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+            &aiBlendOperation) == aiReturn_SUCCESS)
+    {
+        fs::path texturePath(aiTexturePath.C_Str());
+        auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, false);
+        pMaterial->SetTexture(Material::TextureType::MetallicRoughness, texture);
+    }
+
 
     if (material.GetTextureCount(aiTextureType_OPACITY) > 0 &&
         material.GetTexture(aiTextureType_OPACITY, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,

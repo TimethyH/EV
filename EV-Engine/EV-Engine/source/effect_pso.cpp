@@ -61,7 +61,7 @@ EffectPSO::EffectPSO(bool enableLighting, bool enableDecal)
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 8, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 9, 3);
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
@@ -71,7 +71,7 @@ EffectPSO::EffectPSO(bool enableLighting, bool enableDecal)
     // rootParameters[RootParameters::LightPropertiesCB].InitAsConstants(sizeof(LightProperties) / 4, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-    // rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
@@ -191,6 +191,7 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 5, m_material->GetTexture(TextureType::Normal));
             BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
+            BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
         }
     }
     // if (m_dirtyFlags & DF_Camera)
@@ -204,23 +205,23 @@ void EffectPSO::Apply(CommandList& commandList)
     // {
     //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
     // }
-    //
+    
     // if (m_dirtyFlags & DF_SpotLights)
     // {
-    //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::SpotLights, m_SpotLights);
+    //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::SpotLights, m_spotLights);
     // }
-    //
-    // if (m_dirtyFlags & DF_DirectionalLights)
-    // {
-    //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::DirectionalLights, m_DirectionalLights);
-    // }
-    //
+    
+    if (m_dirtyFlags & DF_DirectionalLights)
+    {
+        commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::DirectionalLights, m_directionalLights);
+    }
+    
     // if (m_dirtyFlags & (DF_PointLights | DF_SpotLights | DF_DirectionalLights))
     // {
     //     LightProperties lightProps;
     //     lightProps.numPointLights = static_cast<uint32_t>(m_pointLights.size());
-    //     lightProps.NumSpotLights = static_cast<uint32_t>(m_SpotLights.size());
-    //     lightProps.NumDirectionalLights = static_cast<uint32_t>(m_DirectionalLights.size());
+    //     lightProps.numSpotLights = static_cast<uint32_t>(m_spotLights.size());
+    //     lightProps.numDirectionalLights = static_cast<uint32_t>(m_directionalLights.size());
     //
     //     commandList.SetGraphics32BitConstants(RootParameters::LightPropertiesCB, lightProps);
     // }

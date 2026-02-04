@@ -40,6 +40,83 @@ struct Material
     // Total:                              ( 16 * 9 = 144 bytes )
 };
 
+// struct PointLight
+// {
+//     float4 PositionWS; // Light position in world space.
+//     //----------------------------------- (16 byte boundary)
+//     float4 PositionVS; // Light position in view space.
+//     //----------------------------------- (16 byte boundary)
+//     float4 Color;
+//     //----------------------------------- (16 byte boundary)
+//     float Ambient;
+//     float ConstantAttenuation;
+//     float LinearAttenuation;
+//     float QuadraticAttenuation;
+//     //----------------------------------- (16 byte boundary)
+//     // Total:                              16 * 4 = 64 bytes
+// };
+
+// struct SpotLight
+// {
+//     float4 PositionWS; // Light position in world space.
+//     //----------------------------------- (16 byte boundary)
+//     float4 PositionVS; // Light position in view space.
+//     //----------------------------------- (16 byte boundary)
+//     float4 DirectionWS; // Light direction in world space.
+//     //----------------------------------- (16 byte boundary)
+//     float4 DirectionVS; // Light direction in view space.
+//     //----------------------------------- (16 byte boundary)
+//     float4 Color;
+//     //----------------------------------- (16 byte boundary)
+//     float Ambient;
+//     float SpotAngle;
+//     float ConstantAttenuation;
+//     float LinearAttenuation;
+//     //----------------------------------- (16 byte boundary)
+//     float QuadraticAttenuation;
+//     float3 Padding;
+//     //----------------------------------- (16 byte boundary)
+//     // Total:                              16 * 7 = 112 bytes
+// };
+
+struct DirectionalLight
+{
+    float4 DirectionWS; // Light direction in world space.
+    //----------------------------------- (16 byte boundary)
+    float4 DirectionVS; // Light direction in view space.
+    //----------------------------------- (16 byte boundary)
+    float4 Color;
+    //----------------------------------- (16 byte boundary)
+    float Ambient;
+    float3 Padding;
+    //----------------------------------- (16 byte boundary)
+    // Total:                              16 * 4 = 64 bytes
+};
+
+// struct LightProperties
+// {
+//     uint NumPointLights;
+//     uint NumSpotLights;
+//     uint NumDirectionalLights;
+// };
+
+// struct LightResult
+// {
+//     float4 Diffuse;
+//     float4 Specular;
+//     float4 Ambient;
+// };
+
+// cbuffer LightPropertiesCB : register(b1)
+// {
+//     LightProperties lightProperty;
+// }
+
+// StructuredBuffer<PointLight> PointLights : register(t0);
+// StructuredBuffer<SpotLight> SpotLights : register(t1);
+StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
+
+
 cbuffer MaterialCB : register(b0, space1)
 {
     Material material; // Need to declare the actual member inside the cbuffer
@@ -54,18 +131,6 @@ cbuffer CameraCB : register(b1, space0)
 {
     Camera camera;
 }
-// Textures
-Texture2D AmbientTexture : register(t3);
-Texture2D EmissiveTexture : register(t4);
-Texture2D DiffuseTexture : register(t5);
-Texture2D SpecularTexture : register(t6);
-Texture2D SpecularPowerTexture : register(t7);
-Texture2D NormalTexture : register(t8);
-Texture2D BumpTexture : register(t9);
-Texture2D OpacityTexture : register(t10);
-
-SamplerState linearSampler : register(s0);
-
 
 float PBRCalculateNormalDistribution(float roughness, const float3 normal, const float3 halfvec)
 {
@@ -144,57 +209,85 @@ float3 PBRSpecular(float normalDist, float geometry, float3 fresnel, float3 view
     return nom / denom;
 }
 
+// Textures
+Texture2D AmbientTexture : register(t3);
+Texture2D EmissiveTexture : register(t4);
+Texture2D DiffuseTexture : register(t5);
+Texture2D SpecularTexture : register(t6);
+Texture2D SpecularPowerTexture : register(t7);
+Texture2D NormalTexture : register(t8);
+Texture2D BumpTexture : register(t9);
+Texture2D OpacityTexture : register(t10);
+Texture2D MetallicRoughness : register(t11);
+
+SamplerState linearSampler : register(s0);
+
+
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float4 diffuse = float4(camera.Position, 1.0);
+    float4 diffuse = DiffuseTexture.Sample(linearSampler, IN.TexCoord);
     float4 texColor = AmbientTexture.Sample(linearSampler, IN.TexCoord);
-    // return float4(1.0, 0.0, 0.0, 1.0);
-	return diffuse; // Removed unnecessary parentheses
+    float3 normalTex = NormalTexture.Sample(linearSampler, IN.TexCoord).xyz  * 2.0f - 1.0f;
+    float4 metallicRough = MetallicRoughness.Sample(linearSampler, IN.TexCoord);
+    float4 emissive = EmissiveTexture.Sample(linearSampler, IN.TexCoord);
+    float PI = 3.14159265358979323846264338327950288f;
 
- //    // PBR stuff
- //
- //    float3 pointLightBRDF = 0;
- //    float3 directionalLightBRDF = 0;
- //    float3 BRDF = 0;
- //
- //    float3 viewDir = normalize(srt - > pCamera - > position - gPos);
- //    float3 F0 = float3(0.04f, 0.04f, 0.04f);
- //    F0 = F0 * (1.0f - metallic) + gAlbedo * metallic;
- //
- //     // -------------------------------
- //         // Point Light Contribution
- //         // -------------------------------
- //    float3 pointLightDir = normalize(pLight.position - gPos);
- //    float3 halfVec = normalize(viewDir + pointLightDir);
- //        // float dist    = length(pLight.position - gPos);
- //        // float attenuation = 1.0f / (dist * dist);
- //        // float3 pointLightColor = pLight.color * attenuation;
- //    float normDist = PBRCalculateNormalDistribution(roughness, gNormal.xyz, halfVec);
- //    float geometryFunc = PBRCalculateGeometry(gNormal.xyz, viewDir, pointLightDir, roughness);
- //    float3 fresnel = PBRCalculateFresnel(viewDir, gNormal.xyz, F0, roughness);
- //    float3 kd = float3(1.0f) - fresnel;
- //    kd *= float3(1.0f) - metallic;
- //    pointLightBRDF += (kd * gAlbedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, gNormal.xyz))
- //                                 * pLight.color * pLight.intensity * max(dot(pointLightDir, gNormal.xyz), 0.0f);
- //
- //
- //    // -------------------------------
- //    // Directional Light Contribution
- //    // -------------------------------
- //    float3 dirLightDir = normalize(srt - > dLight - > direction);
- //    halfVec = normalize(viewDir + dirLightDir);
- //    
- //    normDist = PBRCalculateNormalDistribution(roughness, gNormal.xyz, halfVec);
- //    geometryFunc = PBRCalculateGeometry(gNormal.xyz, viewDir, dirLightDir, roughness);
- //    fresnel = PBRCalculateFresnel(viewDir, gNormal.xyz, F0, roughness);
- //    kd = float3(1.0f) - fresnel;
- //    kd *= float3(1.0f) - metallic;
- //   
- // //  // Directional Light BRDF calculation
- //    directionalLightBRDF += (kd * gAlbedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, dirLightDir, gNormal.xyz))
- //                                * srt - > dLight - > color * srt - > dLight - > intensity * max(dot(dirLightDir, gNormal.xyz), 0.0f);
- //
- //
- //     // Combine ambient, point light, and directional light contributions
- //    BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
+
+    normalTex = normalize(IN.NormalVS);
+    // return float4(1.0, 0.0, 0.0, 1.0);
+    // return float4(diffuse); // Removed unnecessary parentheses
+
+    // PBR stuff
+ 
+    float3 pointLightBRDF = 0;
+    float3 directionalLightBRDF = 0;
+    float3 BRDF = 0;
+    float roughness = metallicRough.g;
+    float metallic = metallicRough.b;
+		
+    float3 viewDir = normalize(camera.Position - IN.PositionVS.xyz);
+    float3 F0 = float3(0.04f, 0.04f, 0.04f);
+    F0 = F0 * (1.0f - metallic) + diffuse * metallic;
+ 
+    //  // -------------------------------
+    //      // Point Light Contribution
+    //      // -------------------------------
+    // float3 pointLightDir = normalize(pLight.position - gPos);
+    // float3 halfVec = normalize(viewDir + pointLightDir);
+    //     // float dist    = length(pLight.position - gPos);
+    //     // float attenuation = 1.0f / (dist * dist);
+    //     // float3 pointLightColor = pLight.color * attenuation;
+    // float normDist = PBRCalculateNormalDistribution(roughness, gNormal.xyz, halfVec);
+    // float geometryFunc = PBRCalculateGeometry(gNormal.xyz, viewDir, pointLightDir, roughness);
+    // float3 fresnel = PBRCalculateFresnel(viewDir, gNormal.xyz, F0, roughness);
+    // float3 kd = float3(1.0f) - fresnel;
+    // kd *= float3(1.0f) - metallic;
+    // pointLightBRDF += (kd * gAlbedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, gNormal.xyz))
+    //                              * pLight.color * pLight.intensity * max(dot(pointLightDir, gNormal.xyz), 0.0f);
+ 
+ 
+    // -------------------------------
+    // Directional Light Contribution
+    // -------------------------------
+    float3 dirLightDir = normalize(-DirectionalLights[0].DirectionVS.xyz);
+    float3 halfVec = normalize(viewDir + dirLightDir);
+    
+    float normDist = PBRCalculateNormalDistribution(roughness, normalTex, halfVec);
+    float geometryFunc = PBRCalculateGeometry(normalTex, viewDir, dirLightDir, roughness);
+    float3 fresnel = PBRCalculateFresnel(viewDir, normalTex, F0, roughness);
+    float3 kd = float3(1.0f,1.0f,1.0f) - fresnel;
+    kd *= float3(1.0f,1.0f,1.0f) - metallic;
+    float intensity = 1.0f;
+ //  // Directional Light BRDF calculation
+    directionalLightBRDF += (kd * diffuse / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, dirLightDir, normalTex))
+                                * DirectionalLights[0].Color * intensity * max(dot(dirLightDir, normalTex), 0.0f);
+ 
+ 
+    // return float4(normalTex,1.0f);
+
+    // return float4(normalTex * 0.5 + 0.5, 1.0);
+
+     // Combine ambient, point light, and directional light contributions
+    BRDF += emissive + pointLightBRDF + directionalLightBRDF + texColor;
+    return float4(BRDF, 1.0f);
 }

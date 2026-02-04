@@ -19,6 +19,9 @@
 #include "scene_node.h"
 #include "scene_visitor.h"
 #include "swapchain.h"
+
+#include <DirectXColors.h>
+
 using namespace DirectX;
 
 // struct Matrices
@@ -314,7 +317,43 @@ void Demo::OnUpdate(UpdateEventArgs& e)
     XMVECTOR cameraRotation = XMQuaternionRotationRollPitchYaw(XMConvertToRadians(m_pitch), XMConvertToRadians(m_yaw), 0.0f);
     m_camera.SetRotation(cameraRotation);
 
-    // XMMATRIX viewMatrix = m_camera.GetViewMatrix();
+    XMMATRIX viewMatrix = m_camera.GetViewMatrix();
+
+    const int numDirectionalLights = 3;
+
+    static const XMVECTORF32 LightColors[] = { DirectX::Colors::White, Colors::OrangeRed, Colors::Blue };
+
+    static float lightAnimTime = 0.0f;
+    // if (m_AnimateLights)
+    // {
+    //     lightAnimTime += static_cast<float>(e.DeltaTime) * 0.5f * XM_PI;
+    // }
+
+    const float radius = 1.0f;
+    float       directionalLightOffset = numDirectionalLights > 0 ? 2.0f * XM_PI / numDirectionalLights : 0;
+
+    m_directionalLights.resize(numDirectionalLights);
+    for (int i = 0; i < numDirectionalLights; ++i)
+    {
+        DirectionalLight& l = m_directionalLights[i];
+
+        float angle = lightAnimTime + directionalLightOffset * i;
+
+        XMVECTORF32 positionWS = { -15.0f,
+                                   20.0f, -10.0f, 1.0f };
+
+        XMVECTOR directionWS = XMVector3Normalize(XMVectorNegate(positionWS));
+        XMVECTOR directionVS = XMVector3TransformNormal(directionWS, viewMatrix);
+
+        XMStoreFloat4(&l.directionWS, directionWS);
+        XMStoreFloat4(&l.directionVS, directionVS);
+
+        l.color = XMFLOAT4(LightColors[i]);
+    }
+
+    m_unlitPSO->SetDirectionalLights(m_directionalLights);
+    // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
+    // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
     OnRender();
     
@@ -426,7 +465,7 @@ void Demo:: OnRender()
     	m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
         m_helmet->Accept(visitor);
 
-        m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
+        // m_chessboard->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * translation);
         m_chessboard->Accept(visitor);
 
         // TODO: Look into EffectsPSO. think this is what you're missing.

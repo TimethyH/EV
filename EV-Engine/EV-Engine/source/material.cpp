@@ -97,6 +97,16 @@ const float Material::GetOpacity() const
     return m_materialProperties->opacity;
 }
 
+const void Material::SetMetallic(float metallic)
+{
+    m_materialProperties->metallic = metallic;
+}
+
+const void Material::SetRoughness(float roughness)
+{
+    m_materialProperties->roughness = roughness;
+}
+
 void Material::SetOpacity(float opacity)
 {
     m_materialProperties->opacity = opacity;
@@ -178,6 +188,11 @@ void Material::SetTexture(TextureType type, std::shared_ptr<Texture> texture)
     {
         m_materialProperties->hasOpacityTexture = (texture != nullptr);
     }
+    break;
+    case TextureType::MetallicRoughness:
+    {
+        m_materialProperties->hasMetallicRoughnessTexture = (texture != nullptr);
+	}
     break;
     }
 }
