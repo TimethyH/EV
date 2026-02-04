@@ -67,6 +67,11 @@ public:
         DirectX::XMMATRIX inverseTransposeModelViewMatrix;
         DirectX::XMMATRIX modelViewProjectionMatrix;
     };
+    struct alignas(16) CameraData
+    {
+        DirectX::XMFLOAT3 position;
+        float pad;
+    };
 
     // An enum for root signature parameters.
     // I'm not using scoped enums to avoid the explicit cast that would be required

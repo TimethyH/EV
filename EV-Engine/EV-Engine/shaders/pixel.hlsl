@@ -145,7 +145,7 @@ float3 PBRSpecular(float normalDist, float geometry, float3 fresnel, float3 view
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float4 diffuse = DiffuseTexture.Sample(linearSampler, IN.TexCoord);
+    float4 diffuse = float4(camera.Position, 1.0);
     float4 texColor = AmbientTexture.Sample(linearSampler, IN.TexCoord);
     // return float4(1.0, 0.0, 0.0, 1.0);
 	return diffuse; // Removed unnecessary parentheses

@@ -196,7 +196,9 @@ void EffectPSO::Apply(CommandList& commandList)
     if (m_dirtyFlags & DF_Camera)
     {
         auto position = Demo::GetCameraPosition();
-        commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, position);
+        CameraData cameraData;
+        cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
+        commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData.position);
     }
     // if (m_dirtyFlags & DF_PointLights)
     // {

@@ -96,7 +96,7 @@
 
         static const D3D12_INPUT_LAYOUT_DESC inputLayout;
     private:
-        static const int                      inputElementCount = 5;
+        static const int                      inputElementCount = 3; // TODO: make it back to 5 when adding tang and bitangent
         static const D3D12_INPUT_ELEMENT_DESC inputElements[inputElementCount];
     };
 // }  // namespace dx12lib
