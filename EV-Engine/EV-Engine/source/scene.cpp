@@ -408,27 +408,43 @@ std::shared_ptr<SceneNode> Scene::ImportSceneNode(CommandList& commandList, std:
         return nullptr;
     }
 
-    auto node = std::make_shared<SceneNode>(XMMATRIX(&(aiNode->mTransformation.a1)));
-    node->SetParent(parent);
+    // Convert Assimp matrix to DirectX matrix with transpose
+    XMMATRIX localTransform = XMMatrixSet(
+        aiNode->mTransformation.a1, aiNode->mTransformation.b1, aiNode->mTransformation.c1, aiNode->mTransformation.d1,
+        aiNode->mTransformation.a2, aiNode->mTransformation.b2, aiNode->mTransformation.c2, aiNode->mTransformation.d2,
+        aiNode->mTransformation.a3, aiNode->mTransformation.b3, aiNode->mTransformation.c3, aiNode->mTransformation.d3,
+        aiNode->mTransformation.a4, aiNode->mTransformation.b4, aiNode->mTransformation.c4, aiNode->mTransformation.d4
+    );
 
-    if (aiNode->mName.length > 0)
+    auto node = std::make_shared<SceneNode>(localTransform);
+
+    // Set parent directly without recalculating transform
+    if (parent)
+    {
+        node->m_parentNode = parent;
+        parent->m_children.push_back(node);
+        if (aiNode->mName.length > 0)
+        {
+            node->SetName(aiNode->mName.C_Str());
+            parent->m_childrenByName.emplace(aiNode->mName.C_Str(), node);
+        }
+    }
+    else if (aiNode->mName.length > 0)
     {
         node->SetName(aiNode->mName.C_Str());
     }
-    // Add meshes to scene node
+
+    // Add meshes
     for (unsigned int i = 0; i < aiNode->mNumMeshes; ++i)
     {
         assert(aiNode->mMeshes[i] < m_meshes.size());
-
-        std::shared_ptr<Mesh> pMesh = m_meshes[aiNode->mMeshes[i]];
-        node->AddMesh(pMesh);
+        node->AddMesh(m_meshes[aiNode->mMeshes[i]]);
     }
 
-    // Recursively Import children
+    // Recursively import children
     for (unsigned int i = 0; i < aiNode->mNumChildren; ++i)
     {
-        auto child = ImportSceneNode(commandList, node, aiNode->mChildren[i]);
-        node->AddChild(child);
+        ImportSceneNode(commandList, node, aiNode->mChildren[i]);
     }
 
     return node;

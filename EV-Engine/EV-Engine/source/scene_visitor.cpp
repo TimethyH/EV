@@ -36,7 +36,7 @@ void SceneVisitor::Visit(SceneNode& sceneNode)
 void SceneVisitor::Visit(Mesh& mesh)
 {
     auto material = mesh.GetMaterial();
-    if (material->IsTransparent() == m_transparentPass)
+    // if (material->IsTransparent() == m_transparentPass)
     {
         m_lightingPSO.SetMaterial(material);
 

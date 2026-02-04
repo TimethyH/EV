@@ -761,8 +761,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 Scene
 	[ ] Implement own model loader (Y2)
-	[ ]
-	[ ]
+	[ ] Add pointlights
+	[ ] Add transparant pass for foliage
 	[ ]
 
 Engine

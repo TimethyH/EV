@@ -134,13 +134,16 @@
             DirectX::XMMATRIX m_inverseTransform;
         } *m_alignedData;
 
-        std::weak_ptr<SceneNode> m_parentNode;
-        NodeList                 m_children;
-        NodeNameMap              m_childrenByName;
         MeshList                 m_meshes;
 
         // The AABB for this scene node. 
         // Created by merging the AABB of the meshes.
         DirectX::BoundingBox m_AABB;
+
+    public:
+        std::weak_ptr<SceneNode> m_parentNode;
+        NodeList                 m_children;
+        NodeNameMap              m_childrenByName;
+
     };
 // }  // namespace dx12lib
