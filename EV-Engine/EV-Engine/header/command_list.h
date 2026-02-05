@@ -452,6 +452,7 @@ public:
         LoadSceneFromFile(const std::wstring& fileName,
             const std::function<bool(float)>& loadingProgres = std::function<bool(float)>());
 
+    std::shared_ptr<Scene> CreateSphere(float radius = 0.5f, uint32_t tessellation = 16, bool reversWinding = false);
 
 protected:
     // friend class CommandQueue;

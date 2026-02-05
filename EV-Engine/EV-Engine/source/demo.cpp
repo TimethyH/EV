@@ -355,6 +355,28 @@ void Demo::OnUpdate(UpdateEventArgs& e)
     // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
     // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
+    float time = static_cast<float>(e.totalTime);
+	
+	// Initialize point lights BEFORE the scene visitor
+    m_pointLights.resize(1);
+
+    // Populate the point light with valid data
+    PointLight& light = m_pointLights[0];
+    light.positionWS = XMFLOAT4(sinf(time) * 5, 1.0F, 0.0f, 1.0f);
+    light.color = XMFLOAT4(0.0f, 0.4f, 0.8f,1.0f);   // White light for testing
+    light.ambient = 0.1f;
+    light.constantAttenuation = 1.0f;
+    light.linearAttenuation = 0.0f;
+    light.quadraticAttenuation = 0.0f;
+
+    // Transform to view space
+    XMVECTOR posWS = XMLoadFloat4(&light.positionWS);
+    XMVECTOR posVS = XMVector3TransformCoord(posWS, viewMatrix);
+    XMStoreFloat4(&light.positionVS, posVS);
+
+    // Set lights ONCE before rendering
+    m_unlitPSO->SetPointLights(m_pointLights);
+
     OnRender();
     
     //
@@ -467,6 +489,18 @@ void Demo:: OnRender()
 
         // m_chessboard->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * translation);
         m_chessboard->Accept(visitor);
+
+        // Visualize the point light as a small sphere
+        for (const auto& l : m_pointLights)
+        {
+            auto lightPos = XMLoadFloat4(&l.positionWS);
+            auto worldMatrix = XMMatrixTranslationFromVector(lightPos);
+            m_sphere->GetRootNode()->SetLocalTransform(worldMatrix);
+            m_sphere->Accept(visitor);
+        }
+
+
+
 
         // TODO: Look into EffectsPSO. think this is what you're missing.
 
@@ -728,6 +762,9 @@ bool Demo::LoadContent()
 	// m_cubeMesh = commandList->CreateCube();
     m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
     m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
+
+    m_sphere = commandList->CreateSphere(0.1f);
+    // m_sphere = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 

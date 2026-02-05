@@ -81,6 +81,7 @@ private:
 	std::vector<PointLight> m_pointLights;
 	// std::vector<SpotLight>  m_spotLights;
 	std::vector<DirectionalLight> m_directionalLights;
+	std::shared_ptr<Scene> m_sphere;
 
 	// Camera Controls
 	float m_forward;

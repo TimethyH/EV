@@ -40,21 +40,21 @@ struct Material
     // Total:                              ( 16 * 9 = 144 bytes )
 };
 
-// struct PointLight
-// {
-//     float4 PositionWS; // Light position in world space.
-//     //----------------------------------- (16 byte boundary)
-//     float4 PositionVS; // Light position in view space.
-//     //----------------------------------- (16 byte boundary)
-//     float4 Color;
-//     //----------------------------------- (16 byte boundary)
-//     float Ambient;
-//     float ConstantAttenuation;
-//     float LinearAttenuation;
-//     float QuadraticAttenuation;
-//     //----------------------------------- (16 byte boundary)
-//     // Total:                              16 * 4 = 64 bytes
-// };
+struct PointLight
+{
+    float4 PositionWS; // Light position in world space.
+    //----------------------------------- (16 byte boundary)
+    float4 PositionVS; // Light position in view space.
+    //----------------------------------- (16 byte boundary)
+    float4 Color;
+    //----------------------------------- (16 byte boundary)
+    float Ambient;
+    float ConstantAttenuation;
+    float LinearAttenuation;
+    float QuadraticAttenuation;
+    //----------------------------------- (16 byte boundary)
+    // Total:                              16 * 4 = 64 bytes
+};
 
 // struct SpotLight
 // {
@@ -112,7 +112,7 @@ struct DirectionalLight
 //     LightProperties lightProperty;
 // }
 
-// StructuredBuffer<PointLight> PointLights : register(t0);
+StructuredBuffer<PointLight> PointLights : register(t0);
 // StructuredBuffer<SpotLight> SpotLights : register(t1);
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
 
@@ -249,21 +249,27 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
     F0 = F0 * (1.0f - metallic) + diffuse.rgb * metallic;
  
-    //  // -------------------------------
-    //      // Point Light Contribution
-    //      // -------------------------------
-    // float3 pointLightDir = normalize(pLight.position - gPos);
-    // float3 halfVec = normalize(viewDir + pointLightDir);
-    //     // float dist    = length(pLight.position - gPos);
-    //     // float attenuation = 1.0f / (dist * dist);
-    //     // float3 pointLightColor = pLight.color * attenuation;
-    // float normDist = PBRCalculateNormalDistribution(roughness, gNormal.xyz, halfVec);
-    // float geometryFunc = PBRCalculateGeometry(gNormal.xyz, viewDir, pointLightDir, roughness);
-    // float3 fresnel = PBRCalculateFresnel(viewDir, gNormal.xyz, F0, roughness);
-    // float3 kd = float3(1.0f) - fresnel;
-    // kd *= float3(1.0f) - metallic;
-    // pointLightBRDF += (kd * gAlbedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, gNormal.xyz))
-    //                              * pLight.color * pLight.intensity * max(dot(pointLightDir, gNormal.xyz), 0.0f);
+    {
+     // -------------------------------
+         // Point Light Contribution
+         // -------------------------------
+        float3 lightPos = PointLights[0].PositionVS;
+        float3 pointLightDir = normalize(lightPos - IN.PositionVS);
+        float3 halfVec = normalize(viewDir + pointLightDir);
+        float dist = length(lightPos - IN.PositionVS);
+        float HdotV = max(dot(halfVec, viewDir), 0.0);
+        float attenuation = 1.0f / (dist * dist);
+        // float3 pointLightColor = pLight.color * attenuation;
+        float normDist = PBRCalculateNormalDistribution(roughness, normalTex, halfVec);
+        float geometryFunc = PBRCalculateGeometry(normalTex, viewDir, pointLightDir, roughness);
+        float3 fresnel = PBRCalculateFresnel(HdotV, F0, roughness);
+        float3 kd = float3(1.0f, 1.0f, 1.0f) - fresnel;
+        kd *= float3(1.0f, 1.0f, 1.0f) - metallic;
+        float3 lightColor = PointLights[0].Color.xyz * attenuation;
+        float intensity = 1.0f;
+        pointLightBRDF += (kd * diffuse / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, normalTex))
+                                 * lightColor * intensity * max(dot(pointLightDir, normalTex), 0.0f);
+    }
  
  
     // -------------------------------

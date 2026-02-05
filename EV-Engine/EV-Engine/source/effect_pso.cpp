@@ -69,7 +69,7 @@ EffectPSO::EffectPSO(bool enableLighting, bool enableDecal)
     rootParameters[RootParameters::MaterialCB].InitAsConstantBufferView(0, 1, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::Camera].InitAsConstantBufferView(1,0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::LightPropertiesCB].InitAsConstants(sizeof(LightProperties) / 4, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-    // rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_PIXEL);
@@ -201,10 +201,10 @@ void EffectPSO::Apply(CommandList& commandList)
         cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData.position);
     }
-    // if (m_dirtyFlags & DF_PointLights)
-    // {
-    //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
-    // }
+    if (m_dirtyFlags & DF_PointLights)
+    {
+        commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
+    }
     
     // if (m_dirtyFlags & DF_SpotLights)
     // {

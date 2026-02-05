@@ -85,7 +85,7 @@ public:
         MaterialCB,         // ConstantBuffer<Material> MaterialCB : register( b0, space1 );
         // LightPropertiesCB,  // ConstantBuffer<LightProperties> LightPropertiesCB : register( b1 );
 
-        // PointLights,        // StructuredBuffer<PointLight> PointLights : register( t0 );
+        PointLights,        // StructuredBuffer<PointLight> PointLights : register( t0 );
         // SpotLights,         // StructuredBuffer<SpotLight> SpotLights : register( t1 );
         DirectionalLights,  // StructuredBuffer<DirectionalLight> DirectionalLights : register( t2 )
 
