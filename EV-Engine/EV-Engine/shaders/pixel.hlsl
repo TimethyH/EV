@@ -288,7 +288,9 @@ float4 main(PixelShaderInput IN) : SV_Target
 
     // return float4(normalTex * 0.5 + 0.5, 1.0);
 
+
      // Combine ambient, point light, and directional light contributions
-    BRDF += emissive + pointLightBRDF + directionalLightBRDF + texColor;
+    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + texColor;
+    BRDF += emissive + pointLightBRDF + directionalLightBRDF;
     return float4(BRDF, 1.0f);
 }
