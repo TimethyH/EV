@@ -4,6 +4,8 @@
 #include <memory>
 #include <string>
 
+#include "camera.h"
+
 namespace EV
 {
 	class Window;
@@ -43,6 +45,8 @@ namespace EV
 		int m_width = 0;
 		int m_height = 0;
 		bool m_VSync = false;
+
+		Camera m_camera;
 
 
 	};

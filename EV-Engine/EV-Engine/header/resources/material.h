@@ -76,6 +76,7 @@ namespace EV
             , hasNormalTexture(false)
             , hasBumpTexture(false)
             , hasOpacityTexture(false)
+			, hasMetallicRoughnessTexture(false)
         {
         }
 

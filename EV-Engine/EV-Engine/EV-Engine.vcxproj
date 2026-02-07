@@ -25,7 +25,6 @@
     <ClCompile Include="source\DX12\command_list.cpp" />
     <ClCompile Include="source\DX12\command_queue.cpp" />
     <ClCompile Include="source\core\application.cpp" />
-    <ClCompile Include="source\demo.cpp" />
     <ClCompile Include="source\DX12\descriptor_allocation.cpp" />
     <ClCompile Include="source\DX12\descriptor_allocator.cpp" />
     <ClCompile Include="source\DX12\descriptor_allocator_page.cpp" />
@@ -36,7 +35,6 @@
     <ClCompile Include="source\DX12\generate_mips_pso.cpp" />
     <ClCompile Include="source\UI\GUI.cpp" />
     <ClCompile Include="source\resources\index_buffer.cpp" />
-    <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\resources\material.cpp" />
     <ClCompile Include="source\DX12\pipeline_state_object.cpp" />
     <ClCompile Include="source\DX12\render_target.cpp" />
@@ -62,6 +60,7 @@
     <ClCompile Include="thirdparty\imgui\imgui_widgets.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ClInclude Include="header\core\EV.h" />
     <ClInclude Include="header\resources\buffer.h" />
     <ClInclude Include="header\core\camera.h" />
     <ClInclude Include="header\DX12\command_list.h" />
@@ -69,7 +68,6 @@
     <ClInclude Include="header\core\application.h" />
     <ClInclude Include="header\core\clock.h" />
     <ClInclude Include="header\utility\defines.h" />
-    <ClInclude Include="header\demo.h" />
     <ClInclude Include="header\DX12\descriptor_allocator.h" />
     <ClInclude Include="header\DX12\descriptor_allocator_page.h" />
     <ClInclude Include="header\DX12\dx12_includes.h" />
@@ -85,6 +83,7 @@
     <ClInclude Include="header\utility\key_codes.h" />
     <ClInclude Include="header\DX12\light.h" />
     <ClInclude Include="header\resources\material.h" />
+    <ClInclude Include="header\utility\link_lib.h" />
     <ClInclude Include="header\utility\optional.hpp" />
     <ClInclude Include="header\DX12\pipeline_state_object.h" />
     <ClInclude Include="header\DX12\render_target.h" />
@@ -148,26 +147,26 @@
   </PropertyGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.Default.props" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>true</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <CharacterSet>Unicode</CharacterSet>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'" Label="Configuration">
-    <ConfigurationType>Application</ConfigurationType>
+    <ConfigurationType>StaticLibrary</ConfigurationType>
     <UseDebugLibraries>false</UseDebugLibraries>
     <PlatformToolset>v145</PlatformToolset>
     <WholeProgramOptimization>true</WholeProgramOptimization>

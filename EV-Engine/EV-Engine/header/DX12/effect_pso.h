@@ -40,7 +40,9 @@
 
 namespace EV
 {
-    class CommandList;
+	class Camera;
+	// class Camera;
+	class CommandList;
     class Material;
     class RootSignature;
     class PipelineStateObject;
@@ -100,7 +102,7 @@ namespace EV
             NumRootParameters
         };
 
-        EffectPSO(bool enableLigting, bool enableDecal);
+        EffectPSO(EV::Camera& cam, bool enableLigting, bool enableDecal);
         virtual ~EffectPSO();
 
         const std::vector<PointLight>& GetPointLights() const
@@ -225,5 +227,7 @@ namespace EV
 
         bool m_enableLighting;
         bool m_enableDecal;
+
+        EV::Camera& m_camera;
     };
 }

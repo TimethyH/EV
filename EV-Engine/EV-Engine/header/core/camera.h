@@ -5,6 +5,7 @@
 
 namespace EV
 {
+	class CommandList;
 
 	// Defines in what space the matrix transformations happen
 	enum class Space
@@ -52,6 +53,7 @@ namespace EV
 
 		void XM_CALLCONV Translate(const DirectX::FXMVECTOR& translation, Space space = Space::LOCAL) const;
 		void XM_CALLCONV Rotate(const DirectX::FXMVECTOR& quaternion) const;
+
 	protected:
 		virtual void UpdateViewMatrix() const;
 		virtual void UpdateInverseViewMatrix() const;
@@ -81,6 +83,17 @@ namespace EV
 		float m_aspect = 0;
 		float m_zNear = 0;
 		float m_zFar = 0;
+
+		// Camera data
+		float m_forward;
+		float m_backward;
+		float m_left;
+		float m_right;
+		float m_up;
+		float m_down;
+
+		float m_pitch;
+		float m_yaw;
 
 		mutable bool m_viewDirty = false;
 		mutable bool m_inverseViewDirty = false;

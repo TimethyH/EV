@@ -13,16 +13,17 @@
 #include <wrl/client.h>
 
 #include "core/application.h"
-#include "demo.h"
+#include "core/camera.h"
 
 using namespace Microsoft::WRL;
 using namespace EV;
 
-EffectPSO::EffectPSO(bool enableLighting, bool enableDecal)
+EffectPSO::EffectPSO(EV::Camera& cam, bool enableLighting, bool enableDecal)
 	: m_dirtyFlags(DF_All)
     , m_pPreviousCommandList(nullptr)
     , m_enableLighting(enableLighting)
     , m_enableDecal(enableDecal)
+	, m_camera(cam)
 {
     m_pAlignedMVP = (MVP*)_aligned_malloc(sizeof(MVP), 16);
 
@@ -195,7 +196,8 @@ void EffectPSO::Apply(CommandList& commandList)
     }
     // if (m_dirtyFlags & DF_Camera)
     {
-        auto position = Demo::GetCameraPosition();
+        // // TODO: Move camera data in its own class so we can retrieve it here and get rid of Demo.
+        auto position = m_camera.GetTranslation();
         CameraData cameraData;
         cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData.position);

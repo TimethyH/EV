@@ -4,4 +4,7 @@
     <Platform Name="x86" />
   </Configurations>
   <Project Path="EV-Engine/EV-Engine.vcxproj" Id="1de97d5e-8144-40a9-9164-014572e6b153" />
+  <Project Path="OceanRenderer/OceanRenderer.vcxproj" Id="07d68a50-789e-4360-8466-307280f8cdc7">
+    <BuildDependency Project="EV-Engine/EV-Engine.vcxproj" />
+  </Project>
 </Solution>

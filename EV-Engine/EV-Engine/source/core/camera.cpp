@@ -3,6 +3,9 @@
 
 #include <limits>
 
+#include "DX12/command_list.h"
+#include "DX12/effect_pso.h"
+
 using namespace EV;
 Camera::Camera()
 	:m_viewDirty(true)
