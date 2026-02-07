@@ -697,10 +697,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 #include <Windows.h>
 #include <Shlwapi.h>
 
-#include <application.h>
 #include <demo.h>
 
 #include <dxgidebug.h>
+
+#include "core/application.h"
 
 void ReportLiveObjects()
 {
@@ -724,12 +725,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 	// 	SetCurrentDirectoryW(path);
 	// }
 
-	Application::Create(hInstance);
+	EV::Application::Create(hInstance);
 	{
 		std::shared_ptr<Demo> demo = std::make_shared<Demo>(L"EV Engine", 1920, 1080);
-		retCode = Application::Get().Run(demo);
+		retCode = EV::Application::Get().Run(demo);
 	}
-	Application::Destroy();
+	EV::Application::Destroy();
 
 	atexit(&ReportLiveObjects);
 
@@ -761,7 +762,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 Scene
 	[ ] Implement own model loader (Y2)
-	[ ] Add pointlights
+	[ ] 
 	[ ] Add transparant pass for foliage
 	[ ]
 
@@ -769,7 +770,7 @@ Engine
 	[ ] ECS oriented engine
 	[ ] Add custom profiler. (Y3)
 	[ ] Setup ImGUI in a way, so it can adjust metrics of the scene at runtime (so you dont have to reload for every iteration)
-	[ ]
+	[ ] Make model assets downloadable with a batchfile
 
 
 Features

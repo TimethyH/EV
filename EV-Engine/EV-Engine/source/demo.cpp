@@ -1,28 +1,27 @@
 #include "demo.h"
-#include "demo.h"
-#include "demo.h"
 
 #include <iostream>
 #include <Shlwapi.h>
 
-#include "application.h"
-#include "command_list.h"
-#include "command_queue.h"
-#include "helpers.h"
-#include "window.h"
+#include "core/application.h"
+#include "DX12/command_list.h"
+#include "DX12/command_queue.h"
+#include "utility/helpers.h"
+#include "core/window.h"
 
-#include "dx12_includes.h"
-#include "effect_pso.h"
-#include "material.h"
-#include "render_target.h"
-#include "Scene.h"
-#include "scene_node.h"
-#include "scene_visitor.h"
-#include "swapchain.h"
+#include "DX12/dx12_includes.h"
+#include "DX12/effect_pso.h"
+#include "resources/material.h"
+#include "DX12/render_target.h"
+#include "DX12/Scene.h"
+#include "DX12/scene_node.h"
+#include "DX12/scene_visitor.h"
+#include "DX12/swapchain.h"
 
 #include <DirectXColors.h>
 
 using namespace DirectX;
+using namespace EV;
 
 // struct Matrices
 // {

@@ -18,91 +18,91 @@
     <ClCompile Include="source\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\application.cpp">
+    <ClCompile Include="source\core\application.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\window.cpp">
+    <ClCompile Include="source\DX12\window.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\dx12_includes.cpp">
+    <ClCompile Include="source\DX12\dx12_includes.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\command_queue.cpp">
+    <ClCompile Include="source\DX12\command_queue.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\clock.cpp">
+    <ClCompile Include="source\core\clock.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\game..cpp">
+    <ClCompile Include="source\core\game..cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="source\demo.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\upload_buffer.cpp">
+    <ClCompile Include="source\DX12\upload_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\descriptor_allocator.cpp">
+    <ClCompile Include="source\DX12\descriptor_allocator.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\descriptor_allocator_page.cpp">
+    <ClCompile Include="source\DX12\descriptor_allocator_page.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\descriptor_allocation.cpp">
+    <ClCompile Include="source\DX12\descriptor_allocation.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\root_signature.cpp">
+    <ClCompile Include="source\DX12\root_signature.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\dynamic_descriptor_heap.cpp">
+    <ClCompile Include="source\DX12\dynamic_descriptor_heap.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\command_list.cpp">
+    <ClCompile Include="source\DX12\command_list.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\resource_state_tracker.cpp">
+    <ClCompile Include="source\DX12\resource_state_tracker.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\resource.cpp">
+    <ClCompile Include="source\resources\resource.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\texture.cpp">
+    <ClCompile Include="source\resources\texture.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\vertex_buffer.cpp">
+    <ClCompile Include="source\resources\vertex_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\buffer.cpp">
+    <ClCompile Include="source\resources\buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\index_buffer.cpp">
+    <ClCompile Include="source\resources\index_buffer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\camera.cpp">
+    <ClCompile Include="source\core\camera.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\mesh.cpp">
+    <ClCompile Include="source\resources\mesh.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\render_target.cpp">
+    <ClCompile Include="source\DX12\render_target.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\generate_mips_pso.cpp">
+    <ClCompile Include="source\DX12\generate_mips_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\pipeline_state_object.cpp">
+    <ClCompile Include="source\DX12\pipeline_state_object.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\shader_resource_view.cpp">
+    <ClCompile Include="source\DX12\shader_resource_view.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\unordered_access_view.cpp">
+    <ClCompile Include="source\DX12\unordered_access_view.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\swapchain.cpp">
+    <ClCompile Include="source\DX12\swapchain.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\GUI.cpp">
+    <ClCompile Include="source\UI\GUI.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="thirdparty\imgui\imgui.cpp">
@@ -120,135 +120,129 @@
     <ClCompile Include="thirdparty\imgui\imgui_widgets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\scene.cpp">
+    <ClCompile Include="source\DX12\scene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\scene_visitor.cpp">
+    <ClCompile Include="source\DX12\scene_visitor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\vertex_types.cpp">
+    <ClCompile Include="source\resources\vertex_types.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\material.cpp">
+    <ClCompile Include="source\resources\material.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="source\scene_node.cpp">
+    <ClCompile Include="source\DX12\scene_node.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
-    <ClCompile Include="shaders\game_framework.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="source\model.cpp">
-      <Filter>Source Files</Filter>
-    </ClCompile>
-    <ClCompile Include="source\effect_pso.cpp">
+    <ClCompile Include="source\DX12\effect_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="header\helpers.h">
+    <ClInclude Include="header\utility\helpers.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\application.h">
+    <ClInclude Include="header\core\application.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\window.h">
+    <ClInclude Include="header\core\window.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\clock.h">
+    <ClInclude Include="header\core\clock.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\events.h">
+    <ClInclude Include="header\core\events.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\key_codes.h">
+    <ClInclude Include="header\utility\key_codes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\game.h">
+    <ClInclude Include="header\core\game.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\dx12_includes.h">
+    <ClInclude Include="header\DX12\dx12_includes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\command_queue.h">
+    <ClInclude Include="header\DX12\command_queue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\demo.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\upload_buffer.h">
+    <ClInclude Include="header\DX12\upload_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\defines.h">
+    <ClInclude Include="header\utility\defines.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\descriptor_allocator.h">
+    <ClInclude Include="header\DX12\descriptor_allocator.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\descriptor_allocator_page.h">
+    <ClInclude Include="header\DX12\descriptor_allocator_page.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\root_signature.h">
+    <ClInclude Include="header\DX12\root_signature.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\dynamic_descriptor_heap.h">
+    <ClInclude Include="header\DX12\dynamic_descriptor_heap.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\command_list.h">
+    <ClInclude Include="header\DX12\command_list.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\resource_state_tracker.h">
+    <ClInclude Include="header\DX12\resource_state_tracker.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\resource.h">
+    <ClInclude Include="header\resources\resource.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\texture.h">
+    <ClInclude Include="header\resources\texture.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\texture_usage.h">
+    <ClInclude Include="header\resources\texture_usage.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\vertex_buffer.h">
+    <ClInclude Include="header\resources\vertex_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\buffer.h">
+    <ClInclude Include="header\resources\buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\index_buffer.h">
+    <ClInclude Include="header\resources\index_buffer.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\camera.h">
+    <ClInclude Include="header\core\camera.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\mesh.h">
+    <ClInclude Include="header\resources\mesh.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\render_target.h">
+    <ClInclude Include="header\DX12\render_target.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\thread_safe_queue.h">
+    <ClInclude Include="header\utility\thread_safe_queue.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\generate_mips_pso.h">
+    <ClInclude Include="header\DX12\generate_mips_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\GenerateMips_CS.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\shader_resource_view.h">
+    <ClInclude Include="header\DX12\shader_resource_view.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\unordered_access_view.h">
+    <ClInclude Include="header\DX12\unordered_access_view.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\pipeline_state_object.h">
+    <ClInclude Include="header\DX12\pipeline_state_object.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\swapchain.h">
+    <ClInclude Include="header\DX12\swapchain.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\GUI.h">
+    <ClInclude Include="header\UI\GUI.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\imGUI_VS.h">
@@ -278,43 +272,37 @@
     <ClInclude Include="thirdparty\imgui\imstb_truetype.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\signals.hpp">
+    <ClInclude Include="header\utility\signals.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\optional.hpp">
+    <ClInclude Include="header\utility\optional.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\scene.h">
+    <ClInclude Include="header\DX12\scene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\visitor.h">
+    <ClInclude Include="header\DX12\visitor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\scene_visitor.h">
+    <ClInclude Include="header\DX12\scene_visitor.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\vertex_types.h">
+    <ClInclude Include="header\resources\vertex_types.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\material.h">
+    <ClInclude Include="header\resources\material.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\scene_node.h">
+    <ClInclude Include="header\DX12\scene_node.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\game_framework.h">
+    <ClInclude Include="header\utility\game_framework_includes.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\game_framework_includes.h">
+    <ClInclude Include="header\DX12\effect_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
-    <ClInclude Include="header\model.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="header\effect_pso.h">
-      <Filter>Header Files</Filter>
-    </ClInclude>
-    <ClInclude Include="header\light.h">
+    <ClInclude Include="header\DX12\light.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>
@@ -323,6 +311,6 @@
     <FxCompile Include="shaders\vertex.hlsl" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="header\descriptor_allocation.h" />
+    <None Include="header\DX12\descriptor_allocation.h" />
   </ItemGroup>
 </Project>
