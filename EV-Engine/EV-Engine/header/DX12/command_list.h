@@ -455,6 +455,9 @@ namespace EV
                 const std::function<bool(float)>& loadingProgres = std::function<bool(float)>());
 
         std::shared_ptr<Scene> CreateSphere(float radius = 0.5f, uint32_t tessellation = 16, bool reversWinding = false);
+        std::shared_ptr<Scene> CreatePlane(float width, float depth, uint32_t subdivisionWidth,
+                                           uint32_t subdivisionDepth,
+                                           bool reverseWinding = false);
 
     protected:
         // friend class CommandQueue;

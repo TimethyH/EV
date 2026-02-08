@@ -939,6 +939,78 @@ std::shared_ptr<Scene> CommandList::CreateSphere(float radius, uint32_t tessella
 	return CreateScene(vertices, indices);
 }
 
+std::shared_ptr<Scene> CommandList::CreatePlane(float width, float depth, uint32_t subdivisionWidth, uint32_t subdivisionDepth, bool reverseWinding)
+{
+	if (subdivisionWidth < 1 || subdivisionDepth < 1)
+		throw std::out_of_range("subdivision parameters must be at least 1");
+
+	VertexCollection vertices;
+	IndexCollection  indices;
+
+	float halfWidth = width * 0.5f;
+	float halfDepth = depth * 0.5f;
+
+	float dx = width / subdivisionWidth;
+	float dz = depth / subdivisionDepth;
+
+	float du = 1.0f / subdivisionWidth;
+	float dv = 1.0f / subdivisionDepth;
+
+	// Plane lies in XZ plane, Y-up
+	XMFLOAT3 normal = { 0.0f, 1.0f, 0.0f };
+	XMFLOAT3 tangent = { 1.0f, 0.0f, 0.0f };    // Along X-axis
+	XMFLOAT3 bitangent = { 0.0f, 0.0f, 1.0f };  // Along Z-axis
+
+	// Generate vertices
+	for (uint32_t i = 0; i <= subdivisionDepth; ++i)
+	{
+		float z = halfDepth - i * dz;
+		float v = (float)i * dv;
+
+		for (uint32_t j = 0; j <= subdivisionWidth; ++j)
+		{
+			float x = -halfWidth + j * dx;
+			float u = (float)j * du;
+
+			XMFLOAT3 position = { x, 0.0f, z };
+			XMFLOAT3 texCoord = { u, v, 0.0f };
+
+			vertices.emplace_back(position, normal, texCoord, tangent, bitangent);
+		}
+	}
+
+	// Generate indices
+	uint32_t stride = subdivisionWidth + 1;
+
+	for (uint32_t i = 0; i < subdivisionDepth; ++i)
+	{
+		for (uint32_t j = 0; j < subdivisionWidth; ++j)
+		{
+			uint32_t bottomLeft = i * stride + j;
+			uint32_t bottomRight = bottomLeft + 1;
+			uint32_t topLeft = (i + 1) * stride + j;
+			uint32_t topRight = topLeft + 1;
+
+			// First triangle
+			indices.emplace_back(bottomLeft);
+			indices.emplace_back(topLeft);
+			indices.emplace_back(bottomRight);
+
+			// Second triangle
+			indices.emplace_back(bottomRight);
+			indices.emplace_back(topLeft);
+			indices.emplace_back(topRight);
+		}
+	}
+
+	if (reverseWinding)
+	{
+		ReverseWinding(indices, vertices);
+	}
+
+	return CreateScene(vertices, indices);
+}
+
 void CommandList::ClearTexture(const std::shared_ptr<Texture>& texture, float clearColor[])
 {
 	assert(texture);
