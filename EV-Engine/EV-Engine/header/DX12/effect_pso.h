@@ -102,7 +102,7 @@ namespace EV
             NumRootParameters
         };
 
-        EffectPSO(EV::Camera& cam, bool enableLigting, bool enableDecal);
+        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLigting, bool enableDecal);
         virtual ~EffectPSO();
 
         const std::vector<PointLight>& GetPointLights() const

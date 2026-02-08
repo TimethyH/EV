@@ -18,7 +18,7 @@
 using namespace Microsoft::WRL;
 using namespace EV;
 
-EffectPSO::EffectPSO(EV::Camera& cam, bool enableLighting, bool enableDecal)
+EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLighting, bool enableDecal)
 	: m_dirtyFlags(DF_All)
     , m_pPreviousCommandList(nullptr)
     , m_enableLighting(enableLighting)
@@ -29,8 +29,8 @@ EffectPSO::EffectPSO(EV::Camera& cam, bool enableLighting, bool enableDecal)
 
     // Get the folder of the running executable.
     std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + L"/vertex.cso";
-    std::wstring pixelShader = parentPath + L"/pixel.cso";
+    std::wstring vertexShader = parentPath + vertexpath;
+    std::wstring pixelShader = parentPath + pixelPath;
 
     // Setup the root signature
     // Load the vertex shader.

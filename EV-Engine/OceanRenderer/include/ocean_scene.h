@@ -77,6 +77,8 @@ private:
 	std::shared_ptr<EV::Scene> m_helmet;
 	std::shared_ptr<EV::Scene> m_chessboard;
 
+	std::shared_ptr<EV::Scene> m_oceanPlane;
+
 	std::atomic_bool  m_isLoading;
 	bool m_cancelLoading;
 	std::string m_loadingText;
@@ -158,6 +160,7 @@ private:
 	std::shared_ptr<EV::GUI> m_GUI = nullptr;
 
 	std::shared_ptr<EV::EffectPSO> m_unlitPSO;
+	std::shared_ptr<EV::EffectPSO> m_oceanPSO;
 
 	std::future<bool> m_loadingTask;
 
