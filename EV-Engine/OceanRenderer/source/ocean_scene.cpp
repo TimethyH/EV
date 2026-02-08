@@ -177,8 +177,8 @@ bool Ocean::LoadContent()
     app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
 
     // Start the loading task to perform async loading of the scene file.
-    m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
-        L"assets/sponza/sponza_nobanner.obj"));
+    // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
+    //     L"assets/sponza/sponza_nobanner.obj"));
 
     // Loading helmet to not load big ass sponza.
     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
@@ -386,7 +386,7 @@ void Ocean::OnRender()
         XMMATRIX translation = XMMatrixTranslation(0.0f, -12.0f, 0.0f);
 
         // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
-        m_scene->Accept(visitor);
+        // m_scene->Accept(visitor);
 
         m_oceanPlane->Accept(oceanVisitor);
 
@@ -439,6 +439,25 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 
 void Ocean::UnloadContent()
 {
+
+}
+
+float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed, float A)
+{
+    // A * exp(-1/(magnitudeK * L)^2)/k^4 * dot(k,w)^2 * exp(-k^2 * L^2)
+    
+    float g = 9.81f;
+    float magnitudeK = sqrtf(k.x * k.x + k.y * k.y);
+    float V2 = windSpeed * windSpeed;
+    float L = V2 / g;
+    float L2 = L * L;
+    float k2 = magnitudeK * magnitudeK;
+    float k4 = k2 * k2;
+
+    float kDotW = k.x * windDir.x + k.y * windDir.y;
+    float kDotW2 = kDotW * kDotW;
+
+    return A * (exp(-1.0f / (k2 * L2)) / k4) * kDotW2 * exp(-k2 * L2);
 
 }
 

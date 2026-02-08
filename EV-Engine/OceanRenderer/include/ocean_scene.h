@@ -51,7 +51,8 @@ public:
 	bool LoadContent() override;
 	void UnloadContent() override;
 
-	static DirectX::XMVECTOR GetCameraPosition() { return m_camera.GetTranslation(); } // TODO: remove. find a better solution than polluding demo.
+	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.5f);
+
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender() override;
