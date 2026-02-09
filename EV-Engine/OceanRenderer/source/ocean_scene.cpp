@@ -7,10 +7,14 @@
 #include "core/EV.h"
 
 #include <DirectXColors.h>
+#include <random>
 
 using namespace DirectX;
 using namespace EV;
 
+#define OCEAN_SUBRES 256
+#define OCEAN_SIZE 100.0f
+#define PI 3.14159265359f
 
 
 Camera Ocean::m_camera; // Staticly defined in .h to get its position for the effectsPSO -> to shader
@@ -188,7 +192,7 @@ bool Ocean::LoadContent()
     auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue.GetCommandList();
 
-    m_oceanPlane = commandList->CreatePlane(100.0f, 100.0f, 256, 256);
+    m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES);
 
     // m_cubeMesh = commandList->CreateCube();
     // m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
@@ -461,6 +465,50 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
 
 }
 
+void Ocean::GenerateH0() {
+    const float L = OCEAN_SIZE; // Patch size
+
+    for (int m = 0; m < OCEAN_SUBRES; m++) {
+        for (int n = 0; n < OCEAN_SUBRES; n++) {
+            // Get wave vector for this frequency
+            float kx = (2.0f * PI * (n - OCEAN_SUBRES / 2.0f)) / L;
+            float ky = (2.0f * PI * (m - OCEAN_SUBRES / 2.0f)) / L;
+            XMFLOAT2 k(kx, ky);
+
+            // Generate two independent gaussian random numbers
+            float xiR = GaussianRandom();
+            float xiI = GaussianRandom();
+
+            XMFLOAT2 windDir(1.0f, 0.0f);
+            float windSpeed = 3.0f;
+            // Phillips spectrum value
+            float Ph = InitPhillipsSpectrum(k, windDir,windSpeed);
+
+            // Equation 42: h_tilde_0(k) = (1/√2) * (ξr + i*ξi) * √Ph(k)
+            float scale = (1.0f / sqrtf(2.0f)) * sqrtf(Ph);
+
+            H0[m][n].real = scale * xiR;
+            H0[m][n].imag = scale * xiI;
+
+            // TODO: Understand this part better.
+            // Also store the conjugate for -k (needed for equation 43)
+            // h_tilde_0(-k) = conjugate of h_tilde_0(k)
+            int m_neg = (OCEAN_SUBRES - m) % OCEAN_SUBRES;  // Wrap around for negative indices
+            int n_neg = (OCEAN_SUBRES - n) % OCEAN_SUBRES;
+
+            H0Conj[m][n].real = H0[m_neg][n_neg].real;
+            H0Conj[m][n].imag = -H0[m_neg][n_neg].imag; // Conjugate
+        }
+    }
+}
+
+float Ocean::GaussianRandom() {
+    static std::random_device rd;
+    static std::mt19937 gen(rd());
+    static std::normal_distribution<float> dist(0.0f, 1.0f); // mean=0, std=1
+
+    return dist(gen);
+}
 
 void Ocean::OnKeyPress(KeyEventArgs& e)
 {

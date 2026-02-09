@@ -7,7 +7,7 @@
 #include "core/game.h"
 #include "core/window.h"
 #include "DX12/render_target.h"
-
+#include <complex>
 
 class UpdateEventArgs;
 class KeyEventArgs;
@@ -52,6 +52,8 @@ public:
 	void UnloadContent() override;
 
 	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.5f);
+	void GenerateH0();
+	float GaussianRandom();
 
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
@@ -165,6 +167,9 @@ private:
 
 	std::future<bool> m_loadingTask;
 
+
+	std::complex<float> H0[256][256];
+	std::complex<float> H0Conj[256][256];
 };
 
 }
