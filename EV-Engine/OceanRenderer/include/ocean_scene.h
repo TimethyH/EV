@@ -51,9 +51,11 @@ public:
 	bool LoadContent() override;
 	void UnloadContent() override;
 
+	bool Init();
 	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.5f);
 	void GenerateH0();
 	float GaussianRandom();
+	void UpdateSpectrum(float time);
 
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
@@ -169,6 +171,7 @@ private:
 
 
 	std::complex<float> H0[256][256];
+	std::complex<float> heightMap[256][256];
 	std::complex<float> H0Conj[256][256];
 };
 

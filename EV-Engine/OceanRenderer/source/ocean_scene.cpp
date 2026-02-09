@@ -76,6 +76,8 @@ Ocean::Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVS
     m_pAlignedCameraData = (CameraData*)_aligned_malloc(sizeof(CameraData), 16);
     m_pAlignedCameraData->m_initialPosition = m_camera.GetTranslation();
     m_pAlignedCameraData->m_initialRotation = m_camera.GetRotation();
+
+    Init();     
 }
 
 Ocean::~Ocean()
@@ -346,6 +348,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // Set lights ONCE before rendering
     m_unlitPSO->SetPointLights(m_pointLights);
 
+    // Update heightmap
+    UpdateSpectrum(time);
     OnRender();
 
 }
@@ -446,6 +450,13 @@ void Ocean::UnloadContent()
 
 }
 
+bool Ocean::Init()
+{
+    GenerateH0();
+    return 1;
+}
+
+
 float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed, float A)
 {
     // A * exp(-1/(magnitudeK * L)^2)/k^4 * dot(k,w)^2 * exp(-k^2 * L^2)
@@ -465,6 +476,7 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
 
 }
 
+
 void Ocean::GenerateH0() {
     const float L = OCEAN_SIZE; // Patch size
 
@@ -480,26 +492,31 @@ void Ocean::GenerateH0() {
             float xiI = GaussianRandom();
 
             XMFLOAT2 windDir(1.0f, 0.0f);
-            float windSpeed = 3.0f;
-            // Phillips spectrum value
+            float windSpeed = 30.0f;
+
             float Ph = InitPhillipsSpectrum(k, windDir,windSpeed);
 
-            // Equation 42: h_tilde_0(k) = (1/√2) * (ξr + i*ξi) * √Ph(k)
-            float scale = (1.0f / sqrtf(2.0f)) * sqrtf(Ph);
+            // Equation 42: h0(k) = (1/√2) * (gausRandom + i*gausRandomI) * sqrt(Ph(k))
+            H0[m][n] = (1.0f / sqrtf(2.0f)) * std::complex<float>(xiR, xiI) * sqrtf(Ph);
 
-            H0[m][n].real = scale * xiR;
-            H0[m][n].imag = scale * xiI;
+            int m_minus = (OCEAN_SUBRES - m) % OCEAN_SUBRES;
+            int n_minus = (OCEAN_SUBRES - n) % OCEAN_SUBRES;
 
-            // TODO: Understand this part better.
-            // Also store the conjugate for -k (needed for equation 43)
-            // h_tilde_0(-k) = conjugate of h_tilde_0(k)
-            int m_neg = (OCEAN_SUBRES - m) % OCEAN_SUBRES;  // Wrap around for negative indices
-            int n_neg = (OCEAN_SUBRES - n) % OCEAN_SUBRES;
+            H0Conj[m][n] = std::conj(H0[m_minus][n_minus]);
 
-            H0Conj[m][n].real = H0[m_neg][n_neg].real;
-            H0Conj[m][n].imag = -H0[m_neg][n_neg].imag; // Conjugate
         }
     }
+
+    // TODO: Should this be in a different loop or can it be in the same one?
+    for (int m = 0; m < OCEAN_SUBRES; m++) {
+        for (int n = 0; n < OCEAN_SUBRES; n++) {
+            int m_minus = (OCEAN_SUBRES - m) % OCEAN_SUBRES;
+            int n_minus = (OCEAN_SUBRES - n) % OCEAN_SUBRES;
+
+            H0Conj[m][n] = std::conj(H0[m_minus][n_minus]);
+        }
+    }
+
 }
 
 float Ocean::GaussianRandom() {
@@ -509,6 +526,37 @@ float Ocean::GaussianRandom() {
 
     return dist(gen);
 }
+
+// TODO: Do this in a compute shader?!
+void Ocean::UpdateSpectrum(float time) {
+    const float g = 9.81f;  // Gravity
+
+    for (int m = 0; m < OCEAN_SUBRES; m++) {
+        for (int n = 0; n < OCEAN_SUBRES; n++) {
+            // Calculate k TODO: already computed, store and reuse
+            float kx = (2.0f * PI * (n - OCEAN_SUBRES / 2.0f)) / OCEAN_SIZE;
+            float ky = (2.0f * PI * (m - OCEAN_SUBRES / 2.0f)) / OCEAN_SIZE;
+            float k_length = sqrtf(kx * kx + ky * ky);
+
+            // Dispersion: ω(k) = sqrt(g * |k|)
+            float omega = sqrtf(g * k_length);
+
+            // phase: ω(k) * t
+            float phase = omega * time;
+
+            // exp(iωt) = cos(ωt) + i*sin(ωt)
+            std::complex<float> iwt(cosf(phase), sinf(phase));
+
+            // exp(-iωt) = cos(ωt) - i*sin(ωt)
+            std::complex<float> negIwt(cosf(phase), -sinf(phase));
+
+            // Equation 43: height(k,t) = h0(k)*exp(iωt) + h0*(-k)*exp(-iωt)
+            heightMap[m][n] = H0[m][n] * iwt +
+                H0Conj[m][n] * negIwt;
+        }
+    }
+}
+
 
 void Ocean::OnKeyPress(KeyEventArgs& e)
 {
