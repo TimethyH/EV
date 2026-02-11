@@ -53,7 +53,7 @@ public:
 
 	bool Init();
 	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.5f);
-	void GenerateH0();
+	std::shared_ptr<Texture> GenerateH0();
 	float GaussianRandom();
 	void UpdateSpectrum(float time);
 
@@ -173,6 +173,8 @@ private:
 	std::complex<float> H0[256][256];
 	std::complex<float> heightMap[256][256];
 	std::complex<float> H0Conj[256][256];
+
+	std::shared_ptr<Texture> m_H0Texture;
 };
 
 }

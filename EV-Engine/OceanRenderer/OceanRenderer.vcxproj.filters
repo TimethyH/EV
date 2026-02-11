@@ -18,6 +18,9 @@
     <ClInclude Include="include\ocean_scene.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\compute_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\main.cpp">
@@ -26,9 +29,13 @@
     <ClCompile Include="source\ocean_scene.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\compute_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\fft.hlsl" />
     <FxCompile Include="shaders\ocean_pixel.hlsl" />
+    <FxCompile Include="shaders\ocean_vertex.hlsl" />
   </ItemGroup>
 </Project>

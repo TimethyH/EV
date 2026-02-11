@@ -208,7 +208,7 @@ bool Ocean::LoadContent()
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso", false, false);
-    m_oceanPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/ocean_pixel.cso", false, false);
+    m_oceanPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", false, false);
 
 
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -477,7 +477,7 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
 }
 
 
-void Ocean::GenerateH0() {
+std::shared_ptr<Texture> Ocean::GenerateH0() {
     const float L = OCEAN_SIZE; // Patch size
 
     for (int m = 0; m < OCEAN_SUBRES; m++) {
@@ -516,6 +516,41 @@ void Ocean::GenerateH0() {
             H0Conj[m][n] = std::conj(H0[m_minus][n_minus]);
         }
     }
+    
+    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto commandList = commandQueue.GetCommandList();
+    
+	
+	DXGI_FORMAT H0Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    auto resourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(H0Format, OCEAN_SIZE, OCEAN_SIZE);
+    
+	// Copy H0 texture data
+    m_H0Texture = Application::Get().CreateTexture(resourceDesc);
+    m_H0Texture->SetName(L"H0 Texture");
+
+    std::vector<float> combinedData(OCEAN_SUBRES * OCEAN_SUBRES * 4);
+
+    for (int m = 0; m < OCEAN_SUBRES; m++) {
+        for (int n = 0; n < OCEAN_SUBRES; n++) {
+            int index = (m * OCEAN_SUBRES + n) * 4;
+            combinedData[index + 0] = H0[m][n].real();        // R: H0 real
+            combinedData[index + 1] = H0[m][n].imag();        // G: H0 imaginary
+            combinedData[index + 2] = H0Conj[m][n].real();    // B: H0_conj real
+            combinedData[index + 3] = H0Conj[m][n].imag();    // A: H0_conj imaginary
+        }
+    }
+
+    D3D12_SUBRESOURCE_DATA subData = {};
+    subData.pData = combinedData.data();
+    subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
+    subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
+
+    commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
+    
+    auto fenceValue = commandQueue.ExecuteCommandList(commandList);
+    commandQueue.WaitForFenceValue(fenceValue);
+
+    return m_H0Texture;
 
 }
 

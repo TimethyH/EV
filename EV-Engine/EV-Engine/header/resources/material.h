@@ -128,6 +128,7 @@ namespace EV
             Bump,
             Opacity,
             MetallicRoughness,
+            H0,
             NumTypes,
         };
 

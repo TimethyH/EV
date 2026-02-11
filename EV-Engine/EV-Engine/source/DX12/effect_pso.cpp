@@ -61,7 +61,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 9, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 3);
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
@@ -76,7 +76,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription; 
     rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, 1, &anisotropicSampler, rootSignatureFlags);
     // clang-format on
 
@@ -192,6 +192,7 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
+			BindTexture(commandList, 9, m_material->GetTexture(TextureType::H0));
         }
     }
     // if (m_dirtyFlags & DF_Camera)
