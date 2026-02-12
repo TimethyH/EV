@@ -9,6 +9,7 @@
 #include "DX12/render_target.h"
 #include <complex>
 
+class OceanCompute;
 class UpdateEventArgs;
 class KeyEventArgs;
 class MouseMotionEventArgs;
@@ -51,9 +52,8 @@ public:
 	bool LoadContent() override;
 	void UnloadContent() override;
 
-	bool Init();
 	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.5f);
-	std::shared_ptr<Texture> GenerateH0();
+	void GenerateH0(std::shared_ptr<CommandList> commandList);
 	float GaussianRandom();
 	void UpdateSpectrum(float time);
 
@@ -165,7 +165,7 @@ private:
 	std::shared_ptr<EV::GUI> m_GUI = nullptr;
 
 	std::shared_ptr<EV::EffectPSO> m_unlitPSO;
-	std::shared_ptr<EV::EffectPSO> m_oceanPSO;
+	std::shared_ptr<OceanCompute> m_oceanPSO;
 
 	std::future<bool> m_loadingTask;
 
@@ -175,6 +175,7 @@ private:
 	std::complex<float> H0Conj[256][256];
 
 	std::shared_ptr<Texture> m_H0Texture;
+	std::shared_ptr<Texture> m_phaseTexture;
 };
 
 }

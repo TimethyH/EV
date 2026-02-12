@@ -9,6 +9,8 @@
 #include <DirectXColors.h>
 #include <random>
 
+#include "compute_pso.h"
+
 using namespace DirectX;
 using namespace EV;
 
@@ -77,7 +79,7 @@ Ocean::Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVS
     m_pAlignedCameraData->m_initialPosition = m_camera.GetTranslation();
     m_pAlignedCameraData->m_initialRotation = m_camera.GetRotation();
 
-    Init();     
+    // Init();     
 }
 
 Ocean::~Ocean()
@@ -191,7 +193,7 @@ bool Ocean::LoadContent()
     //     L"assets/damaged_helmet/DamagedHelmet.gltf"));
 
 
-    auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue.GetCommandList();
 
     m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES);
@@ -205,10 +207,21 @@ bool Ocean::LoadContent()
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 
+    GenerateH0(commandList);
+
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
+    // RootParams to update H0 each frame
+    CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeSRV(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+
+    CD3DX12_ROOT_PARAMETER1 H0RootParameters[OceanCompute::RootParameters::NumRootParameters];
+    H0RootParameters[OceanCompute::RootParameters::ReadTextures].InitAsDescriptorTable(1, &h0DescriptorRangeSRV); // SRV t0
+    H0RootParameters[OceanCompute::RootParameters::WriteTextures].InitAsDescriptorTable(1, &h0DescriptorRangeUAV); // UAV u0
+    H0RootParameters[OceanCompute::RootParameters::Time].InitAsConstants(1, 0); // CBV b0
+
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso", false, false);
-    m_oceanPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", false, false);
+    m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
 
 
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -259,10 +272,15 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 {
     static uint64_t frameCount = 0;
     static double totalTime = 0.0;
+    static double oceanTime = 0.0;
+
+    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    auto commandList = commandQueue.GetCommandList();
 
     // super::OnUpdate(e);
 
     totalTime += e.deltaTime;
+    oceanTime += e.deltaTime;
     frameCount++;
 
     if (totalTime > 1.0)
@@ -321,6 +339,10 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
         l.color = XMFLOAT4(LightColors[i]);
     }
+    uint32_t phaseDispatchSize = OCEAN_SUBRES / 16;
+    m_oceanPSO->Dispatch(commandList, m_H0Texture, m_phaseTexture, oceanTime, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+
+    auto fence = commandQueue.ExecuteCommandList(commandList);
 
     m_unlitPSO->SetDirectionalLights(m_directionalLights);
     // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
@@ -350,6 +372,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
     // Update heightmap
     UpdateSpectrum(time);
+
+    commandQueue.WaitForFenceValue(fence);
     OnRender();
 
 }
@@ -372,7 +396,7 @@ void Ocean::OnRender()
     else
     {
         SceneVisitor visitor(*commandList, m_camera, *m_unlitPSO, false);
-        SceneVisitor oceanVisitor(*commandList, m_camera, *m_oceanPSO, false);
+        // SceneVisitor oceanVisitor(*commandList, m_camera, *m_oceanPSO, false);
 
 
          // Clear the render targets.
@@ -396,7 +420,7 @@ void Ocean::OnRender()
         // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
         // m_scene->Accept(visitor);
 
-        m_oceanPlane->Accept(oceanVisitor);
+        m_oceanPlane->Accept(visitor);
 
         XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);
         // m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
@@ -450,21 +474,17 @@ void Ocean::UnloadContent()
 
 }
 
-bool Ocean::Init()
-{
-    GenerateH0();
-    return 1;
-}
-
-
 float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed, float A)
 {
     // A * exp(-1/(magnitudeK * L)^2)/k^4 * dot(k,w)^2 * exp(-k^2 * L^2)
     
+    const float l = OCEAN_SIZE * 0.001f; // Patch size
+
     float g = 9.81f;
     float magnitudeK = sqrtf(k.x * k.x + k.y * k.y);
+    if (magnitudeK < 0.0001f) return 0.0f;
     float V2 = windSpeed * windSpeed;
-    float L = V2 / g;
+    float L = V2 / g;   
     float L2 = L * L;
     float k2 = magnitudeK * magnitudeK;
     float k4 = k2 * k2;
@@ -472,12 +492,12 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
     float kDotW = k.x * windDir.x + k.y * windDir.y;
     float kDotW2 = kDotW * kDotW;
 
-    return A * (exp(-1.0f / (k2 * L2)) / k4) * kDotW2 * exp(-k2 * L2);
+    return A * (exp(-1.0f / (k2 * L2)) / k4) * kDotW2 * exp(-k2 * l*l);
 
 }
 
 
-std::shared_ptr<Texture> Ocean::GenerateH0() {
+void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     const float L = OCEAN_SIZE; // Patch size
 
     for (int m = 0; m < OCEAN_SUBRES; m++) {
@@ -498,16 +518,10 @@ std::shared_ptr<Texture> Ocean::GenerateH0() {
 
             // Equation 42: h0(k) = (1/√2) * (gausRandom + i*gausRandomI) * sqrt(Ph(k))
             H0[m][n] = (1.0f / sqrtf(2.0f)) * std::complex<float>(xiR, xiI) * sqrtf(Ph);
-
-            int m_minus = (OCEAN_SUBRES - m) % OCEAN_SUBRES;
-            int n_minus = (OCEAN_SUBRES - n) % OCEAN_SUBRES;
-
-            H0Conj[m][n] = std::conj(H0[m_minus][n_minus]);
-
         }
     }
 
-    // TODO: Should this be in a different loop or can it be in the same one?
+    // Needs its own loop since the conjugate needs all data of H0 to be valid
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             int m_minus = (OCEAN_SUBRES - m) % OCEAN_SUBRES;
@@ -516,16 +530,19 @@ std::shared_ptr<Texture> Ocean::GenerateH0() {
             H0Conj[m][n] = std::conj(H0[m_minus][n_minus]);
         }
     }
-    
-    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-    auto commandList = commandQueue.GetCommandList();
-    
 	
+    // Input texture SRV
 	DXGI_FORMAT H0Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
-    auto resourceDesc = CD3DX12_RESOURCE_DESC::Tex2D(H0Format, OCEAN_SIZE, OCEAN_SIZE);
+    auto H0Desc = CD3DX12_RESOURCE_DESC::Tex2D(H0Format, OCEAN_SUBRES, OCEAN_SUBRES);
     
+    // output texture UAV
+    DXGI_FORMAT phaseFormat = DXGI_FORMAT_R32G32_FLOAT;
+    auto phaseDesc = CD3DX12_RESOURCE_DESC::Tex2D(phaseFormat, OCEAN_SUBRES, OCEAN_SUBRES);
+    phaseDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+
 	// Copy H0 texture data
-    m_H0Texture = Application::Get().CreateTexture(resourceDesc);
+    m_H0Texture = Application::Get().CreateTexture(H0Desc);
     m_H0Texture->SetName(L"H0 Texture");
 
     std::vector<float> combinedData(OCEAN_SUBRES * OCEAN_SUBRES * 4);
@@ -545,13 +562,11 @@ std::shared_ptr<Texture> Ocean::GenerateH0() {
     subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
 
+    // Create output texture
+    m_phaseTexture = Application::Get().CreateTexture(phaseDesc);
+    m_phaseTexture->SetName(L"Phase Output Texture");
+
     commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
-    
-    auto fenceValue = commandQueue.ExecuteCommandList(commandList);
-    commandQueue.WaitForFenceValue(fenceValue);
-
-    return m_H0Texture;
-
 }
 
 float Ocean::GaussianRandom() {

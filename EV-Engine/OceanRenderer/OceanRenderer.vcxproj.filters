@@ -37,5 +37,6 @@
     <FxCompile Include="shaders\fft.hlsl" />
     <FxCompile Include="shaders\ocean_pixel.hlsl" />
     <FxCompile Include="shaders\ocean_vertex.hlsl" />
+    <FxCompile Include="shaders\animate_waves.hlsl" />
   </ItemGroup>
 </Project>

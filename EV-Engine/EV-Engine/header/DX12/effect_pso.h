@@ -230,5 +230,6 @@ namespace EV
         bool m_enableOcean;
 
         EV::Camera& m_camera;
+		
     };
 }
