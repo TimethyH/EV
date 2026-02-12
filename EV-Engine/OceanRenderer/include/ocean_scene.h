@@ -52,7 +52,7 @@ public:
 	bool LoadContent() override;
 	void UnloadContent() override;
 
-	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.5f);
+	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.05f);
 	void GenerateH0(std::shared_ptr<CommandList> commandList);
 	float GaussianRandom();
 	void UpdateSpectrum(float time);
@@ -165,7 +165,9 @@ private:
 	std::shared_ptr<EV::GUI> m_GUI = nullptr;
 
 	std::shared_ptr<EV::EffectPSO> m_unlitPSO;
+	std::shared_ptr<EV::EffectPSO> m_displacementPSO;
 	std::shared_ptr<OceanCompute> m_oceanPSO;
+	std::shared_ptr<OceanCompute> m_fftPSO;
 
 	std::future<bool> m_loadingTask;
 
@@ -176,6 +178,8 @@ private:
 
 	std::shared_ptr<Texture> m_H0Texture;
 	std::shared_ptr<Texture> m_phaseTexture;
+	std::shared_ptr<Texture> m_heightTexture;
+	std::shared_ptr<Texture> m_halfHeightTexture; // after 1st FFT pass
 };
 
 }

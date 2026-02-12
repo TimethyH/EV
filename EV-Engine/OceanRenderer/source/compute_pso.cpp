@@ -71,3 +71,21 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
     
 }
 
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> outputTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase)
+{
+    commandList->SetPipelineState(m_pipelineStateObject);
+    commandList->SetComputeRootSignature(m_rootSignature);
+
+    // Bind H0
+    commandList->SetShaderResourceView(RootParameters::ReadTextures, 0, inputTexture,
+        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    // Bind Phase UAV
+    commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 0, outputTexture, 0);
+    // Set Time 
+    commandList->SetCompute32BitConstants(RootParameters::Time, 1, &columnPhase);
+
+    commandList->Dispatch(dispatchDimension.x, dispatchDimension.y, dispatchDimension.z);
+
+}
+
+

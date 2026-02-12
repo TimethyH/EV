@@ -18,11 +18,12 @@
 using namespace Microsoft::WRL;
 using namespace EV;
 
-EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLighting, bool enableDecal)
+EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLighting, bool enableDecal, bool enableOcean)
 	: m_dirtyFlags(DF_All)
     , m_pPreviousCommandList(nullptr)
     , m_enableLighting(enableLighting)
     , m_enableDecal(enableDecal)
+	, m_enableOcean(enableOcean)
 	, m_camera(cam)
 {
     m_pAlignedMVP = (MVP*)_aligned_malloc(sizeof(MVP), 16);
@@ -72,7 +73,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
@@ -183,6 +184,7 @@ void EffectPSO::Apply(CommandList& commandList)
 
             using TextureType = Material::TextureType;
 
+
             BindTexture(commandList, 0, m_material->GetTexture(TextureType::Ambient));
             BindTexture(commandList, 1, m_material->GetTexture(TextureType::Emissive));
             BindTexture(commandList, 2, m_material->GetTexture(TextureType::Diffuse));
@@ -192,7 +194,7 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
-			BindTexture(commandList, 9, m_material->GetTexture(TextureType::H0));
+            
         }
     }
     // if (m_dirtyFlags & DF_Camera)
@@ -206,6 +208,11 @@ void EffectPSO::Apply(CommandList& commandList)
     if (m_dirtyFlags & DF_PointLights)
     {
         commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
+    }
+    if (m_enableOcean && m_heightmap)
+    {
+        commandList.SetShaderResourceView(RootParameters::Textures, 9, m_heightmap,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     }
     
     // if (m_dirtyFlags & DF_SpotLights)
@@ -238,4 +245,9 @@ std::wstring EffectPSO::GetModulePath()
     GetModuleFileNameW(nullptr, buffer, MAX_PATH);
     PathRemoveFileSpecW(buffer);
     return std::wstring(buffer);
+}
+
+void EffectPSO::SetHeightTexture(std::shared_ptr<Texture> inTexture)
+{
+    m_heightmap = inTexture;
 }

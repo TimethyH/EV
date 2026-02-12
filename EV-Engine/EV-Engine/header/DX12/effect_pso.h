@@ -102,7 +102,7 @@ namespace EV
             NumRootParameters
         };
 
-        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLigting, bool enableDecal = false);
+        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLigting, bool enableDecal = false, bool enableOcean = false);
         virtual ~EffectPSO();
 
         const std::vector<PointLight>& GetPointLights() const
@@ -179,7 +179,7 @@ namespace EV
         // Apply this effect to the rendering pipeline.
         void Apply(CommandList& commandList);
         std::wstring GetModulePath();
-
+        void SetHeightTexture(std::shared_ptr<Texture> inTexture);
     private:
         enum DirtyFlags
         {
@@ -230,6 +230,9 @@ namespace EV
         bool m_enableOcean;
 
         EV::Camera& m_camera;
+
+        // height tex for vertex shader
+        std::shared_ptr<Texture> m_heightmap;
 		
     };
 }

@@ -193,7 +193,7 @@ bool Ocean::LoadContent()
     //     L"assets/damaged_helmet/DamagedHelmet.gltf"));
 
 
-    auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue.GetCommandList();
 
     m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES);
@@ -221,7 +221,9 @@ bool Ocean::LoadContent()
     H0RootParameters[OceanCompute::RootParameters::Time].InitAsConstants(1, 0); // CBV b0
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso", false, false);
+    m_displacementPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", false, false, true);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
+    m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", H0RootParameters, _countof(H0RootParameters));
 
 
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -339,8 +341,14 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
         l.color = XMFLOAT4(LightColors[i]);
     }
+
+
     uint32_t phaseDispatchSize = OCEAN_SUBRES / 16;
     m_oceanPSO->Dispatch(commandList, m_H0Texture, m_phaseTexture, oceanTime, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+    commandList->UAVBarrier(m_phaseTexture);
+	m_fftPSO->Dispatch(commandList, m_phaseTexture, m_halfHeightTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0);
+    commandList->UAVBarrier(m_halfHeightTexture);
+	m_fftPSO->Dispatch(commandList, m_halfHeightTexture, m_heightTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1);
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
@@ -396,7 +404,7 @@ void Ocean::OnRender()
     else
     {
         SceneVisitor visitor(*commandList, m_camera, *m_unlitPSO, false);
-        // SceneVisitor oceanVisitor(*commandList, m_camera, *m_oceanPSO, false);
+        SceneVisitor oceanVisitor(*commandList, m_camera, *m_displacementPSO, false);
 
 
          // Clear the render targets.
@@ -411,6 +419,11 @@ void Ocean::OnRender()
         commandList->SetViewport(m_viewport);
         commandList->SetScissorRect(m_scissorRect);
         commandList->SetRenderTarget(m_renderTarget);
+        m_displacementPSO->SetHeightTexture(m_heightTexture);
+
+        m_displacementPSO->SetDirectionalLights(m_directionalLights);
+        m_displacementPSO->SetPointLights(m_pointLights);
+
 
         // REMINDER: Transform is built with Scale * Rotation * Translation (SRT)
         XMMATRIX scale = XMMatrixScaling(10.0f, 10.0f, 10.0f);
@@ -420,7 +433,7 @@ void Ocean::OnRender()
         // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
         // m_scene->Accept(visitor);
 
-        m_oceanPlane->Accept(visitor);
+        m_oceanPlane->Accept(oceanVisitor);
 
         XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);
         // m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
@@ -449,7 +462,7 @@ void Ocean::OnRender()
     }
     // Render the GUI on the render target
     OnGUI(commandList, m_swapChain->GetRenderTarget());
-
+    commandList->TransitionBarrier(m_heightTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandQueue.ExecuteCommandList(commandList);
 
     m_swapChain->Present();
@@ -478,7 +491,7 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
 {
     // A * exp(-1/(magnitudeK * L)^2)/k^4 * dot(k,w)^2 * exp(-k^2 * L^2)
     
-    const float l = OCEAN_SIZE * 0.001f; // Patch size
+    const float l = OCEAN_SIZE * 0.00001; // Patch size
 
     float g = 9.81f;
     float magnitudeK = sqrtf(k.x * k.x + k.y * k.y);
@@ -492,7 +505,7 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
     float kDotW = k.x * windDir.x + k.y * windDir.y;
     float kDotW2 = kDotW * kDotW;
 
-    return A * (exp(-1.0f / (k2 * L2)) / k4) * kDotW2 * exp(-k2 * l*l);
+    return 0.02f * (exp(-1.0f / (k2 * L2)) / k4) * kDotW2 * exp(-k2 * l*l);
 
 }
 
@@ -511,7 +524,7 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
             float xiR = GaussianRandom();
             float xiI = GaussianRandom();
 
-            XMFLOAT2 windDir(1.0f, 0.0f);
+            XMFLOAT2 windDir(0.7f, 0.7f); // diagonal wind
             float windSpeed = 30.0f;
 
             float Ph = InitPhillipsSpectrum(k, windDir,windSpeed);
@@ -535,7 +548,7 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
 	DXGI_FORMAT H0Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     auto H0Desc = CD3DX12_RESOURCE_DESC::Tex2D(H0Format, OCEAN_SUBRES, OCEAN_SUBRES);
     
-    // output texture UAV
+    // output phase texture UAV
     DXGI_FORMAT phaseFormat = DXGI_FORMAT_R32G32_FLOAT;
     auto phaseDesc = CD3DX12_RESOURCE_DESC::Tex2D(phaseFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     phaseDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
@@ -562,9 +575,19 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
 
-    // Create output texture
+    // Create phase output texture
     m_phaseTexture = Application::Get().CreateTexture(phaseDesc);
     m_phaseTexture->SetName(L"Phase Output Texture");
+
+    // Create height texture
+    // TODO: can be made to store single float instead of 2, imaginary nr is gone!
+    m_heightTexture = Application::Get().CreateTexture(phaseDesc);
+    m_heightTexture->SetName(L"heightmap Texture");
+
+    // Create intermediate height texture
+    // TODO: can be made to store single float instead of 2, imaginary nr is gone!
+    m_halfHeightTexture = Application::Get().CreateTexture(phaseDesc);
+    m_halfHeightTexture->SetName(L"intermediate heightmap Texture");
 
     commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
 }

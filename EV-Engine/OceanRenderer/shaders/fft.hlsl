@@ -1,7 +1,77 @@
-[numthreads(1, 1, 1)]
-void main( uint3 DTid : SV_DispatchThreadID )
+#define TOTALPOINTS 256
+#define PI 3.14159265359f
+
+cbuffer Constants : register(b0)
 {
+    uint columnPass;
 }
+
+Texture2D<float2> inputTexture : register(t0);
+RWTexture2D<float2> outputTexture : register(u0);
+
+float2 complex_multiply(float2 a, float2 b)
+{
+    return float2(a.x * b.x - a.y * b.y,
+                  a.x * b.y + a.y * b.x);
+}
+
+groupshared float2 buffer[2][TOTALPOINTS];
+
+[numthreads(TOTALPOINTS, 1, 1)]
+void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint groupIndex : SV_GroupIndex)
+{
+    // Load input
+    if (columnPass)
+    {
+        buffer[0][groupIndex] = inputTexture.Load(int3(groupIndex, groupID.x, 0));
+    }
+    else
+    {
+        buffer[0][groupIndex] = inputTexture.Load(int3(groupID.x, groupIndex, 0));
+    }
+    
+    GroupMemoryBarrierWithGroupSync();
+    
+    uint flag = 0;
+    
+    for (uint stage = 0; stage < 8; ++stage)
+    {
+        uint b = TOTALPOINTS >> (stage + 1);
+        uint w = b * (groupIndex / b);
+        uint i = (w + groupIndex) % TOTALPOINTS;
+        
+        float2 A = buffer[flag][i];
+        float2 B = buffer[flag][i + b];
+        
+        // Jim's exact twiddle calculation
+        float angle = -2.0f * PI * float(w) / float(TOTALPOINTS);
+        float2 twiddle = float2(cos(angle), sin(angle));
+        twiddle.y = -twiddle.y; // Inverse FFT flip
+        
+        buffer[1 - flag][groupIndex] = A + complex_multiply(twiddle, B);
+        
+        flag = 1 - flag;
+        GroupMemoryBarrierWithGroupSync();
+    }
+    
+    float2 result = buffer[flag][groupIndex];
+
+	// 2D inverse FFT normalization: divide by N on column pass
+    if (columnPass)
+    {
+        result /= float(TOTALPOINTS);
+    }
+
+    if (columnPass)
+    {
+        outputTexture[int2(groupIndex, groupID.x)] = result;
+    }
+    else
+    {
+        outputTexture[int2(groupID.x, groupIndex)] = result;
+    }
+}
+
 
 /*
  *

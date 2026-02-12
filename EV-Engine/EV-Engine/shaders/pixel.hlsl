@@ -220,6 +220,7 @@ Texture2D BumpTexture : register(t9);
 Texture2D OpacityTexture : register(t10);
 Texture2D MetallicRoughness : register(t11);
 
+
 SamplerState linearSampler : register(s0);
 
 
