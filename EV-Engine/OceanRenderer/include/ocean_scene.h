@@ -9,6 +9,10 @@
 #include "DX12/render_target.h"
 #include <complex>
 
+#define OCEAN_SUBRES 512
+#define OCEAN_SIZE 500.0f
+#define OCEAN_DEPTH 20.0f
+
 class OceanCompute;
 class UpdateEventArgs;
 class KeyEventArgs;
@@ -200,9 +204,9 @@ private:
 		float peakOmega = 0.0f;
 	}m_jonswapParams;
 
-	std::complex<float> H0[256][256];
-	std::complex<float> heightMap[256][256];
-	std::complex<float> H0Conj[256][256];
+	std::complex<float> H0[OCEAN_SUBRES][OCEAN_SUBRES];
+	std::complex<float> heightMap[OCEAN_SUBRES][OCEAN_SUBRES];
+	std::complex<float> H0Conj[OCEAN_SUBRES][OCEAN_SUBRES];
 
 	std::shared_ptr<Texture> m_H0Texture;
 	std::shared_ptr<Texture> m_slopeTexture;

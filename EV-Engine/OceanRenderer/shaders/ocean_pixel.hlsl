@@ -40,34 +40,30 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 deepColor = float3(0.01f, 0.05f, 0.15f);
     float3 shallowColor = float3(0.0f, 0.3f, 0.5f);
 
-    // Facing ratio: how much the surface faces the camera
-    float facing = saturate(dot(normal, viewDir));
-    float3 baseColor = lerp(deepColor, shallowColor, facing);
-
     // Directional light (world space)
     float3 lightDir = normalize(-DirectionalLights[0].DirectionWS.xyz);
     float3 lightColor = DirectionalLights[0].Color.rgb;
 
     // Diffuse
     float NdotL = max(dot(normal, lightDir), 0.0f);
-    float3 diffuse = baseColor * NdotL * lightColor;
+    float3 diffuse = shallowColor * NdotL * lightColor;
 
-
-    // Specular (Blinn-Phong)
-    float3 halfVec = normalize(viewDir + lightDir);
-    float NdotH = max(dot(normal, halfVec), 0.0f);
-    float3 specular = lightColor * pow(NdotH, 256.0f) * 0.8f;
-
-    // return float4(specular, 1.0f);
-    // Fresnel (Schlick approximation)
-    float fresnel = pow(1.0f - facing, 4.0f);
-    float3 skyColor = float3(0.4f, 0.6f, 0.9f);
-    float3 reflection = skyColor * fresnel;
-
-    // Ambient
-    float3 ambient = baseColor * 0.15f;
-
-    float3 finalColor = ambient + diffuse + specular + reflection;
-
-    return float4(finalColor, 1.0f);
+    return float4(diffuse, 1.0f);
+    //
+    // // Specular (Blinn-Phong)
+    // float3 halfVec = normalize(viewDir + lightDir);
+    // float NdotH = max(dot(normal, halfVec), 0.0f);
+    // float3 specular = lightColor * pow(NdotH, 256.0f) * 0.8f;
+    //
+    // // Fresnel (Schlick approximation)
+    // float fresnel = pow(1.0f - facing, 4.0f);
+    // float3 skyColor = float3(0.4f, 0.6f, 0.9f);
+    // float3 reflection = skyColor * fresnel;
+    //
+    // // Ambient
+    // float3 ambient = shallowColor * 0.15f;
+    //
+    // float3 finalColor = ambient + diffuse + specular + reflection;
+    //
+    // return float4(finalColor, 1.0f);
 }

@@ -467,7 +467,7 @@ namespace EV
     private:
         // Used for procedural mesh generation.
         using VertexCollection = std::vector<VertexPositionNormalTangentBitangentTexture>;
-        using IndexCollection = std::vector<uint16_t>;
+        using IndexCollection = std::vector<uint32_t>;
 
 
         // Create a scene that contains a single node with a single mesh.

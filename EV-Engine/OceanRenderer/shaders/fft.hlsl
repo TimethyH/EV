@@ -1,4 +1,4 @@
-#define TOTALPOINTS 256
+#define TOTALPOINTS 512
 #define PI 3.14159265359f
 
 cbuffer Constants : register(b0)
@@ -33,7 +33,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
     GroupMemoryBarrierWithGroupSync();
     
     uint flag = 0;
-    for (uint stage = 0; stage < 8; ++stage)
+    for (uint stage = 0; stage < log2(TOTALPOINTS); ++stage)
     {
         uint b = TOTALPOINTS >> (stage + 1);
         uint w = b * (groupIndex / b);

@@ -1,8 +1,8 @@
-#define OCEAN_RESOLUTION 256
-#define OCEAN_SIZE 100
+#define OCEAN_RESOLUTION 512
+#define OCEAN_SIZE 500
 #define PI 3.14159265359f
 #define GRAVITY 9.81f
-#define REPEAT_TIME 100.0f
+#define REPEAT_TIME 500.0f
 
 
 float2 complex_multiply(float2 W, float2 B)

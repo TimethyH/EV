@@ -11,13 +11,11 @@
 
 #include "compute_pso.h"
 
+#define PI 3.14159265359f
+
+
 using namespace DirectX;
 using namespace EV;
-
-#define OCEAN_SUBRES 256
-#define OCEAN_SIZE 100.0f
-#define OCEAN_DEPTH 20.0f
-#define PI 3.14159265359f
 
 
 Camera Ocean::m_camera; // Staticly defined in .h to get its position for the effectsPSO -> to shader
@@ -197,7 +195,7 @@ bool Ocean::LoadContent()
     auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue.GetCommandList();
 
-    m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES);
+    m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, true);
 
     // m_cubeMesh = commandList->CreateCube();
     // m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
@@ -216,7 +214,7 @@ bool Ocean::LoadContent()
     CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeSRV(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0,
         D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
     CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0,
-        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE); // Volatile was needed because fft shader would have varying shaders. Sometimes SRV sometimes not, which causes UAV to be bound to SRV.
 
     CD3DX12_ROOT_PARAMETER1 H0RootParameters[OceanCompute::RootParameters::NumRootParameters];
     H0RootParameters[OceanCompute::RootParameters::ReadTextures].InitAsDescriptorTable(1, &h0DescriptorRangeSRV); // SRV t0
@@ -314,7 +312,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_swapChain->WaitForSwapChain();
 
     // Update Camera
-    float speedMultiplier = (m_shift ? 16.0f : 4.0f);
+    float speedMultiplier = (m_shift ? 32.0f : 4.0f);
     XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     m_camera.Translate(cameraTranslate, Space::LOCAL);
