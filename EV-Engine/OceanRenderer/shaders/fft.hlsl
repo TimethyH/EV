@@ -6,8 +6,7 @@ cbuffer Constants : register(b0)
     uint columnPass;
 }
 
-Texture2D<float2> inputTexture : register(t0);
-RWTexture2D<float2> outputTexture : register(u0);
+RWTexture2D<float4> outputTexture : register(u0);
 
 float2 complex_multiply(float2 a, float2 b)
 {
@@ -15,61 +14,54 @@ float2 complex_multiply(float2 a, float2 b)
                   a.x * b.y + a.y * b.x);
 }
 
-groupshared float2 buffer[2][TOTALPOINTS];
+groupshared float2 bufferRG[2][TOTALPOINTS];
+groupshared float2 bufferBA[2][TOTALPOINTS];
+
 
 [numthreads(TOTALPOINTS, 1, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_GroupID, uint groupIndex : SV_GroupIndex)
 {
-    // Load input
+    float4 data;
     if (columnPass)
-    {
-        buffer[0][groupIndex] = inputTexture.Load(int3(groupIndex, groupID.x, 0));
-    }
+        data = outputTexture.Load(int3(groupID.x, groupIndex, 0)); // column: x fixed, y varies
     else
-    {
-        buffer[0][groupIndex] = inputTexture.Load(int3(groupID.x, groupIndex, 0));
-    }
-    
+        data = outputTexture.Load(int3(groupIndex, groupID.x, 0)); // row: x varies, y fixed
+
+    bufferRG[0][groupIndex] = data.rg;
+    bufferBA[0][groupIndex] = data.ba;
+
     GroupMemoryBarrierWithGroupSync();
     
     uint flag = 0;
-    
     for (uint stage = 0; stage < 8; ++stage)
     {
         uint b = TOTALPOINTS >> (stage + 1);
         uint w = b * (groupIndex / b);
         uint i = (w + groupIndex) % TOTALPOINTS;
-        
-        float2 A = buffer[flag][i];
-        float2 B = buffer[flag][i + b];
-        
-        // Jim's exact twiddle calculation
+
         float angle = -2.0f * PI * float(w) / float(TOTALPOINTS);
-        float2 twiddle = float2(cos(angle), sin(angle));
-        twiddle.y = -twiddle.y; // Inverse FFT flip
-        
-        buffer[1 - flag][groupIndex] = A + complex_multiply(twiddle, B);
-        
+        float2 twiddle = float2(cos(angle), -sin(angle));
+
+        bufferRG[1 - flag][groupIndex] = bufferRG[flag][i] + complex_multiply(twiddle, bufferRG[flag][i + b]);
+        bufferBA[1 - flag][groupIndex] = bufferBA[flag][i] + complex_multiply(twiddle, bufferBA[flag][i + b]);
+
         flag = 1 - flag;
         GroupMemoryBarrierWithGroupSync();
     }
-    
-    float2 result = buffer[flag][groupIndex];
 
-	// 2D inverse FFT normalization: divide by N on column pass
-    if (columnPass)
-    {
-        result /= float(TOTALPOINTS);
-    }
+    float2 resultRG = bufferRG[flag][groupIndex];
+    float2 resultBA = bufferBA[flag][groupIndex];
+
+    // if (columnPass)
+    // {
+    //     resultRG /= float(TOTALPOINTS);
+    //     resultBA /= float(TOTALPOINTS);
+    // }
 
     if (columnPass)
-    {
-        outputTexture[int2(groupIndex, groupID.x)] = result;
-    }
+        outputTexture[int2(groupID.x, groupIndex)] = float4(resultRG, resultBA);
     else
-    {
-        outputTexture[int2(groupID.x, groupIndex)] = result;
-    }
+        outputTexture[int2(groupIndex, groupID.x)] = float4(resultRG, resultBA);
 }
 
 

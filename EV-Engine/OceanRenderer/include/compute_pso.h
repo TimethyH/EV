@@ -24,11 +24,8 @@ public:
     std::wstring ModulePath();
     // ~OceanCompute();
 
-    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture>
-                  outputTexture, float
-                  totalTime, DirectX::XMUINT3 dispatchDimension);
-    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture,
-                  std::shared_ptr<Texture> outputTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase);
+    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, DirectX::XMUINT3 dispatchDimension);
+    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase);
 
     enum RootParameters
     {

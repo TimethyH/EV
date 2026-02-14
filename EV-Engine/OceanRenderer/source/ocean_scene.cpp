@@ -16,6 +16,7 @@ using namespace EV;
 
 #define OCEAN_SUBRES 256
 #define OCEAN_SIZE 100.0f
+#define OCEAN_DEPTH 20.0f
 #define PI 3.14159265359f
 
 
@@ -212,18 +213,31 @@ bool Ocean::LoadContent()
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
     // RootParams to update H0 each frame
-    CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeSRV(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-    CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+    CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeSRV(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0, 0,
+        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+    CD3DX12_DESCRIPTOR_RANGE1 h0DescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2, 0, 0,
+        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
 
     CD3DX12_ROOT_PARAMETER1 H0RootParameters[OceanCompute::RootParameters::NumRootParameters];
     H0RootParameters[OceanCompute::RootParameters::ReadTextures].InitAsDescriptorTable(1, &h0DescriptorRangeSRV); // SRV t0
     H0RootParameters[OceanCompute::RootParameters::WriteTextures].InitAsDescriptorTable(1, &h0DescriptorRangeUAV); // UAV u0
     H0RootParameters[OceanCompute::RootParameters::Time].InitAsConstants(1, 0); // CBV b0
 
+    // FFT 
+    CD3DX12_DESCRIPTOR_RANGE1 FFTDescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0,
+        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+
+    CD3DX12_ROOT_PARAMETER1 FFTRootParameters[2];
+    FFTRootParameters[0].InitAsDescriptorTable(1, &FFTDescriptorRangeUAV); // UAV u0
+    FFTRootParameters[1].InitAsConstants(1, 0); // CBV b0
+
+
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso", false, false);
     m_displacementPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", false, false, true);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
-    m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", H0RootParameters, _countof(H0RootParameters));
+    m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
+    m_permuteHeightPSO = std::make_shared<OceanCompute>(L"/permute_heightmap.cso", FFTRootParameters, _countof(FFTRootParameters));
+    m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -344,15 +358,30 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
 
     uint32_t phaseDispatchSize = OCEAN_SUBRES / 16;
-    m_oceanPSO->Dispatch(commandList, m_H0Texture, m_phaseTexture, oceanTime, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
-    commandList->UAVBarrier(m_phaseTexture);
-	m_fftPSO->Dispatch(commandList, m_phaseTexture, m_halfHeightTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0);
-    commandList->UAVBarrier(m_halfHeightTexture);
-	m_fftPSO->Dispatch(commandList, m_halfHeightTexture, m_heightTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1);
+    m_oceanPSO->Dispatch(commandList, m_H0Texture, m_slopeTexture, m_displacementTexture, oceanTime, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+    commandList->UAVBarrier(m_slopeTexture);
+    commandList->UAVBarrier(m_displacementTexture);
+	
+    // Displacement
+	m_fftPSO->Dispatch(commandList, m_displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
+    commandList->UAVBarrier(m_displacementTexture);
+	m_fftPSO->Dispatch(commandList, m_displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
+
+    // Slope
+	m_fftPSO->Dispatch(commandList, m_slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
+    commandList->UAVBarrier(m_slopeTexture);
+	m_fftPSO->Dispatch(commandList, m_slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
+	
+    // Permutation
+    commandList->UAVBarrier(m_slopeTexture);
+    commandList->UAVBarrier(m_displacementTexture);
+    m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
+    m_permuteHeightPSO->Dispatch(commandList, m_displacementTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
     m_unlitPSO->SetDirectionalLights(m_directionalLights);
+    m_displacementPSO->SetDirectionalLights(m_directionalLights);
     // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
     // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
@@ -377,9 +406,10 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
     // Set lights ONCE before rendering
     m_unlitPSO->SetPointLights(m_pointLights);
+    m_displacementPSO->SetPointLights(m_pointLights);
 
     // Update heightmap
-    UpdateSpectrum(time);
+    // UpdateSpectrum(time);
 
     commandQueue.WaitForFenceValue(fence);
     OnRender();
@@ -419,7 +449,11 @@ void Ocean::OnRender()
         commandList->SetViewport(m_viewport);
         commandList->SetScissorRect(m_scissorRect);
         commandList->SetRenderTarget(m_renderTarget);
-        m_displacementPSO->SetHeightTexture(m_heightTexture);
+
+        // Set Ocean Textures
+        // TODO: rename the textrures...
+        m_displacementPSO->SetHeightTexture(m_displacementTexture);
+        m_displacementPSO->SetSlopeTexture(m_slopeTexture);
 
         m_displacementPSO->SetDirectionalLights(m_directionalLights);
         m_displacementPSO->SetPointLights(m_pointLights);
@@ -462,7 +496,8 @@ void Ocean::OnRender()
     }
     // Render the GUI on the render target
     OnGUI(commandList, m_swapChain->GetRenderTarget());
-    commandList->TransitionBarrier(m_heightTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    commandList->TransitionBarrier(m_slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    commandList->TransitionBarrier(m_displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandQueue.ExecuteCommandList(commandList);
 
     m_swapChain->Present();
@@ -509,28 +544,90 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
 
 }
 
+float DispersionRelation(float kMag)
+{
+    return sqrt(9.81f * kMag * tanh(std::min(kMag * OCEAN_DEPTH, 20.0f)));
+}
+
+float DispersionDerivative(float kMag)
+{
+    float th = tanh(std::min(kMag * OCEAN_DEPTH, 20.0f));
+    float ch = cosh(kMag * 20.0f);
+    return 9.81f * (OCEAN_DEPTH * kMag / ch / ch + th) / DispersionRelation(kMag) / 2.0f;
+}
+
+float NormalizationFactor(float s)
+{
+    float s2 = s * s;
+    float s3 = s2 * s;
+    float s4 = s3 * s;
+    if (s < 5) return -0.000564f * s4 + 0.00776f * s3 - 0.044f * s2 + 0.192f * s + 0.163f;
+    else return -4.80e-08f * s4 + 1.07e-05f * s3 - 9.53e-04f * s2 + 5.90e-02f * s + 3.93e-01f;
+}
+
+float Cosine2s(float theta, float s)
+{
+    return NormalizationFactor(s) * pow(abs(cos(0.5f * theta)), 2.0f * s);
+}
+
+float SpreadPower(float omega, float peakOmega)
+{
+    if (omega > peakOmega)
+        return 9.77f * pow(abs(omega / peakOmega), -2.5f);
+    else
+        return 6.97f * pow(abs(omega / peakOmega), 5.0f);
+}
+
+float Ocean::DirectionSpectrum(float theta, float omega)
+{
+    float s = SpreadPower(omega, m_jonswapParams.peakOmega) + 16 * tanh(std::min(omega / m_jonswapParams.peakOmega, 20.0f)) * m_jonswapParams.swell * m_jonswapParams.swell;
+
+    return std::lerp(2.0f / 3.1415f * cos(theta) * cos(theta), Cosine2s(theta - m_jonswapParams.angle, s), m_jonswapParams.spreadBlend);
+}
+
+float Ocean::ShortWavesFade(float kLength)
+{
+    return exp(-m_jonswapParams.shortWavesFade * m_jonswapParams.shortWavesFade * kLength * kLength);
+}
+
 
 void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     const float L = OCEAN_SIZE; // Patch size
+    float deltaK = 2.0f * PI / L;
 
+    const float lowCutoff = 0.0001f;
+    const float highCutoff = 9000.0f;
+    UpdateSpectrumParameters();
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             // Get wave vector for this frequency
-            float kx = (2.0f * PI * (n - OCEAN_SUBRES / 2.0f)) / L;
-            float ky = (2.0f * PI * (m - OCEAN_SUBRES / 2.0f)) / L;
-            XMFLOAT2 k(kx, ky);
+            float kx = (n - OCEAN_SUBRES / 2.0f) * deltaK;
+            float ky = (m - OCEAN_SUBRES / 2.0f) * deltaK;
+            float k(sqrtf(kx * kx + ky * ky));
 
+            if (k >= lowCutoff && k <= highCutoff)
+            {
+	            
+            float kAngle = atan2(ky, kx);
+            float omega = DispersionRelation(k);
+            float dOmegadk = DispersionDerivative(k);
+
+            float spectrum = JONSWAP(omega) * DirectionSpectrum(kAngle, omega) * ShortWavesFade(k);
+            
             // Generate two independent gaussian random numbers
             float xiR = GaussianRandom();
             float xiI = GaussianRandom();
+            //
+            // XMFLOAT2 windDir(0.7f, 0.7f); // diagonal wind
+            // float windSpeed = 30.0f;
 
-            XMFLOAT2 windDir(0.7f, 0.7f); // diagonal wind
-            float windSpeed = 30.0f;
-
-            float Ph = InitPhillipsSpectrum(k, windDir,windSpeed);
+            // float Ph = InitPhillipsSpectrum(k, windDir,windSpeed);
 
             // Equation 42: h0(k) = (1/√2) * (gausRandom + i*gausRandomI) * sqrt(Ph(k))
-            H0[m][n] = (1.0f / sqrtf(2.0f)) * std::complex<float>(xiR, xiI) * sqrtf(Ph);
+            // H0[m][n] = (1.0f / sqrtf(2.0f)) * std::complex<float>(xiR, xiI) * sqrtf(Ph);
+            float amplitude = sqrtf(2.0f * spectrum * fabsf(dOmegadk) / k * deltaK * deltaK);
+            H0[m][n] = std::complex<float>(xiR * amplitude, xiI * amplitude);
+            }
         }
     }
 
@@ -544,12 +641,13 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
         }
     }
 	
+    // TODO: the tex formats can probably be 16bit rather than 32
     // Input texture SRV
 	DXGI_FORMAT H0Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
     auto H0Desc = CD3DX12_RESOURCE_DESC::Tex2D(H0Format, OCEAN_SUBRES, OCEAN_SUBRES);
     
     // output phase texture UAV
-    DXGI_FORMAT phaseFormat = DXGI_FORMAT_R32G32_FLOAT;
+    DXGI_FORMAT phaseFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
     auto phaseDesc = CD3DX12_RESOURCE_DESC::Tex2D(phaseFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     phaseDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
@@ -575,19 +673,37 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
 
+    // Create slope output texture
+    m_slopeTexture = Application::Get().CreateTexture(phaseDesc);
+    m_slopeTexture->SetName(L"Slope Output Texture");
+
     // Create phase output texture
-    m_phaseTexture = Application::Get().CreateTexture(phaseDesc);
-    m_phaseTexture->SetName(L"Phase Output Texture");
+    m_displacementTexture = Application::Get().CreateTexture(phaseDesc);
+    m_displacementTexture->SetName(L"Displacement Output Texture");
 
     // Create height texture
-    // TODO: can be made to store single float instead of 2, imaginary nr is gone!
     m_heightTexture = Application::Get().CreateTexture(phaseDesc);
-    m_heightTexture->SetName(L"heightmap Texture");
+    m_heightTexture->SetName(L"Heightmap Texture");
 
     // Create intermediate height texture
-    // TODO: can be made to store single float instead of 2, imaginary nr is gone!
-    m_halfHeightTexture = Application::Get().CreateTexture(phaseDesc);
-    m_halfHeightTexture->SetName(L"intermediate heightmap Texture");
+    m_normalTexture = Application::Get().CreateTexture(phaseDesc);
+    m_normalTexture->SetName(L"Normal Texture");
+
+    // Create height texture
+    m_intermediateTextureSlope = Application::Get().CreateTexture(phaseDesc);
+    m_intermediateTextureSlope->SetName(L"inter slopemap Texture");
+
+    // Create intermediate height texture
+    m_intermediateTextureHeight = Application::Get().CreateTexture(phaseDesc);
+    m_intermediateTextureHeight->SetName(L"inter heightmap Texture");
+
+    // Create intermediate height texture
+    m_permutedSlope = Application::Get().CreateTexture(phaseDesc);
+    m_permutedSlope->SetName(L"permuted slopemap Texture");
+
+    // Create intermediate height texture
+    m_permutedHeight = Application::Get().CreateTexture(phaseDesc);
+    m_permutedHeight->SetName(L"permuted heightmap Texture");
 
     commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
 }
@@ -628,6 +744,58 @@ void Ocean::UpdateSpectrum(float time) {
                 H0Conj[m][n] * negIwt;
         }
     }
+}
+
+
+float TMACorrection(float omega)
+{
+    // Acerola uses 20 for depth
+    float omegaH = omega * sqrt(OCEAN_DEPTH / 9.81f);
+    if (omegaH <= 1.0f)
+        return 0.5f * omegaH * omegaH;
+    if (omegaH < 2.0f)
+        return 1.0f - 0.5f * (2.0f - omegaH) * (2.0f - omegaH);
+
+    return 1.0f;
+}
+
+float Ocean::JONSWAP(float omega)
+{
+    float sigma = (omega <= m_jonswapParams.peakOmega) ? 0.07f : 0.09f;
+    float r = exp(-(omega - m_jonswapParams.peakOmega) * (omega - m_jonswapParams.peakOmega) / 2.0f / sigma / sigma / m_jonswapParams.peakOmega / m_jonswapParams.peakOmega);
+    float g = 9.81f;
+
+    float oneOverOmega = 1.0f / (omega + 1e-6f);
+    float peakOmegaOverOmega = m_jonswapParams.peakOmega / omega;
+
+    return m_jonswapParams.scale * TMACorrection(omega) * m_jonswapParams.alpha * g * g * oneOverOmega * oneOverOmega * oneOverOmega * oneOverOmega * oneOverOmega 
+			* exp(-1.25f * peakOmegaOverOmega * peakOmegaOverOmega * peakOmegaOverOmega * peakOmegaOverOmega) * pow(abs(m_jonswapParams.gamma), r);
+}
+float Ocean::JonswapAlpha(float fetch, float windSpeed)
+{
+    return 0.076f * pow(9.81f * fetch / windSpeed / windSpeed, - 0.22f);
+}
+
+float Ocean::JonswapPeakFequency(float fetch, float windSpeed)
+{
+    return 22.0f * pow(windSpeed * fetch / 9.81f / 9.81f, -0.33f);
+}
+
+void Ocean::UpdateSpectrumParameters()
+{
+    m_jonswapParams.scale = 1.0f; // Used to scale the Spectrum [1.0f, 5.0f] --> Value Range
+    m_jonswapParams.spreadBlend = 1.0f; // Used to blend between agitated water motion, and windDirection [0.0f, 1.0f]
+    m_jonswapParams.swell = 1.0f; // Influences wave choppines, the bigger the swell, the longer the wave length [0.0f, 1.0f]
+    m_jonswapParams.gamma = 6.0f; // Defines the Spectrum Peak [0.0f, 7.0f]
+    m_jonswapParams.shortWavesFade = 1.0f; // [0.0f, 1.0f]
+    
+    m_jonswapParams.windDirection = 135.0f; // [0.0f, 360.0f]
+    m_jonswapParams.fetch = 10000.0f; // Distance over which Wind impacts Wave Formation [0.0f, 10000.0f]
+    m_jonswapParams.windSpeed = 20.0f; // [0.0f, 100.0f]
+
+    m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
+    m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+    m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
 }
 
 

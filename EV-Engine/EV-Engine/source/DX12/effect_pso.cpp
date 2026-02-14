@@ -62,7 +62,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 11, 3);
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
@@ -211,8 +211,13 @@ void EffectPSO::Apply(CommandList& commandList)
     }
     if (m_enableOcean && m_heightmap)
     {
+        D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+
         commandList.SetShaderResourceView(RootParameters::Textures, 9, m_heightmap,
-            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+            shaderRead);
+
+        commandList.SetShaderResourceView(RootParameters::Textures, 10, m_slopemap,
+            shaderRead);
     }
     
     // if (m_dirtyFlags & DF_SpotLights)
@@ -250,4 +255,9 @@ std::wstring EffectPSO::GetModulePath()
 void EffectPSO::SetHeightTexture(std::shared_ptr<Texture> inTexture)
 {
     m_heightmap = inTexture;
+}
+
+void EffectPSO::SetSlopeTexture(std::shared_ptr<Texture> inTexture)
+{
+    m_slopemap = inTexture;
 }

@@ -1,5 +1,6 @@
 struct PixelShaderInput
 {
+    float3 PositionWS : POSITION_WS;
     float4 PositionVS : POSITION;
     float3 NormalVS : NORMAL;
     float2 TexCoord : TEXCOORD;
@@ -16,6 +17,9 @@ struct DirectionalLight
 
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
 
+Texture2D SlopeTexture : register(t13);
+SamplerState linearSampler : register(s0);
+
 cbuffer CameraCB : register(b1, space0)
 {
     float3 cameraPosition;
@@ -23,40 +27,47 @@ cbuffer CameraCB : register(b1, space0)
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float3 normal = normalize(IN.NormalVS);
-    float3 viewDir = normalize(-IN.PositionVS.xyz);
-    
-    // Deep ocean color and shallow color
+    // Slope texture contains analytical slopes after IFFT + permute
+    float4 slope = SlopeTexture.Sample(linearSampler, IN.TexCoord);
+
+    // Reconstruct normal from slopes (object space, Y-up)
+    float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
+
+    // All lighting in world space
+    float3 viewDir = normalize(cameraPosition - IN.PositionWS);
+
+    // Water colors
     float3 deepColor = float3(0.01f, 0.05f, 0.15f);
     float3 shallowColor = float3(0.0f, 0.3f, 0.5f);
-    
-    // Blend based on view angle (steeper = deeper)
+
+    // Facing ratio: how much the surface faces the camera
     float facing = saturate(dot(normal, viewDir));
     float3 baseColor = lerp(deepColor, shallowColor, facing);
-    
-    // Directional light
-    float3 lightDir = normalize(-DirectionalLights[0].DirectionVS.xyz);
+
+    // Directional light (world space)
+    float3 lightDir = normalize(-DirectionalLights[0].DirectionWS.xyz);
     float3 lightColor = DirectionalLights[0].Color.rgb;
-    
+
     // Diffuse
     float NdotL = max(dot(normal, lightDir), 0.0f);
     float3 diffuse = baseColor * NdotL * lightColor;
-    
+
+
     // Specular (Blinn-Phong)
     float3 halfVec = normalize(viewDir + lightDir);
     float NdotH = max(dot(normal, halfVec), 0.0f);
-    float specularPower = 256.0f;
-    float3 specular = lightColor * pow(NdotH, specularPower) * 0.8f;
-    
-    // Fresnel approximation (more reflective at grazing angles)
+    float3 specular = lightColor * pow(NdotH, 256.0f) * 0.8f;
+
+    // return float4(specular, 1.0f);
+    // Fresnel (Schlick approximation)
     float fresnel = pow(1.0f - facing, 4.0f);
     float3 skyColor = float3(0.4f, 0.6f, 0.9f);
     float3 reflection = skyColor * fresnel;
-    
+
     // Ambient
     float3 ambient = baseColor * 0.15f;
-    
+
     float3 finalColor = ambient + diffuse + specular + reflection;
-    // return float4(normal * 0.5 + 0.5, 1.0);
+
     return float4(finalColor, 1.0f);
 }

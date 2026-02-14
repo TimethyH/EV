@@ -53,9 +53,16 @@ public:
 	void UnloadContent() override;
 
 	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.05f);
+	float DirectionSpectrum(float theta, float omega);
+	float ShortWavesFade(float kLength);
 	void GenerateH0(std::shared_ptr<CommandList> commandList);
 	float GaussianRandom();
 	void UpdateSpectrum(float time);
+	float JONSWAP(float omega);
+
+	float JonswapAlpha(float fetch, float windSpeed);
+	float JonswapPeakFequency(float fetch, float windSpeed);
+	void UpdateSpectrumParameters();
 
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
@@ -127,12 +134,12 @@ private:
 	uint32_t m_height;
 
 
-	void TransitionResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, Microsoft::WRL::ComPtr<ID3D12Resource> pResource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
-	void ClearRTV(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, D3D12_CPU_DESCRIPTOR_HANDLE RTV, FLOAT* clearColor);
-	void ClearDepth(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, D3D12_CPU_DESCRIPTOR_HANDLE DSV, FLOAT depth = 1.0f);
-	// Create GPU buffer
-	void UpdateBufferResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, ID3D12Resource** pDestination, ID3D12Resource** pIntermediate, size_t numElements, size_t elementSize, const void* pBufferData, D3D12_RESOURCE_FLAGS = D3D12_RESOURCE_FLAG_NONE);
-	void ResizeDepthBuffer(uint32_t width, uint32_t height);
+	// void TransitionResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, Microsoft::WRL::ComPtr<ID3D12Resource> pResource, D3D12_RESOURCE_STATES before, D3D12_RESOURCE_STATES after);
+	// void ClearRTV(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, D3D12_CPU_DESCRIPTOR_HANDLE RTV, FLOAT* clearColor);
+	// void ClearDepth(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, D3D12_CPU_DESCRIPTOR_HANDLE DSV, FLOAT depth = 1.0f);
+	// // Create GPU buffer
+	// void UpdateBufferResource(Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> pCommandList, ID3D12Resource** pDestination, ID3D12Resource** pIntermediate, size_t numElements, size_t elementSize, const void* pBufferData, D3D12_RESOURCE_FLAGS = D3D12_RESOURCE_FLAG_NONE);
+	// void ResizeDepthBuffer(uint32_t width, uint32_t height);
 
 	uint64_t m_fenceValues[EV::Window::BufferCount] = {};
 
@@ -168,18 +175,44 @@ private:
 	std::shared_ptr<EV::EffectPSO> m_displacementPSO;
 	std::shared_ptr<OceanCompute> m_oceanPSO;
 	std::shared_ptr<OceanCompute> m_fftPSO;
+	std::shared_ptr<OceanCompute> m_permuteHeightPSO;
+	std::shared_ptr<OceanCompute> m_permuteSlopePSO;
 
 	std::future<bool> m_loadingTask;
 
+	// Ocean
+
+	// FFT and JONSWAP Implementation largely referenced from https://github.com/gasgiant/FFT-Ocean/
+	struct JonswapParameters
+	{
+		float scale = 0.0f; // Used to scale the Spectrum [1.0f, 5.0f] --> Value Range
+		float spreadBlend = 0.0f; // Used to blend between agitated water motion, and windDirection [0.0f, 1.0f]
+		float swell = 0.0f; // Influences wave choppines, the bigger the swell, the longer the wave length [0.0f, 1.0f]
+		float gamma = 0.0f; // Defines the Spectrum Peak [0.0f, 7.0f]
+		float shortWavesFade = 0.0f; // [0.0f, 1.0f]
+
+		float windDirection = 0.0f; // [0.0f, 360.0f]
+		float fetch = 0.0f; // Distance over which Wind impacts Wave Formation [0.0f, 10000.0f]
+		float windSpeed = 0.0f; // [0.0f, 100.0f]
+
+		float angle = 0.0f;
+		float alpha = 0.0f;
+		float peakOmega = 0.0f;
+	}m_jonswapParams;
 
 	std::complex<float> H0[256][256];
 	std::complex<float> heightMap[256][256];
 	std::complex<float> H0Conj[256][256];
 
 	std::shared_ptr<Texture> m_H0Texture;
-	std::shared_ptr<Texture> m_phaseTexture;
+	std::shared_ptr<Texture> m_slopeTexture;
+	std::shared_ptr<Texture> m_displacementTexture;
 	std::shared_ptr<Texture> m_heightTexture;
-	std::shared_ptr<Texture> m_halfHeightTexture; // after 1st FFT pass
+	std::shared_ptr<Texture> m_normalTexture; 
+	std::shared_ptr<Texture> m_intermediateTextureSlope; 
+	std::shared_ptr<Texture> m_intermediateTextureHeight; 
+	std::shared_ptr<Texture> m_permutedSlope; 
+	std::shared_ptr<Texture> m_permutedHeight; 
 };
 
 }

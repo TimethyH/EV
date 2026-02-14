@@ -54,7 +54,7 @@ std::wstring OceanCompute::ModulePath()
     return std::wstring(buffer);
 }
 
-void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> outputTexture, float totalTime, DirectX::XMUINT3 dispatchDimension)
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, DirectX::XMUINT3 dispatchDimension)
 {
     commandList->SetPipelineState(m_pipelineStateObject);
     commandList->SetComputeRootSignature(m_rootSignature);
@@ -63,7 +63,8 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
     commandList->SetShaderResourceView(RootParameters::ReadTextures, 0, inputTexture,
         D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     // Bind Phase UAV
-    commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 0, outputTexture, 0);
+    commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 0, slopeTexture, 0);
+    commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 1, displacementTexture, 0);
     // Set Time 
     commandList->SetCompute32BitConstants(RootParameters::Time, 1, &totalTime);
 
@@ -71,18 +72,15 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
     
 }
 
-void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> outputTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase)
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase)
 {
     commandList->SetPipelineState(m_pipelineStateObject);
     commandList->SetComputeRootSignature(m_rootSignature);
 
-    // Bind H0
-    commandList->SetShaderResourceView(RootParameters::ReadTextures, 0, inputTexture,
-        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
     // Bind Phase UAV
-    commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 0, outputTexture, 0);
+    commandList->SetUnorderedAccessView(0, 0, RWTexture, 0);
     // Set Time 
-    commandList->SetCompute32BitConstants(RootParameters::Time, 1, &columnPhase);
+    commandList->SetCompute32BitConstants(1, 1, &columnPhase);
 
     commandList->Dispatch(dispatchDimension.x, dispatchDimension.y, dispatchDimension.z);
 

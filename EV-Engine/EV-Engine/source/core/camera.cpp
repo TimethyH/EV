@@ -15,7 +15,7 @@ Camera::Camera()
 	,m_fov(45.0f)
 	,m_aspect(1.0f)
 	,m_zNear(0.1f)
-	,m_zFar(100.0f)
+	,m_zFar(1000.0f)
 {
 	pData = static_cast<AlignedData*>(_aligned_malloc(sizeof(AlignedData), 16));
 	pData->m_translation = DirectX::XMVectorZero();
