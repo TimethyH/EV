@@ -342,8 +342,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
         float angle = lightAnimTime + directionalLightOffset * i;
 
-        XMVECTORF32 positionWS = { -15.0f,
-                                   20.0f, -10.0f, 1.0f };
+        XMVECTORF32 positionWS = { 0.0f,
+                                   5.0f, 20.0f, 1.0f };
 
         XMVECTOR directionWS = XMVector3Normalize(XMVectorNegate(positionWS));
         XMVECTOR directionVS = XMVector3TransformNormal(directionWS, viewMatrix);

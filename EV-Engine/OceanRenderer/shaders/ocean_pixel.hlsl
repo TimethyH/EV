@@ -120,7 +120,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 pointLightBRDF = 0;
     float3 directionalLightBRDF = 0;
     float3 BRDF = 0;
-    float roughness = 0.02f;
+    float roughness = 0.2f;
     float metallic = 0.0f;
 		
     float3 viewDir = normalize(cameraPosition - IN.PositionWS);
