@@ -14,7 +14,7 @@ RWTexture2D<float4> outputTexture : register(u0);
 [numthreads(16, 16, 1)]
 void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
-    const float2 Lambda = float2(1.0f, 1.0f);
+    const float2 Lambda = float2(1.3f, 1.3f);
 
     float4 htildeDisplacement = Permute(outputTexture.Load(int3(dispatchThreadID.xy, 0)), dispatchThreadID);
 	

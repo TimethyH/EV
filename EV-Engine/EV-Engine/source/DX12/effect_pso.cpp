@@ -109,7 +109,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     rtvFormats.RTFormats[0] = backBufferFormat;
 
     CD3DX12_RASTERIZER_DESC rasterizerState(D3D12_DEFAULT);
-    if (m_enableDecal) {
+    if (m_enableDecal || m_enableOcean) {
         // Disable backface culling on decal geometry.
         rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     }

@@ -110,7 +110,7 @@ float4 main(PixelShaderInput IN) : SV_Target
 
     // Reconstruct normal from slopes (object space, Y-up)
     float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
-
+    // return float4(normal, 1.0f);
     float PI = 3.14159265358979323846264338327950288f;
 
     float3 shallowColor = float3(0.0f, 0.3f, 0.5f);
@@ -174,7 +174,7 @@ float4 main(PixelShaderInput IN) : SV_Target
 
 
      // Combine ambient, point light, and directional light contributions
-    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + texColor;
-    BRDF += pointLightBRDF + directionalLightBRDF;
+    float3 ambient = shallowColor * 0.15f;
+    BRDF += ambient + pointLightBRDF + directionalLightBRDF;
     return float4(BRDF, 1.0f);
 }
