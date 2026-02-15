@@ -181,6 +181,8 @@ namespace EV
         std::wstring GetModulePath();
         void SetHeightTexture(std::shared_ptr<Texture> inTexture);
         void SetSlopeTexture(std::shared_ptr<Texture> inTexture);
+        void SetFoamTexture(std::shared_ptr<Texture> inTexture);
+
     private:
         enum DirtyFlags
         {
@@ -235,6 +237,7 @@ namespace EV
         // height tex for vertex shader
         std::shared_ptr<Texture> m_heightmap;
         std::shared_ptr<Texture> m_slopemap;
+        std::shared_ptr<Texture> m_foamTexture;
 		
     };
 }

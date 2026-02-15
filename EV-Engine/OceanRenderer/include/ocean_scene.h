@@ -179,8 +179,7 @@ private:
 	std::shared_ptr<EV::EffectPSO> m_displacementPSO;
 	std::shared_ptr<OceanCompute> m_oceanPSO;
 	std::shared_ptr<OceanCompute> m_fftPSO;
-	std::shared_ptr<OceanCompute> m_permuteHeightPSO;
-	std::shared_ptr<OceanCompute> m_permuteSlopePSO;
+	std::shared_ptr<OceanCompute> m_permutePSO;
 
 	std::future<bool> m_loadingTask;
 
@@ -217,6 +216,7 @@ private:
 	std::shared_ptr<Texture> m_intermediateTextureHeight; 
 	std::shared_ptr<Texture> m_permutedSlope; 
 	std::shared_ptr<Texture> m_permutedHeight; 
+	std::shared_ptr<Texture> m_foamTexture; 
 };
 
 }

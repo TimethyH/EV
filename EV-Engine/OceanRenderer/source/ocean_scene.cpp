@@ -229,13 +229,19 @@ bool Ocean::LoadContent()
     FFTRootParameters[0].InitAsDescriptorTable(1, &FFTDescriptorRangeUAV); // UAV u0
     FFTRootParameters[1].InitAsConstants(1, 0); // CBV b0
 
+    // Permute
+    CD3DX12_DESCRIPTOR_RANGE1 permuteDescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);
+    CD3DX12_ROOT_PARAMETER1 permuteRootParameters[1];
+    permuteRootParameters[0].InitAsDescriptorTable(1, &permuteDescriptorRangeUAV); // UAV
+
+
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso", false, false);
     m_displacementPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", false, false, true);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
-    m_permuteHeightPSO = std::make_shared<OceanCompute>(L"/permute_heightmap.cso", FFTRootParameters, _countof(FFTRootParameters));
-    m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
+    m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
+    // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
     DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
@@ -373,8 +379,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // Permutation
     commandList->UAVBarrier(m_slopeTexture);
     commandList->UAVBarrier(m_displacementTexture);
-    m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
-    m_permuteHeightPSO->Dispatch(commandList, m_displacementTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
+    // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
+    m_permutePSO->Dispatch(commandList, m_slopeTexture,  m_displacementTexture, m_foamTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
@@ -452,6 +458,7 @@ void Ocean::OnRender()
         // TODO: rename the textrures...
         m_displacementPSO->SetHeightTexture(m_displacementTexture);
         m_displacementPSO->SetSlopeTexture(m_slopeTexture);
+        m_displacementPSO->SetFoamTexture(m_foamTexture);
 
         m_displacementPSO->SetDirectionalLights(m_directionalLights);
         m_displacementPSO->SetPointLights(m_pointLights);
@@ -496,6 +503,7 @@ void Ocean::OnRender()
     OnGUI(commandList, m_swapChain->GetRenderTarget());
     commandList->TransitionBarrier(m_slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandList->TransitionBarrier(m_displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    commandList->TransitionBarrier(m_foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     commandQueue.ExecuteCommandList(commandList);
 
     m_swapChain->Present();
@@ -649,6 +657,9 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     auto phaseDesc = CD3DX12_RESOURCE_DESC::Tex2D(phaseFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     phaseDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
+    DXGI_FORMAT foamFormat = DXGI_FORMAT_R32_FLOAT;
+    auto foamDesc = CD3DX12_RESOURCE_DESC::Tex2D(foamFormat, OCEAN_SUBRES, OCEAN_SUBRES);
+    foamDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	// Copy H0 texture data
     m_H0Texture = Application::Get().CreateTexture(H0Desc);
@@ -702,6 +713,10 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     // Create intermediate height texture
     m_permutedHeight = Application::Get().CreateTexture(phaseDesc);
     m_permutedHeight->SetName(L"permuted heightmap Texture");
+
+    // foam texture
+    m_foamTexture = Application::Get().CreateTexture(foamDesc);
+    m_foamTexture->SetName(L"Jacobian foam Texture");
 
     commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
 }

@@ -62,7 +62,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 11, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3);
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
@@ -209,7 +209,7 @@ void EffectPSO::Apply(CommandList& commandList)
     {
         commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
     }
-    if (m_enableOcean && m_heightmap)
+    if (m_enableOcean)
     {
         D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
@@ -217,6 +217,8 @@ void EffectPSO::Apply(CommandList& commandList)
             shaderRead);
 
         commandList.SetShaderResourceView(RootParameters::Textures, 10, m_slopemap,
+            shaderRead);
+        commandList.SetShaderResourceView(RootParameters::Textures, 11, m_foamTexture,
             shaderRead);
     }
     
@@ -261,3 +263,8 @@ void EffectPSO::SetSlopeTexture(std::shared_ptr<Texture> inTexture)
 {
     m_slopemap = inTexture;
 }
+void EffectPSO::SetFoamTexture(std::shared_ptr<Texture> inTexture)
+{
+    m_foamTexture = inTexture;
+}
+

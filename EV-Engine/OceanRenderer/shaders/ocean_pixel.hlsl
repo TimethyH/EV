@@ -18,6 +18,7 @@ struct DirectionalLight
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
 
 Texture2D SlopeTexture : register(t13);
+Texture2D FoamTexture : register(t14);
 SamplerState linearSampler : register(s0);
 
 cbuffer CameraCB : register(b1, space0)
@@ -107,6 +108,7 @@ float4 main(PixelShaderInput IN) : SV_Target
 {
     // Slope texture contains analytical slopes after IFFT + permute
     float4 slope = SlopeTexture.Sample(linearSampler, IN.TexCoord);
+    float foam = FoamTexture.Sample(linearSampler, IN.TexCoord);
 
     // Reconstruct normal from slopes (object space, Y-up)
     float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
@@ -176,5 +178,9 @@ float4 main(PixelShaderInput IN) : SV_Target
      // Combine ambient, point light, and directional light contributions
     float3 ambient = shallowColor * 0.15f;
     BRDF += ambient + pointLightBRDF + directionalLightBRDF;
+	// Add Foam
+    float3 foamColor = float3(1.0f, 1.0f, 1.0f);
+
+    BRDF = lerp(BRDF, foamColor, saturate(foam));
     return float4(BRDF, 1.0f);
 }

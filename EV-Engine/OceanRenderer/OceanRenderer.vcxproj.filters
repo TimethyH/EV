@@ -38,7 +38,6 @@
     <FxCompile Include="shaders\ocean_pixel.hlsl" />
     <FxCompile Include="shaders\ocean_vertex.hlsl" />
     <FxCompile Include="shaders\animate_waves.hlsl" />
-    <FxCompile Include="shaders\permute_slopemap.hlsl" />
-    <FxCompile Include="shaders\permute_heightmap.hlsl" />
+    <FxCompile Include="shaders\permute.hlsl" />
   </ItemGroup>
 </Project>

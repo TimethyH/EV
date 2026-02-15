@@ -26,6 +26,7 @@ public:
 
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, DirectX::XMUINT3 dispatchDimension);
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase);
+    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, DirectX::XMUINT3 dispatchDimension);
 
     enum RootParameters
     {

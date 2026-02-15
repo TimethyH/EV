@@ -86,4 +86,19 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
 
 }
 
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, DirectX::XMUINT3 dispatchDimension)
+{
+    commandList->SetPipelineState(m_pipelineStateObject);
+    commandList->SetComputeRootSignature(m_rootSignature);
+
+    // Bind Phase UAV
+    commandList->SetUnorderedAccessView(0, 0, RWDisplacementTexture, 0);
+    commandList->SetUnorderedAccessView(0, 1, RWSlopeTexture, 0);
+    commandList->SetUnorderedAccessView(0, 2, foamTexture, 0);
+
+
+    commandList->Dispatch(dispatchDimension.x, dispatchDimension.y, dispatchDimension.z);
+
+}
+
 
