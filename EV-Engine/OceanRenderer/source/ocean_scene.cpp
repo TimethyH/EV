@@ -797,13 +797,13 @@ float Ocean::JonswapPeakFequency(float fetch, float windSpeed)
 void Ocean::UpdateSpectrumParameters()
 {
     m_jonswapParams.scale = 1.0f; // Used to scale the Spectrum [1.0f, 5.0f] --> Value Range
-    m_jonswapParams.spreadBlend = 1.0f; // Used to blend between agitated water motion, and windDirection [0.0f, 1.0f]
-    m_jonswapParams.swell = 0.3f; // Influences wave choppines, the bigger the swell, the longer the wave length [0.0f, 1.0f]
+    m_jonswapParams.spreadBlend = 0.8f; // Used to blend between agitated water motion, and windDirection [0.0f, 1.0f]
+    m_jonswapParams.swell = 1.0f; // Influences wave choppines, the bigger the swell, the longer the wave length [0.0f, 1.0f]
     m_jonswapParams.gamma = 5.0f; // Defines the Spectrum Peak [0.0f, 7.0f]
-    m_jonswapParams.shortWavesFade = 0.1f; // [0.0f, 1.0f]
+    m_jonswapParams.shortWavesFade = 0.0f; // [0.0f, 1.0f]
     
-    m_jonswapParams.windDirection = 135.0f; // [0.0f, 360.0f]
-    m_jonswapParams.fetch = 1000.0f; // Distance over which Wind impacts Wave Formation [0.0f, 10000.0f]
+    m_jonswapParams.windDirection = 270.0f; // [0.0f, 360.0f]
+    m_jonswapParams.fetch = 800.0f; // Distance over which Wind impacts Wave Formation [0.0f, 10000.0f]
     m_jonswapParams.windSpeed = 30.0f; // [0.0f, 100.0f]
 
     m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;

@@ -67,6 +67,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 Ocean
 	[ ] (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision
 	[ ] Proper PBR water lighting
+	[ ] Foam is incorrect. foam gets added even when the waves dont collapse into themselves
+	[ ] 
+	[ ]
+	[ ]
 	[ ] Fully understand every component of the Ocean
 	[ ] Make a blogpost
 	[ ] Skybox for atmosphere.

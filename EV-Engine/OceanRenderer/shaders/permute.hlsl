@@ -39,6 +39,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     // Jacobian 
     float jacobian = (1.0f + Lambda.x * dxxdzz.x) * (1.0f + Lambda.y * dxxdzz.y) - Lambda.x * Lambda.y * dydxz.y * dydxz.y;
 	
+	// TODO: this is most probably garbage data. check how you're storing the data. 
     float foam = htildeDisplacement.a;
     foam *= exp(-FOAM_DECAY);
     foam = saturate(foam);
