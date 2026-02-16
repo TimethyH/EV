@@ -50,15 +50,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												GENERAL
 
-[ ] Get rid of Demo in the lib and all usages.
+[ ] Cleanup engine.
 [ ] Understand ins and outs of the engine, how it works in its entirety. (Make a good mindmap)
 [ ] Find all TODOs in the engine and adres them
-[ ] Read the DX12 samples and understand how they do it.
 [ ] Code cleanup. Remove all unused comments, structure the layout of demo, cleanup the class instantiation functions in Application.cpp (all in the top)
-[ ] Structure project folders better, seperate files into these
-[ ] use namespaces? like dx12lib. These are nice to know what is part of engine initialization.
-[ ]
-[ ]
+[ ] Add ImGui for proper UI support.
 [ ]
 [ ]
 [ ]
@@ -66,6 +62,17 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 
 												SPECIFIC
+
+
+Ocean
+	[ ] (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision
+	[ ] Proper PBR water lighting
+	[ ] Fully understand every component of the Ocean
+	[ ] Make a blogpost
+	[ ] Skybox for atmosphere.
+	[ ] Make texture resolution DXGI_FORMAT_R16G16B16A16_FLOAT instead of 32bit
+	[ ] Add tweakable parameters to ImGui
+	[ ] 
 
 Scene
 	[ ] Implement own model loader (Y2)

@@ -10,7 +10,7 @@
 #include <complex>
 
 #define OCEAN_SUBRES 512
-#define OCEAN_SIZE 100.0f
+#define OCEAN_SIZE 500.0f
 #define OCEAN_DEPTH 20.0f
 
 class OceanCompute;
