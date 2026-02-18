@@ -39,6 +39,8 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID, uint3 groupID : SV_Group
         uint w = b * (groupIndex / b);
         uint i = (w + groupIndex) % TOTALPOINTS;
 
+        // rotation = e^2 * pi * i * t, this is counterclockwise roation, fft requires clockwise.
+		// you scale an amplitude by this rotation over time
         float angle = -2.0f * PI * float(w) / float(TOTALPOINTS);
         float2 twiddle = float2(cos(angle), -sin(angle));
 

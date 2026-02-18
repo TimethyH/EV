@@ -63,19 +63,19 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												SPECIFIC
 
-
+												
 Ocean
-	[ ] (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision
+	[ ] (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
 	[ ] Proper PBR water lighting
 	[ ] Foam is incorrect. foam gets added even when the waves dont collapse into themselves
-	[ ] 
+	[ ] Add tweakable parameters to ImGui
+	[ ] Store gaussian randoms in a texture for GPU sampling. Move wave generation to compute (JONSWAP)
 	[ ]
 	[ ]
 	[ ] Fully understand every component of the Ocean
 	[ ] Make a blogpost
 	[ ] Skybox for atmosphere.
 	[ ] Make texture resolution DXGI_FORMAT_R16G16B16A16_FLOAT instead of 32bit
-	[ ] Add tweakable parameters to ImGui
 	[ ] 
 
 Scene
