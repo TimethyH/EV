@@ -21,7 +21,8 @@ VertexShaderOutput main(VertexShaderInput IN)
 {
     VertexShaderOutput OUT;
 
-    OUT.Position = mul(MatCB.ViewProjectionMatrix, float4(IN.Position, 1.0f));
+    float4 clip = mul(MatCB.ViewProjectionMatrix, float4(IN.Position, 1.0f));
+    OUT.Position = clip.xyww;
     OUT.TexCoord = IN.Position;
 
     return OUT;

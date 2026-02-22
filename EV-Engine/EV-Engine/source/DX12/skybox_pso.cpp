@@ -13,6 +13,7 @@
 #include "DX12/root_signature.h"
 #include "utility/helpers.h"
 
+using namespace EV;
 EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pixelPath)
 {
     auto& app = Application::Get();
@@ -67,6 +68,8 @@ EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pix
         CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
         CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
         CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DSVFormat;   
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL         DepthStencil; 
     } skyboxPipelineStateStream;
 
     // TODO: shouldnt DHR also care about depth buffer?
@@ -76,51 +79,59 @@ EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pix
     rtvFormats.NumRenderTargets = 1;
     rtvFormats.RTFormats[0] = HDRFormat;
     
+    CD3DX12_DEPTH_STENCIL_DESC dsDesc(D3D12_DEFAULT);
+    dsDesc.DepthWriteMask = D3D12_DEPTH_WRITE_MASK_ZERO;    // don't write depth
+    dsDesc.DepthFunc = D3D12_COMPARISON_FUNC_LESS_EQUAL; // pass at far plane
+
     skyboxPipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
     skyboxPipelineStateStream.InputLayout = { inputLayout, 1 };
     skyboxPipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
     skyboxPipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
     skyboxPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
     skyboxPipelineStateStream.RTVFormats = rtvFormats;
+    skyboxPipelineStateStream.DSVFormat = depthBufferFormat;
+    skyboxPipelineStateStream.DepthStencil = dsDesc;
 
     m_pipelineStateObject = app.CreatePipelineStateObject(skyboxPipelineStateStream);
 }
 
-void EV::SkyboxPSO::Apply(CommandList& commandList)
+void SkyboxPSO::Apply(CommandList& commandList)
 {
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetGraphicsRootSignature(m_rootSignature);
 
-    auto viewProjection = m_pAlignedMVP->view * m_pAlignedMVP->projection;
+    // Strip translation from view so skybox stays centered on camera
+    DirectX::XMMATRIX rotationOnlyView = m_pAlignedMVP->view;
+    rotationOnlyView.r[3] = DirectX::XMVectorSet(0.f, 0.f, 0.f, 1.f);
+
+    auto viewProjection = rotationOnlyView * m_pAlignedMVP->projection;
     commandList.SetGraphics32BitConstants(0, viewProjection);
 
-    commandList.SetShaderResourceView(1, 0, m_skyboxTexture,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    if (m_skyboxSRV)  // use m_skyboxSRV, not m_skyboxTexture
+        commandList.SetShaderResourceView(1, 0, m_skyboxSRV,
+            D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
 }
 
-void EV::SkyboxPSO::SetMaterial(const std::shared_ptr<Material>& material)
+void SkyboxPSO::SetMaterial(const std::shared_ptr<Material>& material)
 {
 }
 
-void XM_CALLCONV EV::SkyboxPSO::SetProjectionMatrix(DirectX::FXMMATRIX proj)
+void XM_CALLCONV SkyboxPSO::SetProjectionMatrix(DirectX::FXMMATRIX proj)
 {
     m_pAlignedMVP->projection = proj;
 }
 
-void XM_CALLCONV EV::SkyboxPSO::SetViewMatrix(DirectX::FXMMATRIX view)
+void XM_CALLCONV SkyboxPSO::SetViewMatrix(DirectX::FXMMATRIX view)
 {
     m_pAlignedMVP->view = view;
 }
 
-void XM_CALLCONV EV::SkyboxPSO::SetWorldMatrix(DirectX::FXMMATRIX world)
+void XM_CALLCONV SkyboxPSO::SetWorldMatrix(DirectX::FXMMATRIX world)
 {
     m_pAlignedMVP->world = world;
 }
 
-void EV::SkyboxPSO::SetSkyboxTexture(std::shared_ptr<Texture> skyTexture)
+void SkyboxPSO::SetSkyboxSRV(std::shared_ptr<ShaderResourceView> skyTexture)
 {
-    if (!m_skyboxTexture)
-    {
-        m_skyboxTexture = skyTexture;
-    }
+    m_skyboxSRV = skyTexture;  // just assign directly
 }

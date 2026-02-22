@@ -3,6 +3,7 @@
 #include <string>
 
 #include "base_pso.h"
+#include "DX12/shader_resource_view.h"
 
 
 namespace EV
@@ -19,10 +20,10 @@ namespace EV
 		void XM_CALLCONV SetProjectionMatrix(DirectX::FXMMATRIX proj) override;
 		void XM_CALLCONV SetViewMatrix(DirectX::FXMMATRIX view) override;
 		void XM_CALLCONV SetWorldMatrix(DirectX::FXMMATRIX world) override;
+		void SetSkyboxSRV(std::shared_ptr<ShaderResourceView> skyTexture);
 
-		void SetSkyboxTexture(std::shared_ptr<Texture> skyTexture);
 		
 	private:
-		std::shared_ptr<Texture> m_skyboxTexture = nullptr;
+		std::shared_ptr<ShaderResourceView> m_skyboxSRV = nullptr;
 	};
 }
