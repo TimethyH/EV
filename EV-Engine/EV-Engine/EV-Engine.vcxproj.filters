@@ -132,6 +132,12 @@
     <ClCompile Include="source\DX12\effect_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\DX12\pano_cubemap_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\DX12\skybox_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\utility\helpers.h">
@@ -300,6 +306,15 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\core\EV.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\pano_cubemap_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\base_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\skybox_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

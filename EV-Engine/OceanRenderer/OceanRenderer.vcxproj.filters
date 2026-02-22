@@ -39,5 +39,10 @@
     <FxCompile Include="shaders\ocean_vertex.hlsl" />
     <FxCompile Include="shaders\animate_waves.hlsl" />
     <FxCompile Include="shaders\permute.hlsl" />
+    <FxCompile Include="shaders\HDR_to_SDR_PS.hlsl" />
+    <FxCompile Include="shaders\HDR_to_SDR_VS.hlsl" />
+    <FxCompile Include="shaders\pano_to_cubemap_CS.hlsl" />
+    <FxCompile Include="shaders\skybox_PS.hlsl" />
+    <FxCompile Include="shaders\skybox_VS.hlsl" />
   </ItemGroup>
 </Project>

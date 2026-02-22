@@ -225,7 +225,7 @@ namespace EV
         /**
          * Generate a cubemap texture from a panoramic (equirectangular) texture.
          */
-        void PanoToCubemap(Texture& cubemap, const Texture& pano);
+        void PanoToCubemap(const std::shared_ptr<Texture>& cubemapTexture, const std::shared_ptr<Texture>& panoTexture);
 
         /**
          * Copy subresource data to a texture.
@@ -531,7 +531,7 @@ namespace EV
         // Pipeline state object for Mip map generation.
         std::unique_ptr<GenerateMipsPSO> m_generateMipsPSO;
         // Pipeline state object for converting panorama (equirectangular) to cubemaps
-        // std::unique_ptr<PanoToCubemapPSO> m_panoToCubemapPSO; 
+        std::unique_ptr<PanoToCubemapPSO> m_panoToCubemapPSO; 
 
         // Objects that are being tracked by a command list that is "in-flight" on 
         // the command-queue and cannot be deleted. To ensure objects are not deleted 

@@ -22,6 +22,8 @@ class ResizeEventArgs;
 
 namespace EV
 {
+	class SkyboxPSO;
+	class ShaderResourceView;
 	class GUI;
 	class SwapChain;
 	class PipelineStateObject;
@@ -94,6 +96,7 @@ private:
 	std::shared_ptr<EV::Scene> m_chessboard;
 
 	std::shared_ptr<EV::Scene> m_oceanPlane;
+	std::shared_ptr<EV::Scene> m_skybox;
 
 	std::atomic_bool  m_isLoading;
 	bool m_cancelLoading;
@@ -177,6 +180,7 @@ private:
 
 	std::shared_ptr<EV::EffectPSO> m_unlitPSO;
 	std::shared_ptr<EV::EffectPSO> m_displacementPSO;
+	std::shared_ptr<SkyboxPSO> m_skyboxPSO;
 	std::shared_ptr<OceanCompute> m_oceanPSO;
 	std::shared_ptr<OceanCompute> m_fftPSO;
 	std::shared_ptr<OceanCompute> m_permutePSO;
@@ -217,6 +221,23 @@ private:
 	std::shared_ptr<Texture> m_permutedSlope; 
 	std::shared_ptr<Texture> m_permutedHeight; 
 	std::shared_ptr<Texture> m_foamTexture; 
+	std::shared_ptr<Texture> m_skyboxTexture; 
+	std::shared_ptr<Texture> m_skyboxCubemap; 
+	std::shared_ptr<Texture> m_HDRTexture; 
+
+	std::shared_ptr<EV::ShaderResourceView> m_skyboxCubemapSRV; 
+
+	// Root signatures
+	std::shared_ptr<RootSignature> m_skyboxSignature;
+	std::shared_ptr<RootSignature> m_HDRRootSignature;
+	std::shared_ptr<RootSignature> m_SDRRootSignature;
+
+	// Pipeline state object.
+	// Skybox PSO
+	std::shared_ptr<PipelineStateObject> m_HDRPSO;
+	// HDR -> SDR tone mapping PSO.
+	std::shared_ptr<PipelineStateObject> m_SDRPipelineState;
+
 };
 
 }

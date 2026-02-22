@@ -35,7 +35,8 @@
 
 namespace EV
 {
-	class EffectPSO;
+	class BasePSO;
+	// class EffectPSO;
 	class Camera;
 	// namespace dx12lib
 	// {
@@ -49,7 +50,7 @@ namespace EV
 	     * Constructor for the SceneVisitor.
 	     * @param commandList The CommandList that is used to render the meshes in the scene.
 	     */
-	    SceneVisitor(CommandList& commandList, const Camera& camera, EffectPSO& pso, bool transparent);
+	    SceneVisitor(CommandList& commandList, const Camera& camera, BasePSO& pso, bool transparent);
 
 	    // For this sample, we don't need to do anything when visiting the Scene.
 	    virtual void Visit(Scene& scene) override;
@@ -61,7 +62,7 @@ namespace EV
 	private:
 	    CommandList& m_commandList;
 	    const Camera& m_camera;
-	    EffectPSO& m_lightingPSO;
+	    BasePSO& m_lightingPSO;
 	    bool m_transparentPass;
 	};
 }

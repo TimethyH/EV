@@ -13,7 +13,7 @@
 using namespace EV;
 using namespace DirectX;
 
-SceneVisitor::SceneVisitor(CommandList& commandList, const Camera& camera, EffectPSO& pso, bool transparent)
+SceneVisitor::SceneVisitor(CommandList& commandList, const Camera& camera, BasePSO& pso, bool transparent)
     : m_commandList(commandList)
     , m_camera(camera)
     , m_lightingPSO(pso)

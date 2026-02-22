@@ -19,6 +19,8 @@
     </ProjectConfiguration>
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="source\DX12\skybox_pso.cpp" />
+    <ClCompile Include="source\DX12\pano_cubemap_pso.cpp" />
     <ClCompile Include="source\resources\buffer.cpp" />
     <ClCompile Include="source\core\camera.cpp" />
     <ClCompile Include="source\core\clock.cpp" />
@@ -61,6 +63,9 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\core\EV.h" />
+    <ClInclude Include="header\DX12\base_pso.h" />
+    <ClInclude Include="header\DX12\skybox_pso.h" />
+    <ClInclude Include="header\DX12\pano_cubemap_pso.h" />
     <ClInclude Include="header\resources\buffer.h" />
     <ClInclude Include="header\core\camera.h" />
     <ClInclude Include="header\DX12\command_list.h" />

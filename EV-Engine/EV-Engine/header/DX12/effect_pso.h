@@ -38,6 +38,8 @@
 #include <vector>
 #include <xstring>
 
+#include "base_pso.h"
+
 namespace EV
 {
 	class Camera;
@@ -49,7 +51,7 @@ namespace EV
     class ShaderResourceView;
     class Texture;
 
-    class EffectPSO
+    class EffectPSO : public BasePSO
     {
     public:
         // Light properties for the pixel shader.
@@ -60,14 +62,7 @@ namespace EV
             uint32_t numDirectionalLights;
         };
 
-        // Transformation matrices for the vertex shader.
-        struct alignas(16) Matrices
-        {
-            DirectX::XMMATRIX modelMatrix;
-            DirectX::XMMATRIX modelViewMatrix;
-            DirectX::XMMATRIX inverseTransposeModelViewMatrix;
-            DirectX::XMMATRIX modelViewProjectionMatrix;
-        };
+
         struct alignas(16) CameraData
         {
             DirectX::XMFLOAT3 position;
@@ -103,7 +98,7 @@ namespace EV
         };
 
         EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLigting, bool enableDecal = false, bool enableOcean = false);
-        virtual ~EffectPSO();
+        virtual ~EffectPSO() override;
 
         const std::vector<PointLight>& GetPointLights() const
         {
@@ -139,14 +134,14 @@ namespace EV
         {
             return m_material;
         }
-        void SetMaterial(const std::shared_ptr<Material>& material)
+        void SetMaterial(const std::shared_ptr<Material>& material) override
         {
             m_material = material;
             m_dirtyFlags |= DF_Material;
         }
 
         // Set matrices.
-        void XM_CALLCONV SetWorldMatrix(DirectX::FXMMATRIX worldMatrix)
+        void XM_CALLCONV SetWorldMatrix(DirectX::FXMMATRIX worldMatrix) override
         {
             m_pAlignedMVP->world = worldMatrix;
             m_dirtyFlags |= DF_Matrices;
@@ -156,7 +151,7 @@ namespace EV
             return m_pAlignedMVP->world;
         }
 
-        void XM_CALLCONV SetViewMatrix(DirectX::FXMMATRIX viewMatrix)
+        void XM_CALLCONV SetViewMatrix(DirectX::FXMMATRIX viewMatrix) override
         {
             m_pAlignedMVP->view = viewMatrix;
             m_dirtyFlags |= DF_Matrices;
@@ -166,7 +161,7 @@ namespace EV
             return m_pAlignedMVP->view;
         }
 
-        void XM_CALLCONV SetProjectionMatrix(DirectX::FXMMATRIX projectionMatrix)
+        void XM_CALLCONV SetProjectionMatrix(DirectX::FXMMATRIX projectionMatrix) override
         {
             m_pAlignedMVP->projection = projectionMatrix;
             m_dirtyFlags |= DF_Matrices;
@@ -177,8 +172,7 @@ namespace EV
         }
 
         // Apply this effect to the rendering pipeline.
-        void Apply(CommandList& commandList);
-        std::wstring GetModulePath();
+        void Apply(CommandList& commandList) override; 
         void SetHeightTexture(std::shared_ptr<Texture> inTexture);
         void SetSlopeTexture(std::shared_ptr<Texture> inTexture);
         void SetFoamTexture(std::shared_ptr<Texture> inTexture);
@@ -196,19 +190,13 @@ namespace EV
             DF_All = DF_PointLights | DF_SpotLights | DF_DirectionalLights | DF_Material | DF_Matrices
         };
 
-        struct alignas(16) MVP
-        {
-            DirectX::XMMATRIX world;
-            DirectX::XMMATRIX view;
-            DirectX::XMMATRIX projection;
-        };
+
 
         // Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
             const std::shared_ptr<Texture>& texture);
 
-        std::shared_ptr<RootSignature>       m_rootSignature;
-        std::shared_ptr<PipelineStateObject> m_pipelineStateObject;
+
 
         std::vector<PointLight>       m_pointLights;
         std::vector<SpotLight>        m_spotLights;
@@ -220,8 +208,7 @@ namespace EV
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
 
-        // Matrices
-        MVP* m_pAlignedMVP;
+
         // If the command list changes, all parameters need to be rebound.
         CommandList* m_pPreviousCommandList;
 

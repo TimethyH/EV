@@ -10,6 +10,9 @@
 #include <random>
 
 #include "compute_pso.h"
+#include "DX12/skybox_pso.h"
+#include "DX12/root_signature.h"
+#include "DX12/skybox_pso.h"
 
 #define PI 3.14159265359f
 
@@ -17,6 +20,58 @@
 using namespace DirectX;
 using namespace EV;
 
+
+enum TonemapMethod : uint32_t
+{
+    TM_Linear,
+    TM_Reinhard,
+    TM_ReinhardSq,
+    TM_ACESFilmic,
+};
+
+struct TonemapParameters
+{
+    TonemapParameters()
+        : TonemapMethod(TM_Reinhard)
+        , Exposure(0.0f)
+        , MaxLuminance(1.0f)
+        , K(1.0f)
+        , A(0.22f)
+        , B(0.3f)
+        , C(0.1f)
+        , D(0.2f)
+        , E(0.01f)
+        , F(0.3f)
+        , LinearWhite(11.2f)
+        , Gamma(2.2f)
+    {
+    }
+
+    // The method to use to perform tonemapping.
+    TonemapMethod TonemapMethod;
+    // Exposure should be expressed as a relative exposure value (-2, -1, 0, +1, +2 )
+    float Exposure;
+
+    // The maximum luminance to use for linear tonemapping.
+    float MaxLuminance;
+
+    // Reinhard constant. Generally this is 1.0.
+    float K;
+
+    // ACES Filmic parameters
+    // See: https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting/142
+    float A;  // Shoulder strength
+    float B;  // Linear strength
+    float C;  // Linear angle
+    float D;  // Toe strength
+    float E;  // Toe Numerator
+    float F;  // Toe denominator
+    // Note E/F = Toe angle.
+    float LinearWhite;
+    float Gamma;
+};
+
+TonemapParameters g_TonemapParameters;
 
 Camera Ocean::m_camera; // Staticly defined in .h to get its position for the effectsPSO -> to shader
 
@@ -197,6 +252,22 @@ bool Ocean::LoadContent()
 
     m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, false);
 
+    m_skybox = commandList->CreateCube(1.0f, true);
+    m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/cloudSky.hdr", true);
+
+    // Create a cubemap for the HDR panorama.
+    auto cubemapDesc = m_skyboxTexture->GetD3D12ResourceDesc();
+    cubemapDesc.Width = 4096;
+    cubemapDesc.Height = 2048;
+    cubemapDesc.DepthOrArraySize = 6;
+    cubemapDesc.MipLevels = 0;
+
+    m_skyboxCubemap = app.CreateTexture(cubemapDesc);
+    m_skyboxCubemap->SetName(L"Cloud Cubemap");
+
+    // Convert the 2D panorama to a 3D cubemap.
+    commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture);
+
     // m_cubeMesh = commandList->CreateCube();
     // m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
     // m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
@@ -241,16 +312,25 @@ bool Ocean::LoadContent()
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
+    m_skyboxPSO = std::make_shared<SkyboxPSO>(L"/skybox_VS.cso", L"/skybox_PS.cso");
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
-    DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    D3D12_SHADER_RESOURCE_VIEW_DESC cubeMapSRVDesc = {};
+    cubeMapSRVDesc.Format = cubemapDesc.Format;
+    cubeMapSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    cubeMapSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    cubeMapSRVDesc.TextureCube.MipLevels = (UINT)-1;  // Use all mips.
+
+    m_skyboxCubemapSRV = app.CreateShaderResourceView(m_skyboxCubemap, &cubeMapSRVDesc);
+
+    DXGI_FORMAT HDRbackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 
-    DXGI_SAMPLE_DESC sampleDesc = app.GetMultisampleQualityLevels(backBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
+    DXGI_SAMPLE_DESC sampleDesc = app.GetMultisampleQualityLevels(HDRbackBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
 
     // offscreen render target
-    auto colorDesc = CD3DX12_RESOURCE_DESC::Tex2D(backBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+    auto colorDesc = CD3DX12_RESOURCE_DESC::Tex2D(HDRbackBufferFormat, m_width, m_height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
 
     D3D12_CLEAR_VALUE clearColor;
     clearColor.Format = colorDesc.Format;
@@ -260,10 +340,10 @@ bool Ocean::LoadContent()
     clearColor.Color[3] = 1.0f;
 
     // Texture colorTexture = Texture(colorDesc, &clearColor, TextureUsage::RenderTarget, L"Color Render Target");
-    auto colorTexture = Application::Get().CreateTexture(colorDesc, &clearColor);
-    colorTexture->SetName(L"Color Render Target");
+    m_HDRTexture = Application::Get().CreateTexture(colorDesc, &clearColor);
+    m_HDRTexture->SetName(L"Color Render Target");
 
-    auto depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, m_width, m_height, 1, 1, sampleDesc.Count, sampleDesc.Quality, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
+    auto depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, m_width, m_height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
 
     D3D12_CLEAR_VALUE depthClearValue;
     depthClearValue.Format = depthDesc.Format;
@@ -274,12 +354,138 @@ bool Ocean::LoadContent()
     depthTexture->SetName(L"Depth Render Target");
 
     // attach textures to the render target
-    m_renderTarget.AttachTexture(AttachmentPoint::Color0, colorTexture);
+    m_renderTarget.AttachTexture(AttachmentPoint::Color0, m_HDRTexture);
     m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
 
     // auto fenceValue = commandQueue.ExecuteCommandList(commandList);
     // commandQueue.WaitForFenceValue(fenceValue);
 
+
+
+
+
+
+    std::wstring parentPath = GetModulePath();
+   
+    // // Create a root signature for the HDR pipeline.
+    // {
+    //     // Load the HDR shaders.
+    //     ComPtr<ID3DBlob> vs;
+    //     ComPtr<ID3DBlob> ps;
+    //     ThrowIfFailed(D3DReadFileToBlob(L"data/shaders/04-HDR/HDR_VS.cso", &vs));
+    //     ThrowIfFailed(D3DReadFileToBlob(L"data/shaders/04-HDR/HDR_PS.cso", &ps));
+    //
+    //     // Allow input layout and deny unnecessary access to certain pipeline stages.
+    //     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
+    //         D3D12_ROOT_SIGNATURE_FLAG_DENY_HULL_SHADER_ROOT_ACCESS |
+    //         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
+    //         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
+    //
+    //     CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 2);
+    //
+    //     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
+    //     rootParameters[RootParameters::MatricesCB].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE,
+    //         D3D12_SHADER_VISIBILITY_VERTEX);
+    //     rootParameters[RootParameters::MaterialCB].InitAsConstantBufferView(0, 1, D3D12_ROOT_DESCRIPTOR_FLAG_NONE,
+    //         D3D12_SHADER_VISIBILITY_PIXEL);
+    //     rootParameters[RootParameters::LightPropertiesCB].InitAsConstants(sizeof(LightProperties) / 4, 1, 0,
+    //         D3D12_SHADER_VISIBILITY_PIXEL);
+    //     rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE,
+    //         D3D12_SHADER_VISIBILITY_PIXEL);
+    //     rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE,
+    //         D3D12_SHADER_VISIBILITY_PIXEL);
+    //     rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRange,
+    //         D3D12_SHADER_VISIBILITY_PIXEL);
+    //
+    //     CD3DX12_STATIC_SAMPLER_DESC linearRepeatSampler(0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR);
+    //     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
+    //
+    //     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+    //     rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, 1, &linearRepeatSampler,
+    //         rootSignatureFlags);
+    //
+    //     m_HDRRootSignature = m_Device->CreateRootSignature(rootSignatureDescription.Desc_1_1);
+    //
+    //     // Setup the HDR pipeline state.
+    //     struct HDRPipelineStateStream
+    //     {
+    //         CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
+    //         CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT          InputLayout;
+    //         CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
+    //         CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
+    //         CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
+    //         CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DSVFormat;
+    //         CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+    //     } hdrPipelineStateStream;
+    //
+    //     hdrPipelineStateStream.pRootSignature = m_HDRRootSignature->GetD3D12RootSignature().Get();
+    //     hdrPipelineStateStream.InputLayout = VertexPositionNormalTangentBitangentTexture::InputLayout;
+    //     hdrPipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    //     hdrPipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vs.Get());
+    //     hdrPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(ps.Get());
+    //     hdrPipelineStateStream.DSVFormat = m_HDRRenderTarget.GetDepthStencilFormat();
+    //     hdrPipelineStateStream.RTVFormats = m_HDRRenderTarget.GetRenderTargetFormats();
+    //
+    //     m_HDRPipelineState = m_Device->CreatePipelineStateObject(hdrPipelineStateStream);
+    //
+    //     // The unlit pipeline state is similar to the HDR pipeline state except a different pixel shader.
+    //     ComPtr<ID3DBlob> unlitPixelShader;
+    //     ThrowIfFailed(D3DReadFileToBlob(L"data/shaders/04-HDR/Unlit_PS.cso", &unlitPixelShader));
+    //
+    //     hdrPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(unlitPixelShader.Get());
+    //
+    //     m_UnlitPipelineState = m_Device->CreatePipelineStateObject(hdrPipelineStateStream);
+    // }
+    
+    // Create the SDR Root Signature
+    {
+        CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    
+        CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+        rootParameters[0].InitAsConstants(sizeof(TonemapParameters) / 4, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
+        rootParameters[1].InitAsDescriptorTable(1, &descriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    
+        CD3DX12_STATIC_SAMPLER_DESC linearClampsSampler(
+            0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
+    
+        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
+        rootSignatureDescription.Init_1_1(2, rootParameters, 1, &linearClampsSampler);
+    
+        m_SDRRootSignature = app.CreateRootSignature(rootSignatureDescription.Desc_1_1);
+    
+        // Create the SDR PSO
+        ComPtr<ID3DBlob> vs;
+        ComPtr<ID3DBlob> ps;
+    
+        std::wstring vsPath = parentPath + L"/HDR_to_SDR_VS.cso";
+        std::wstring psPath = parentPath + L"/HDR_to_SDR_PS.cso";
+    
+        ThrowIfFailed(D3DReadFileToBlob(vsPath.c_str(), &vs));
+        ThrowIfFailed(D3DReadFileToBlob(psPath.c_str(), &ps));
+    
+        CD3DX12_RASTERIZER_DESC rasterizerDesc(D3D12_DEFAULT);
+        rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
+    
+        struct SDRPipelineStateStream
+        {
+            CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
+            CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
+            CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
+            CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
+            CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            Rasterizer;
+            CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+        } sdrPipelineStateStream;
+    
+        sdrPipelineStateStream.pRootSignature = m_SDRRootSignature->GetRootSignature().Get();
+        sdrPipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+        sdrPipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vs.Get());
+        sdrPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(ps.Get());
+        sdrPipelineStateStream.Rasterizer = rasterizerDesc;
+        sdrPipelineStateStream.RTVFormats = m_swapChain->GetRenderTarget().GetRenderTargetFormats();
+    
+        m_SDRPipelineState = app.CreatePipelineStateObject(sdrPipelineStateStream);
+    }
 
     commandQueue.WaitForFenceValue(fence);
     m_pWindow->RegisterCallbacks(shared_from_this());
@@ -360,6 +566,16 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
         l.color = XMFLOAT4(LightColors[i]);
     }
 
+
+    // skybox 
+
+    // auto viewMatrix = XMMatrixTranspose(XMMatrixRotationQuaternion(m_camera.GetRotation()));
+    auto projMatrix = m_camera.GetProjectionMatrix();
+    auto viewProjMatrix = viewMatrix * projMatrix;
+
+    m_skyboxPSO->SetSkyboxTexture(m_skyboxTexture);
+    m_skyboxPSO->SetViewMatrix(viewMatrix);
+    m_skyboxPSO->SetProjectionMatrix(projMatrix);
 
     uint32_t phaseDispatchSize = OCEAN_SUBRES / 16;
     m_oceanPSO->Dispatch(commandList, m_H0Texture, m_slopeTexture, m_displacementTexture, oceanTime, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
@@ -488,17 +704,30 @@ void Ocean::OnRender()
             auto lightPos = XMLoadFloat4(&l.positionWS);
             auto worldMatrix = XMMatrixTranslationFromVector(lightPos);
             m_sphere->GetRootNode()->SetLocalTransform(worldMatrix);
-            m_sphere->Accept(visitor);
+            // m_sphere->Accept(visitor);
         }
 
-        // Resolve the MSAA render target to the swapchain's backbuffer.
-        auto& swapChainRT = m_swapChain->GetRenderTarget();
-        auto  swapChainBackBuffer = swapChainRT.GetTexture(AttachmentPoint::Color0);
-        auto  msaaRenderTarget = m_renderTarget.GetTexture(AttachmentPoint::Color0);
-
-        commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
+        // // Resolve the MSAA render target to the swapchain's backbuffer.
+        // auto& swapChainRT = m_swapChain->GetRenderTarget();
+        // auto  swapChainBackBuffer = swapChainRT.GetTexture(AttachmentPoint::Color0);
+        // auto  msaaRenderTarget = m_renderTarget.GetTexture(AttachmentPoint::Color0);
+        //
+        // commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
 
     }
+
+    // Perform HDR -> SDR tonemapping directly to the SwapChain's render target.
+    commandList->SetRenderTarget(m_swapChain->GetRenderTarget());
+    commandList->SetViewport(m_viewport);
+    commandList->SetPipelineState(m_SDRPipelineState);
+    commandList->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
+    commandList->SetGraphicsRootSignature(m_SDRRootSignature);
+    commandList->SetGraphics32BitConstants(0, g_TonemapParameters);
+    commandList->SetShaderResourceView(1, 0, m_HDRTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    
+    commandList->Draw(3);
+
+
     // Render the GUI on the render target
     OnGUI(commandList, m_swapChain->GetRenderTarget());
     commandList->TransitionBarrier(m_slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);

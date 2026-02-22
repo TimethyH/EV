@@ -98,11 +98,11 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     } pipelineStateStream;
 
     // Create a color buffer with sRGB for gamma correction.
-    DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R8G8B8A8_UNORM_SRGB;
+    DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 
     // Check the best multisample quality level that can be used for the given back buffer format.
-    DXGI_SAMPLE_DESC sampleDesc = Application::Get().GetMultisampleQualityLevels(backBufferFormat);
+    DXGI_SAMPLE_DESC sampleDesc = {1,0};
 
     D3D12_RT_FORMAT_ARRAY rtvFormats = {};
     rtvFormats.NumRenderTargets = 1;
@@ -128,7 +128,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
 
     // Create an SRV that can be used to pad unused texture slots.
     D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
-    defaultSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    defaultSRV.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     defaultSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     defaultSRV.Texture2D.MostDetailedMip = 0;
     defaultSRV.Texture2D.MipLevels = 1;
@@ -246,13 +246,6 @@ void EffectPSO::Apply(CommandList& commandList)
     m_dirtyFlags = DF_None;
 }
 
-std::wstring EffectPSO::GetModulePath()
-{
-    WCHAR buffer[MAX_PATH];
-    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-    PathRemoveFileSpecW(buffer);
-    return std::wstring(buffer);
-}
 
 void EffectPSO::SetHeightTexture(std::shared_ptr<Texture> inTexture)
 {
