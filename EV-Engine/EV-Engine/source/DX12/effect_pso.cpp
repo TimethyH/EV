@@ -18,11 +18,9 @@
 using namespace Microsoft::WRL;
 using namespace EV;
 
-EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLighting, bool enableDecal, bool enableOcean)
+EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableOcean)
 	: m_dirtyFlags(DF_All)
     , m_pPreviousCommandList(nullptr)
-    , m_enableLighting(enableLighting)
-    , m_enableDecal(enableDecal)
 	, m_enableOcean(enableOcean)
 	, m_camera(cam)
 {
@@ -37,22 +35,8 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     // Load the vertex shader.
     ComPtr<ID3DBlob> vertexShaderBlob;
     ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-
-    // Load the pixel shader.
     ComPtr<ID3DBlob> pixelShaderBlob;
-    if (enableLighting) {
-        if (enableDecal) {
-            // ThrowIfFailed(D3DReadFileToBlob(L"data/shaders/05-Models/Decal_PS.cso", &pixelShaderBlob));
-        }
-        else
-        {
-            // ThrowIfFailed(D3DReadFileToBlob(L"data/shaders/05-Models/Lighting_PS.cso", &pixelShaderBlob));
-        }
-    }
-    else
-    {
-        ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
-    }
+	ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
 
     // Create a root signature.
     // Allow input layout and deny unnecessary access to certain pipeline stages.
@@ -62,7 +46,8 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3 );
+
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
@@ -109,7 +94,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     rtvFormats.RTFormats[0] = backBufferFormat;
 
     CD3DX12_RASTERIZER_DESC rasterizerState(D3D12_DEFAULT);
-    if (m_enableDecal || m_enableOcean) {
+    if (m_enableOcean) {
         // Disable backface culling on decal geometry.
         rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
     }
@@ -128,7 +113,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
 
     // Create an SRV that can be used to pad unused texture slots.
     D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
-    defaultSRV.Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    defaultSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
     defaultSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
     defaultSRV.Texture2D.MostDetailedMip = 0;
     defaultSRV.Texture2D.MipLevels = 1;
@@ -196,6 +181,7 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
             
         }
+       
     }
     // if (m_dirtyFlags & DF_Camera)
     {
@@ -211,6 +197,7 @@ void EffectPSO::Apply(CommandList& commandList)
     }
     if (m_enableOcean)
     {
+        // TODO: use bind texture since this binds a default texture if invalid.
         D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
         commandList.SetShaderResourceView(RootParameters::Textures, 9, m_heightmap,

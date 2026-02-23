@@ -12,6 +12,7 @@
 #include "compute_pso.h"
 #include "DX12/skybox_pso.h"
 #include "DX12/root_signature.h"
+#include "DX12/sdr_pso.h"
 #include "DX12/skybox_pso.h"
 
 #define PI 3.14159265359f
@@ -19,59 +20,6 @@
 
 using namespace DirectX;
 using namespace EV;
-
-
-enum TonemapMethod : uint32_t
-{
-    TM_Linear,
-    TM_Reinhard,
-    TM_ReinhardSq,
-    TM_ACESFilmic,
-};
-
-struct TonemapParameters
-{
-    TonemapParameters()
-        : TonemapMethod(TM_Reinhard)
-        , Exposure(0.0f)
-        , MaxLuminance(1.0f)
-        , K(1.0f)
-        , A(0.22f)
-        , B(0.3f)
-        , C(0.1f)
-        , D(0.2f)
-        , E(0.01f)
-        , F(0.3f)
-        , LinearWhite(11.2f)
-        , Gamma(2.2f)
-    {
-    }
-
-    // The method to use to perform tonemapping.
-    TonemapMethod TonemapMethod;
-    // Exposure should be expressed as a relative exposure value (-2, -1, 0, +1, +2 )
-    float Exposure;
-
-    // The maximum luminance to use for linear tonemapping.
-    float MaxLuminance;
-
-    // Reinhard constant. Generally this is 1.0.
-    float K;
-
-    // ACES Filmic parameters
-    // See: https://www.slideshare.net/ozlael/hable-john-uncharted2-hdr-lighting/142
-    float A;  // Shoulder strength
-    float B;  // Linear strength
-    float C;  // Linear angle
-    float D;  // Toe strength
-    float E;  // Toe Numerator
-    float F;  // Toe denominator
-    // Note E/F = Toe angle.
-    float LinearWhite;
-    float Gamma;
-};
-
-TonemapParameters g_TonemapParameters;
 
 Camera Ocean::m_camera; // Staticly defined in .h to get its position for the effectsPSO -> to shader
 
@@ -239,8 +187,8 @@ bool Ocean::LoadContent()
     app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
 
     // Start the loading task to perform async loading of the scene file.
-    // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
-    //     L"assets/sponza/sponza_nobanner.obj"));
+    m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
+        L"assets/sponza/sponza_nobanner.obj"));
 
     // Loading helmet to not load big ass sponza.
     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
@@ -269,10 +217,9 @@ bool Ocean::LoadContent()
 
     // m_cubeMesh = commandList->CreateCube();
     // m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
-    // m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
+    m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
 
     m_sphere = commandList->CreateSphere(0.1f);
-    // m_sphere = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
 
@@ -306,12 +253,13 @@ bool Ocean::LoadContent()
 
 
 
-    m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso", false, false);
-    m_displacementPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", false, false, true);
+    m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
+    m_displacementPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", true);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
     m_skyboxPSO = std::make_shared<SkyboxPSO>(L"/skybox_VS.cso", L"/skybox_PS.cso");
+    m_sdrPSO = std::make_shared<SDRPSO>(L"/HDR_to_SDR_VS.cso", L"/HDR_to_SDR_PS.cso");
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
@@ -355,68 +303,6 @@ bool Ocean::LoadContent()
     // attach textures to the render target
     m_renderTarget.AttachTexture(AttachmentPoint::Color0, m_HDRTexture);
     m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
-
-    // auto fenceValue = commandQueue.ExecuteCommandList(commandList);
-    // commandQueue.WaitForFenceValue(fenceValue);
-
-
-
-
-
-    // TODO: make a PSO object for SDR. -------------------------------------------------------------------------------------------------------------------------------------------
-
-    std::wstring parentPath = GetModulePath();
-   
-    
-    // Create the SDR Root Signature
-    {
-        CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
-    
-        CD3DX12_ROOT_PARAMETER1 rootParameters[2];
-        rootParameters[0].InitAsConstants(sizeof(TonemapParameters) / 4, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL);
-        rootParameters[1].InitAsDescriptorTable(1, &descriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
-    
-        CD3DX12_STATIC_SAMPLER_DESC linearClampsSampler(
-            0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
-            D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
-    
-        CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-        rootSignatureDescription.Init_1_1(2, rootParameters, 1, &linearClampsSampler);
-    
-        m_SDRRootSignature = app.CreateRootSignature(rootSignatureDescription.Desc_1_1);
-    
-        // Create the SDR PSO
-        ComPtr<ID3DBlob> vs;
-        ComPtr<ID3DBlob> ps;
-    
-        std::wstring vsPath = parentPath + L"/HDR_to_SDR_VS.cso";
-        std::wstring psPath = parentPath + L"/HDR_to_SDR_PS.cso";
-    
-        ThrowIfFailed(D3DReadFileToBlob(vsPath.c_str(), &vs));
-        ThrowIfFailed(D3DReadFileToBlob(psPath.c_str(), &ps));
-    
-        CD3DX12_RASTERIZER_DESC rasterizerDesc(D3D12_DEFAULT);
-        rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
-    
-        struct SDRPipelineStateStream
-        {
-            CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
-            CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
-            CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
-            CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
-            CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            Rasterizer;
-            CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
-        } sdrPipelineStateStream;
-    
-        sdrPipelineStateStream.pRootSignature = m_SDRRootSignature->GetRootSignature().Get();
-        sdrPipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-        sdrPipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vs.Get());
-        sdrPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(ps.Get());
-        sdrPipelineStateStream.Rasterizer = rasterizerDesc;
-        sdrPipelineStateStream.RTVFormats = m_swapChain->GetRenderTarget().GetRenderTargetFormats();
-    
-        m_SDRPipelineState = app.CreatePipelineStateObject(sdrPipelineStateStream);
-    }
 
     commandQueue.WaitForFenceValue(fence);
     m_pWindow->RegisterCallbacks(shared_from_this());
@@ -602,6 +488,11 @@ void Ocean::OnRender()
         commandList->SetScissorRect(m_scissorRect);
         commandList->SetRenderTarget(m_renderTarget);
 
+        m_skybox->Accept(skyboxVisitor);
+
+
+        // m_scene->Accept(visitor);
+
         // Set Ocean Textures
         // TODO: rename the textrures...
         m_displacementPSO->SetHeightTexture(m_displacementTexture);
@@ -612,7 +503,6 @@ void Ocean::OnRender()
         m_displacementPSO->SetPointLights(m_pointLights);
 
 
-        m_skybox->Accept(skyboxVisitor);
 
         // REMINDER: Transform is built with Scale * Rotation * Translation (SRT)
         XMMATRIX scale = XMMatrixScaling(10.0f, 10.0f, 10.0f);
@@ -621,7 +511,6 @@ void Ocean::OnRender()
 
         
         // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
-        m_scene->Accept(visitor);
 
         m_oceanPlane->Accept(oceanVisitor);
 
@@ -649,26 +538,20 @@ void Ocean::OnRender()
         //
         // commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
 
+	    // Perform HDR -> SDR tonemapping directly to the SwapChain's render target.
+
+	    commandList->SetRenderTarget(m_swapChain->GetRenderTarget());
+        m_sdrPSO->SetHDRTexture(m_HDRTexture);
+        m_sdrPSO->Apply(*commandList);
+
     }
 
-    // Perform HDR -> SDR tonemapping directly to the SwapChain's render target.
-    commandList->SetRenderTarget(m_swapChain->GetRenderTarget());
-    commandList->SetViewport(m_viewport);
-    commandList->SetPipelineState(m_SDRPipelineState);
-    commandList->SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
-    commandList->SetGraphicsRootSignature(m_SDRRootSignature);
-    commandList->SetGraphics32BitConstants(0, g_TonemapParameters);
-    commandList->SetShaderResourceView(1, 0, m_HDRTexture, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    
-    commandList->Draw(3);
-
-
-    // Render the GUI on the render target
-    OnGUI(commandList, m_swapChain->GetRenderTarget());
-    commandList->TransitionBarrier(m_slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    commandList->TransitionBarrier(m_displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    commandList->TransitionBarrier(m_foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    commandQueue.ExecuteCommandList(commandList);
+	    commandList->TransitionBarrier(m_slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	    commandList->TransitionBarrier(m_displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	    commandList->TransitionBarrier(m_foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+	    // Render the GUI on the render target
+	    OnGUI(commandList, m_swapChain->GetRenderTarget());
+	    commandQueue.ExecuteCommandList(commandList);
 
     m_swapChain->Present();
 }

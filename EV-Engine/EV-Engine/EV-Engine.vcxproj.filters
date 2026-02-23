@@ -138,6 +138,9 @@
     <ClCompile Include="source\DX12\skybox_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\DX12\sdr_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="header\utility\helpers.h">
@@ -315,6 +318,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\skybox_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\sdr_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

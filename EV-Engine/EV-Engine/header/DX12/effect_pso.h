@@ -97,7 +97,7 @@ namespace EV
             NumRootParameters
         };
 
-        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableLigting, bool enableDecal = false, bool enableOcean = false);
+        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableOcean = false);
         virtual ~EffectPSO() override;
 
         const std::vector<PointLight>& GetPointLights() const
@@ -215,8 +215,6 @@ namespace EV
         // Which properties need to be bound to the
         uint32_t m_dirtyFlags;
 
-        bool m_enableLighting;
-        bool m_enableDecal;
         bool m_enableOcean;
 
         EV::Camera& m_camera;

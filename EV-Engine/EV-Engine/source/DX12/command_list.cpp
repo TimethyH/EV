@@ -1305,31 +1305,6 @@ void CommandList::SetShaderResourceView(uint32_t rootParameterIndex, uint32_t de
 		rootParameterIndex, descriptorOffset, 1, srv->GetDescriptorHandle());
 }
 
-// void CommandList::SetShaderResourceView(int32_t rootParameterIndex, uint32_t descriptorOffset,
-// 	const std::shared_ptr<Texture>& texture, D3D12_RESOURCE_STATES stateAfter,
-// 	UINT firstSubresource, UINT numSubresources)
-// {
-// 	if (texture)
-// 	{
-// 		if (numSubresources < D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES)
-// 		{
-// 			for (uint32_t i = 0; i < numSubresources; ++i)
-// 			{
-// 				TransitionBarrier(texture, stateAfter, firstSubresource + i);
-// 			}
-// 		}
-// 		else
-// 		{
-// 			TransitionBarrier(texture, stateAfter);
-// 		}
-//
-// 		TrackResource(texture);
-//
-// 		m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
-// 			rootParameterIndex, descriptorOffset, 1, texture->GetShaderResourceView());
-// 	}
-// }
-
 void CommandList::SetShaderResourceView(uint32_t rootParameterIndex, const std::shared_ptr<Buffer>& buffer,
 	D3D12_RESOURCE_STATES stateAfter, size_t bufferOffset)
 {
