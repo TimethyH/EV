@@ -518,7 +518,7 @@ void Ocean::OnRender()
 
         // m_chessboard->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * translation);
 
-        // m_chessboard->Accept(visitor);
+        m_chessboard->Accept(visitor);
 
     	// Visualize the point light as a small sphere
         for (const auto& l : m_pointLights)
