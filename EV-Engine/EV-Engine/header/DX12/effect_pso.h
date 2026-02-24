@@ -97,7 +97,7 @@ namespace EV
             NumRootParameters
         };
 
-        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath, bool enableOcean = false);
+        EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath);
         virtual ~EffectPSO() override;
 
         const std::vector<PointLight>& GetPointLights() const
@@ -178,21 +178,7 @@ namespace EV
         void SetFoamTexture(std::shared_ptr<Texture> inTexture);
 
     private:
-        enum DirtyFlags
-        {
-            DF_None = 0,
-            DF_PointLights = (1 << 0),
-            DF_SpotLights = (1 << 1),
-            DF_DirectionalLights = (1 << 2),
-            DF_Material = (1 << 3),
-            DF_Matrices = (1 << 4),
-            DF_Camera = (1 << 5),
-            DF_All = DF_PointLights | DF_SpotLights | DF_DirectionalLights | DF_Material | DF_Matrices
-        };
-
-
-
-        // Helper function to bind a texture to the rendering pipeline.
+    	// Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
             const std::shared_ptr<Texture>& texture);
 
@@ -202,20 +188,12 @@ namespace EV
         std::vector<SpotLight>        m_spotLights;
         std::vector<DirectionalLight> m_directionalLights;
 
-        // The material to apply during rendering.
-        std::shared_ptr<Material> m_material;
-
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
 
 
         // If the command list changes, all parameters need to be rebound.
         CommandList* m_pPreviousCommandList;
-
-        // Which properties need to be bound to the
-        uint32_t m_dirtyFlags;
-
-        bool m_enableOcean;
 
         EV::Camera& m_camera;
 

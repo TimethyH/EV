@@ -160,11 +160,13 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\compute_pso.h" />
+    <ClInclude Include="include\ocean_pso.h" />
     <ClInclude Include="include\ocean_scene.h" />
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\compute_pso.cpp" />
     <ClCompile Include="source\main.cpp" />
+    <ClCompile Include="source\ocean_pso.cpp" />
     <ClCompile Include="source\ocean_scene.cpp" />
   </ItemGroup>
   <ItemGroup>

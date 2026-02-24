@@ -22,6 +22,7 @@ class ResizeEventArgs;
 
 namespace EV
 {
+	class OceanPSO;
 	class SDRPSO;
 	class SkyboxPSO;
 	class ShaderResourceView;
@@ -180,7 +181,7 @@ private:
 	std::shared_ptr<EV::GUI> m_GUI = nullptr;
 
 	std::shared_ptr<EV::EffectPSO> m_unlitPSO;
-	std::shared_ptr<EV::EffectPSO> m_displacementPSO;
+	std::shared_ptr<OceanPSO> m_displacementPSO;
 	std::shared_ptr<SkyboxPSO> m_skyboxPSO;
 	std::shared_ptr<SDRPSO> m_sdrPSO;
 	std::shared_ptr<OceanCompute> m_oceanPSO;

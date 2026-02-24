@@ -1,40 +1,33 @@
-// #include "DX12/effect_pso.h"
-#include "DX12/effect_pso.h"
-#include <DX12/command_list.h>
-#include <utility/helpers.h>
-#include <resources/material.h>
-#include <DX12/pipeline_state_object.h>
-#include <DX12/root_signature.h>
-#include <resources/vertex_types.h>
+#include "ocean_pso.h"
 
 #include <d3dcompiler.h>
-#include <d3dx12.h>
-#include <Shlwapi.h>
-#include <wrl/client.h>
 
 #include "core/application.h"
 #include "core/camera.h"
+#include "DX12/command_list.h"
+#include "DX12/root_signature.h"
+#include "resources/material.h"
+#include "resources/vertex_types.h"
+#include "utility/helpers.h"
+#include "DX12/light.h"
 
-using namespace Microsoft::WRL;
-using namespace EV;
-
-EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std::wstring& pixelPath)
-	: m_pPreviousCommandList(nullptr)
+EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, const std::wstring& pixelPath)
+    : m_pPreviousCommandList(nullptr)
 	, m_camera(cam)
 {
     m_pAlignedMVP = (MVP*)_aligned_malloc(sizeof(MVP), 16);
 
     // Get the folder of the running executable.
     std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + vertexpath;
+    std::wstring vertexShader = parentPath + vertexPath;
     std::wstring pixelShader = parentPath + pixelPath;
 
     // Setup the root signature
     // Load the vertex shader.
-    ComPtr<ID3DBlob> vertexShaderBlob;
+    Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
     ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-    ComPtr<ID3DBlob> pixelShaderBlob;
-	ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
+    Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBlob;
+    ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
 
     // Create a root signature.
     // Allow input layout and deny unnecessary access to certain pipeline stages.
@@ -44,23 +37,23 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 9, 3 );
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3);
 
 
     // clang-format off
     CD3DX12_ROOT_PARAMETER1 rootParameters[RootParameters::NumRootParameters];
     rootParameters[RootParameters::MatricesCB].InitAsConstantBufferView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_VERTEX);
     rootParameters[RootParameters::MaterialCB].InitAsConstantBufferView(0, 1, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[RootParameters::Camera].InitAsConstantBufferView(1,0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::Camera].InitAsConstantBufferView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::LightPropertiesCB].InitAsConstants(sizeof(LightProperties) / 4, 1, 0, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::PointLights].InitAsShaderResourceView(0, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     // rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
-    rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
-    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription; 
+    CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
     rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, 1, &anisotropicSampler, rootSignatureFlags);
     // clang-format on
 
@@ -85,13 +78,15 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 
     // Check the best multisample quality level that can be used for the given back buffer format.
-    DXGI_SAMPLE_DESC sampleDesc = {1,0};
+    DXGI_SAMPLE_DESC sampleDesc = { 1,0 };
 
     D3D12_RT_FORMAT_ARRAY rtvFormats = {};
     rtvFormats.NumRenderTargets = 1;
     rtvFormats.RTFormats[0] = backBufferFormat;
 
     CD3DX12_RASTERIZER_DESC rasterizerState(D3D12_DEFAULT);
+        // Disable backface culling on decal geometry.
+	rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
     pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
     pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
@@ -118,12 +113,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
 }
 
-EffectPSO::~EffectPSO()
-{
-    _aligned_free(m_pAlignedMVP);
-}
-
-inline void EffectPSO::BindTexture(CommandList& commandList, uint32_t offset, const std::shared_ptr<Texture>& texture)
+inline void EV::OceanPSO::BindTexture(CommandList& commandList, uint32_t offset, const std::shared_ptr<Texture>& texture)
 {
     if (texture)
     {
@@ -137,7 +127,7 @@ inline void EffectPSO::BindTexture(CommandList& commandList, uint32_t offset, co
     }
 }
 
-void EffectPSO::Apply(CommandList& commandList)
+void EV::OceanPSO::Apply(CommandList& commandList)
 {
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetGraphicsRootSignature(m_rootSignature);
@@ -173,9 +163,9 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
-            
+
         }
-       
+
     }
     // if (m_dirtyFlags & DF_Camera)
     {
@@ -187,19 +177,29 @@ void EffectPSO::Apply(CommandList& commandList)
     }
     if (m_dirtyFlags & DF_PointLights)
     {
-        commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
+        // commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::PointLights, m_pointLights);
     }
-    
+        // TODO: use bind texture since this binds a default texture if invalid.
+        D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
+
+        commandList.SetShaderResourceView(RootParameters::Textures, 9, m_displacementTexture,
+            shaderRead);
+
+        commandList.SetShaderResourceView(RootParameters::Textures, 10, m_slopeTexture,
+            shaderRead);
+        commandList.SetShaderResourceView(RootParameters::Textures, 11, m_foamTexture,
+            shaderRead);
+
     // if (m_dirtyFlags & DF_SpotLights)
     // {
     //     commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::SpotLights, m_spotLights);
     // }
-    
+
     if (m_dirtyFlags & DF_DirectionalLights)
     {
         commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::DirectionalLights, m_directionalLights);
     }
-    
+
     // if (m_dirtyFlags & (DF_PointLights | DF_SpotLights | DF_DirectionalLights))
     // {
     //     LightProperties lightProps;
@@ -214,18 +214,10 @@ void EffectPSO::Apply(CommandList& commandList)
     m_dirtyFlags = DF_None;
 }
 
-
-void EffectPSO::SetHeightTexture(std::shared_ptr<Texture> inTexture)
+void EV::OceanPSO::SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope,
+                                    std::shared_ptr<Texture> foam)
 {
-    m_heightmap = inTexture;
+    m_displacementTexture = displacement;
+    m_slopeTexture = slope;
+    m_foamTexture = foam;
 }
-
-void EffectPSO::SetSlopeTexture(std::shared_ptr<Texture> inTexture)
-{
-    m_slopemap = inTexture;
-}
-void EffectPSO::SetFoamTexture(std::shared_ptr<Texture> inTexture)
-{
-    m_foamTexture = inTexture;
-}
-

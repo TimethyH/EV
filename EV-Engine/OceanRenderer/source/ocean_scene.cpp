@@ -10,6 +10,7 @@
 #include <random>
 
 #include "compute_pso.h"
+#include "ocean_pso.h"
 #include "DX12/skybox_pso.h"
 #include "DX12/root_signature.h"
 #include "DX12/sdr_pso.h"
@@ -254,7 +255,7 @@ bool Ocean::LoadContent()
 
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
-    m_displacementPSO = std::make_shared<EffectPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", true);
+    m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso");
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
@@ -491,13 +492,10 @@ void Ocean::OnRender()
         m_skybox->Accept(skyboxVisitor);
 
 
-        // m_scene->Accept(visitor);
+        m_scene->Accept(visitor);
 
         // Set Ocean Textures
-        // TODO: rename the textrures...
-        m_displacementPSO->SetHeightTexture(m_displacementTexture);
-        m_displacementPSO->SetSlopeTexture(m_slopeTexture);
-        m_displacementPSO->SetFoamTexture(m_foamTexture);
+        m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
 
         m_displacementPSO->SetDirectionalLights(m_directionalLights);
         m_displacementPSO->SetPointLights(m_pointLights);
