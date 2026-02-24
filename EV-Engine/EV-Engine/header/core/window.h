@@ -130,6 +130,11 @@ namespace EV
 		 */
 		Event MouseBlur;
 
+		/**
+		* The DPI scaling of the window has changed.
+		*/
+		DPIScaleEvent DPIScaleChanged;
+
 
 		// Register a game to this window
 		void RegisterCallbacks(std::shared_ptr<Game> pGame);
@@ -156,6 +161,7 @@ namespace EV
 		virtual void OnMouseButtonPress(MouseButtonEventArgs& e);
 		virtual void OnMouseButtonRelease(MouseButtonEventArgs& e);
 		virtual void OnMouseWheel(MouseWheelEventArgs& e);
+		void OnDPIScaleChanged(DPIScaleEventArgs& e);
 
 		virtual void OnResize(ResizeEventArgs& e);
 		void OnClose(WindowCloseEventArgs& e);
@@ -199,6 +205,8 @@ namespace EV
 
 		int m_previousMouseX;
 		int m_previousMouseY;
+
+		float m_DPIScaling;
 	};
 
 }

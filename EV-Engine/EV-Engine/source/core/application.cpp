@@ -246,7 +246,7 @@ Application::Application(HINSTANCE hInst)
     // Using this awareness context allows the client area of the window 
     // to achieve 100% scaling while still allowing non-client window content to 
     // be rendered in a DPI sensitive fashion.
-    SetThreadDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
+    SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 
     // Initializes the COM library for use by the calling thread, sets the thread's concurrency model, and creates a new
     // apartment for the thread if one is required.
@@ -657,6 +657,13 @@ static void RemoveWindow(HWND hWnd)
     }
 }
 
+LRESULT Application::OnWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)
+{
+    auto res = wndProcHandler(hWnd, msg, wParam, lParam);
+    return res ? *res : 0;
+}
+
+
 // Convert the message ID into a MouseButton ID
 MouseButtonEventArgs::MouseButton DecodeMouseButton(UINT messageID)
 {
@@ -714,6 +721,11 @@ static WindowState DecodeWindowState(WPARAM wParam)
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
 {
+
+    if (Application::Get().OnWndProc(hwnd, message, wParam, lParam))
+    {
+        return 1;
+    }
     WindowPtr pWindow;
     {
         WindowMap::iterator iter = gs_Windows.find(hwnd);
@@ -727,6 +739,12 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
     {
         switch (message)
         {
+        case WM_DPICHANGED:
+        {
+            float             dpiScaling = HIWORD(wParam) / 96.0f;
+            DPIScaleEventArgs dpiScaleEventArgs(dpiScaling);
+            pWindow->OnDPIScaleChanged(dpiScaleEventArgs);
+        }
         case WM_PAINT:
         {
             // ++Application::m_frameCount;

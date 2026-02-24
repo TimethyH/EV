@@ -225,6 +225,15 @@ void Window::OnMouseWheel(MouseWheelEventArgs& e)
 	}
 }
 
+
+// The DPI scaling of the window has changed.
+void Window::OnDPIScaleChanged(DPIScaleEventArgs& e)
+{
+	m_DPIScaling = e.DPIScale;
+	DPIScaleChanged(e);
+}
+
+
 void Window::OnResize(ResizeEventArgs& e)
 {
 	// if (m_screenWidth != e.windowWidth || m_screenHeight!= e.windowHeight)

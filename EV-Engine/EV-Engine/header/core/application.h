@@ -69,6 +69,7 @@ class PipelineStateObject;
 		UINT GetDescriptorHandleIncrementSize(D3D12_DESCRIPTOR_HEAP_TYPE type) const;
 
 		static uint64_t GetFrameCount();
+		LRESULT OnWndProc(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam);
 		DescriptorAllocation AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE type, uint32_t numDescriptors = 1);
 		DXGI_SAMPLE_DESC GetMultisampleQualityLevels(
 			DXGI_FORMAT format, UINT numSamples = D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT,

@@ -223,7 +223,7 @@ bool Ocean::LoadContent()
     m_sphere = commandList->CreateSphere(0.1f);
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
-
+    UpdateSpectrumParameters();
     GenerateH0(commandList);
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
@@ -329,11 +329,11 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
     if (totalTime > 1.0)
     {
-        double fps = frameCount / totalTime;
+        m_FPS = frameCount / totalTime;
 
-        char buffer[512];
-        sprintf_s(buffer, "FPS: %f\n", fps);
-        OutputDebugStringA(buffer);
+        // char buffer[512];
+        // sprintf_s(buffer, "FPS: %f\n", m_FPS);
+        // OutputDebugStringA(buffer);
 
         frameCount = 0;
         totalTime = 0.0;
@@ -457,6 +457,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 void Ocean::OnRender()
 {
 
+    m_pWindow->SetFullScreen(m_fullscreen);
+
     auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue.GetCommandList();
 
@@ -558,10 +560,137 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 {
     m_GUI->NewFrame();
 
-    static bool showDemoWindow = false;
-    if (showDemoWindow)
+    if (m_isLoading)
     {
-        ImGui::ShowDemoWindow(&showDemoWindow);
+        // Show a progress bar.
+        ImGui::SetNextWindowPos(ImVec2(m_width / 2.0f, m_height / 2.0f), 0,
+            ImVec2(0.5, 0.5));
+        ImGui::SetNextWindowSize(ImVec2(m_width / 2.0f, 0));
+
+        ImGui::Begin("Loading", nullptr,
+            ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoScrollbar);
+        ImGui::ProgressBar(m_loadingProgress);
+        ImGui::Text(m_loadingText.c_str());
+        if (!m_cancelLoading)
+        {
+            if (ImGui::Button("Cancel"))
+            {
+                m_cancelLoading = true;
+            }
+        }
+        else
+        {
+            ImGui::Text("Cancel Loading...");
+        }
+
+        ImGui::End();
+    }
+
+    if (ImGui::BeginMainMenuBar())
+    {
+        if (ImGui::BeginMenu("File"))
+        {
+            if (ImGui::MenuItem("Open file...", "Ctrl+O", nullptr, !m_isLoading))
+            {
+                m_showFileOpenDialog = true;
+            }
+            ImGui::Separator();
+            if (ImGui::MenuItem("Exit", "Esc"))
+            {
+                // TODO
+            }
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("View"))
+        {
+
+            ImGui::MenuItem("Ocean Parameters", nullptr, &m_showOceanParams);
+
+            ImGui::EndMenu();
+        }
+
+        if (ImGui::BeginMenu("Options"))
+        {
+            bool vSync = m_swapChain->GetVSync();
+            if (ImGui::MenuItem("V-Sync", "V", &vSync))
+            {
+                m_swapChain->SetVSync(vSync);
+            }
+
+            bool fullscreen = m_pWindow->IsFullScreen();
+            if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen))
+            {
+                // m_Window->SetFullscreen( fullscreen );
+                // Defer the window resizing until the reference to the render target is released.
+                m_fullscreen = fullscreen;
+            }
+
+            // ImGui::MenuItem("Animate Lights", "Space", &m_AnimateLights);
+
+            // bool invertY = m_CameraController.IsInverseY();
+            // if (ImGui::MenuItem("Inverse Y", nullptr, &invertY))
+            // {
+            //     m_CameraController.SetInverseY(invertY);
+            // }
+            // if (ImGui::MenuItem("Reset view", "R"))
+            // {
+            //     m_CameraController.ResetView();
+            // }
+
+            ImGui::EndMenu();
+        }
+
+        char buffer[256];
+        {
+            sprintf_s(buffer, _countof(buffer), "FPS: %.2f (%.2f ms)  ", m_FPS, 1.0 / m_FPS * 1000.0);
+            auto fpsTextSize = ImGui::CalcTextSize(buffer);
+            ImGui::SameLine(ImGui::GetWindowWidth() - fpsTextSize.x);
+            ImGui::Text(buffer);
+        }
+
+        ImGui::EndMainMenuBar();
+    }
+
+    if (m_showOceanParams && ImGui::Begin("Ocean Parameters", &m_showOceanParams))
+    {
+        bool paramsChanged = false;
+
+        ImGui::Separator();
+        ImGui::Text("Wind");
+        paramsChanged |= ImGui::SliderFloat("Wind Speed", &m_jonswapParams.windSpeed, 0.0f, 100.0f);
+        paramsChanged |= ImGui::SliderFloat("Wind Direction", &m_jonswapParams.windDirection, 0.0f, 360.0f);
+        paramsChanged |= ImGui::SliderFloat("Fetch", &m_jonswapParams.fetch, 1000.0f, 1000000.0f);
+
+        ImGui::Separator();
+        ImGui::Text("Spectrum");
+        paramsChanged |= ImGui::SliderFloat("Scale", &m_jonswapParams.scale, 0.0f, 5.0f);
+        paramsChanged |= ImGui::SliderFloat("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f);
+        paramsChanged |= ImGui::SliderFloat("Swell", &m_jonswapParams.swell, 0.0f, 1.0f);
+        paramsChanged |= ImGui::SliderFloat("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f);
+        paramsChanged |= ImGui::SliderFloat("Short Waves Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f);
+
+        ImGui::Separator();
+        ImGui::Text("Derived (read-only)");
+        ImGui::LabelText("Alpha", "%.6f", m_jonswapParams.alpha);
+        ImGui::LabelText("Peak Omega", "%.4f", m_jonswapParams.peakOmega);
+
+        if (paramsChanged)
+        {
+            // Recompute derived params and regenerate H0
+            m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
+            m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+            m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+
+            auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+            auto commandList = commandQueue.GetCommandList();
+            GenerateH0(commandList);
+            commandQueue.ExecuteCommandList(commandList);
+            // commandQueue.Flush();
+        }
+
+        ImGui::End();
     }
 
     m_GUI->Render(commandList, renderTarget);
@@ -648,7 +777,6 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
 
     const float lowCutoff = 0.0001f;
     const float highCutoff = 9000.0f;
-    UpdateSpectrumParameters();
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             // Get wave vector for this frequency

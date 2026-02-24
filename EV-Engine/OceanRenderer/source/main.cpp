@@ -70,16 +70,14 @@ Ocean
 	[ ] Foam is incorrect. foam gets added even when the waves dont collapse into themselves
 	[ ] Add tweakable parameters to ImGui
 	[ ] Store gaussian randoms in a texture for GPU sampling. Move wave generation to compute (JONSWAP)
-	[ ]
-	[ ]
 	[ ] Fully understand every component of the Ocean
+	[ ] Understand how the scene draws its meshes
+	[ ] Understand how the SDR and skybox pass work
 	[ ] Make a blogpost
-	[ ] Skybox for atmosphere.
 	[ ] Make texture resolution DXGI_FORMAT_R16G16B16A16_FLOAT instead of 32bit
 	[ ] 
 
 Scene
-	[ ] Implement own model loader (Y2)
 	[ ]
 	[ ] Add transparant pass for foliage
 	[ ]

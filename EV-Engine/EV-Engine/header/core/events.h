@@ -263,6 +263,19 @@ public:
 	double totalTime = 0.0;
 };
 
+class DPIScaleEventArgs : public EventArgs
+{
+public:
+	typedef EventArgs base;
+	DPIScaleEventArgs(float dpiScale)
+		: DPIScale(dpiScale)
+	{}
+
+	float DPIScale;
+};
+
+using DPIScaleEvent = EV::Delegate<void(DPIScaleEventArgs&)>;
+
 class UserEventArgs : EventArgs
 {
 public:

@@ -100,10 +100,16 @@ private:
 	std::shared_ptr<EV::Scene> m_oceanPlane;
 	std::shared_ptr<EV::Scene> m_skybox;
 
+	// ImGUI
 	std::atomic_bool  m_isLoading;
 	bool m_cancelLoading;
 	std::string m_loadingText;
 	float m_loadingProgress;
+	bool m_showFileOpenDialog;
+	bool m_showControls = false;
+	bool m_fullscreen = false;
+	double m_FPS;
+	bool m_showOceanParams = true;
 
 	// TODO: add textures
 	std::shared_ptr<EV::Texture> m_defaultTexture;
