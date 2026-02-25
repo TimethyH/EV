@@ -50,5 +50,7 @@
     <FxCompile Include="shaders\pano_to_cubemap_CS.hlsl" />
     <FxCompile Include="shaders\skybox_PS.hlsl" />
     <FxCompile Include="shaders\skybox_VS.hlsl" />
+    <FxCompile Include="shaders\pixel.hlsl" />
+    <FxCompile Include="shaders\vertex.hlsl" />
   </ItemGroup>
 </Project>

@@ -105,6 +105,7 @@ namespace EV
             : directionWS(0.0f, 0.0f, 1.0f, 0.0f)
             , directionVS(0.0f, 0.0f, 1.0f, 0.0f)
             , color(1.0f, 1.0f, 1.0f, 1.0f)
+			, position(0.0f,5.0f,20.0f)
             , ambient(0.01f)
         {
         }
@@ -115,8 +116,8 @@ namespace EV
         //----------------------------------- (16 byte boundary)
         DirectX::XMFLOAT4 color;
         //----------------------------------- (16 byte boundary)
+        DirectX::XMFLOAT3 position;
         float ambient;
-        float padding[3];
         //----------------------------------- (16 byte boundary)
         // Total:                              16 * 4 = 64 bytes
     };

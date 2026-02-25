@@ -325,10 +325,6 @@
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
-    <FxCompile Include="shaders\pixel.hlsl" />
-    <FxCompile Include="shaders\vertex.hlsl" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="header\DX12\descriptor_allocation.h" />
   </ItemGroup>
 </Project>

@@ -96,6 +96,7 @@ private:
 	std::shared_ptr<EV::Scene> m_scene;
 	std::shared_ptr<EV::Scene> m_helmet;
 	std::shared_ptr<EV::Scene> m_chessboard;
+	std::shared_ptr<EV::Scene> m_duck;
 
 	std::shared_ptr<EV::Scene> m_oceanPlane;
 	std::shared_ptr<EV::Scene> m_skybox;
@@ -110,6 +111,7 @@ private:
 	bool m_fullscreen = false;
 	double m_FPS;
 	bool m_showOceanParams = true;
+	bool m_showLightParams = false;
 
 	// TODO: add textures
 	std::shared_ptr<EV::Texture> m_defaultTexture;

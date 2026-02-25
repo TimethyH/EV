@@ -188,8 +188,11 @@ bool Ocean::LoadContent()
     app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
 
     // Start the loading task to perform async loading of the scene file.
-    m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
-        L"assets/sponza/sponza_nobanner.obj"));
+    // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
+    //     L"assets/sponza/sponza_nobanner.obj"));    
+	
+	// m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
+	//        L"assets/dragon/DragonAttenuation.gltf"));
 
     // Loading helmet to not load big ass sponza.
     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
@@ -217,8 +220,9 @@ bool Ocean::LoadContent()
     commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture);
 
     // m_cubeMesh = commandList->CreateCube();
-    // m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
+    m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
     m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
+    m_duck = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
 
     m_sphere = commandList->CreateSphere(0.1f);
 
@@ -342,7 +346,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_swapChain->WaitForSwapChain();
 
     // Update Camera
-    float speedMultiplier = (m_shift ? 32.0f : 4.0f);
+    float speedMultiplier = (m_shift ? 64.0f : 8.0f);
     XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     m_camera.Translate(cameraTranslate, Space::LOCAL);
@@ -372,8 +376,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
         float angle = lightAnimTime + directionalLightOffset * i;
 
-        XMVECTORF32 positionWS = { 0.0f,
-                                   5.0f, 20.0f, 1.0f };
+        XMVECTOR positionWS = XMLoadFloat3(&l.position);
 
         XMVECTOR directionWS = XMVector3Normalize(XMVectorNegate(positionWS));
         XMVECTOR directionVS = XMVector3TransformNormal(directionWS, viewMatrix);
@@ -381,7 +384,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
         XMStoreFloat4(&l.directionWS, directionWS);
         XMStoreFloat4(&l.directionVS, directionVS);
 
-        l.color = XMFLOAT4(LightColors[i]);
+        // l.color = XMFLOAT4(LightColors[i]);
     }
 
 
@@ -494,7 +497,10 @@ void Ocean::OnRender()
         m_skybox->Accept(skyboxVisitor);
 
 
-        m_scene->Accept(visitor);
+        // m_scene->Accept(visitor);
+        XMMATRIX duckTranslation = XMMatrixTranslation(-4.0f, 0.0f, 0.0f);
+        m_duck->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
+        m_duck->Accept(visitor);
 
         // Set Ocean Textures
         m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
@@ -515,8 +521,8 @@ void Ocean::OnRender()
         m_oceanPlane->Accept(oceanVisitor);
 
         XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);
-        // m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
-        // m_helmet->Accept(visitor);
+        m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
+        m_helmet->Accept(visitor);
 
         // m_chessboard->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * translation);
 
@@ -598,7 +604,7 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
             ImGui::Separator();
             if (ImGui::MenuItem("Exit", "Esc"))
             {
-                // TODO
+                // TODO close app
             }
             ImGui::EndMenu();
         }
@@ -607,6 +613,8 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
         {
 
             ImGui::MenuItem("Ocean Parameters", nullptr, &m_showOceanParams);
+            
+        	ImGui::MenuItem("Light Parameters", nullptr, &m_showLightParams);
 
             ImGui::EndMenu();
         }
@@ -688,6 +696,33 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
             GenerateH0(commandList);
             commandQueue.ExecuteCommandList(commandList);
             // commandQueue.Flush();
+        }
+
+        ImGui::End();
+    }
+
+    if (m_showLightParams && ImGui::Begin("Light Parameters", &m_showLightParams))
+    {
+        bool paramsChanged = false;
+
+        ImGui::Separator();
+        ImGui::Text("Directional Light");
+        paramsChanged |= ImGui::DragFloat3("Position", &m_directionalLights[0].position.x);
+        paramsChanged |= ImGui::ColorPicker4("Color", &m_directionalLights[0].color.x);
+
+        ImGui::Separator();
+        ImGui::Text("Point Light");
+        // paramsChanged |= ImGui::SliderFloat("Scale", &m_jonswapParams.scale, 0.0f, 5.0f);
+        // paramsChanged |= ImGui::SliderFloat("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f);
+        // paramsChanged |= ImGui::SliderFloat("Swell", &m_jonswapParams.swell, 0.0f, 1.0f);
+        // paramsChanged |= ImGui::SliderFloat("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f);
+        // paramsChanged |= ImGui::SliderFloat("Short Waves Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f);
+
+        if (paramsChanged)
+        {
+            auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+            auto commandList = commandQueue.GetCommandList();
+            commandQueue.ExecuteCommandList(commandList);
         }
 
         ImGui::End();
@@ -854,6 +889,8 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     subData.pData = combinedData.data();
     subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
+
+    // TODO clean this up... separate the jobs properly
 
     // Create slope output texture
     m_slopeTexture = Application::Get().CreateTexture(phaseDesc);

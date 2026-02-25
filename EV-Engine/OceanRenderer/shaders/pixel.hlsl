@@ -227,12 +227,14 @@ SamplerState linearSampler : register(s0);
 float4 main(PixelShaderInput IN) : SV_Target
 {
     float4 diffuse = DiffuseTexture.Sample(linearSampler, IN.TexCoord);
-    float4 texColor = AmbientTexture.Sample(linearSampler, IN.TexCoord);
+    float4 ao = AmbientTexture.Sample(linearSampler, IN.TexCoord);
     float3 normalTex = NormalTexture.Sample(linearSampler, IN.TexCoord).xyz  * 2.0f - 1.0f;
     float4 metallicRough = MetallicRoughness.Sample(linearSampler, IN.TexCoord);
     float4 emissive = EmissiveTexture.Sample(linearSampler, IN.TexCoord);
     float PI = 3.14159265358979323846264338327950288f;
 
+    float3 ambientColor = float3(0.03f, 0.03f, 0.03f);
+    float3 ambient = ambientColor * diffuse.rgb * ao.r;
 
     normalTex = normalize(IN.NormalVS);
     // return float4(1.0, 0.0, 0.0, 1.0);
@@ -297,7 +299,8 @@ float4 main(PixelShaderInput IN) : SV_Target
 
 
      // Combine ambient, point light, and directional light contributions
-    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + texColor;
+    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
     BRDF += emissive + pointLightBRDF + directionalLightBRDF;
+    // BRDF = ambient;
     return float4(BRDF, 1.0f);
 }

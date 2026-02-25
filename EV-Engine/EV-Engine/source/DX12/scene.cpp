@@ -224,15 +224,6 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
         pMaterial->SetRoughness(roughness);
     }
 
-    // Load ambient textures.
-    if (material.GetTextureCount(aiTextureType_AMBIENT) > 0 &&
-        material.GetTexture(aiTextureType_AMBIENT, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
-            &aiBlendOperation) == aiReturn_SUCCESS)
-    {
-        fs::path texturePath(aiTexturePath.C_Str());
-        auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, true);
-        pMaterial->SetTexture(EV::Material::TextureType::Ambient, texture);
-    }
 
     // Load emissive textures.
     if (material.GetTextureCount(aiTextureType_EMISSIVE) > 0 &&
@@ -282,6 +273,16 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
         fs::path texturePath(aiTexturePath.C_Str());
         auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, false);
         pMaterial->SetTexture(EV::Material::TextureType::MetallicRoughness, texture);
+    }
+
+    // Load AO texture.
+    if (material.GetTextureCount(aiTextureType_LIGHTMAP) > 0 &&
+        material.GetTexture(aiTextureType_LIGHTMAP, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+            &aiBlendOperation) == aiReturn_SUCCESS)
+    {
+        fs::path texturePath(aiTexturePath.C_Str());
+        auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, false);
+        pMaterial->SetTexture(EV::Material::TextureType::Ambient, texture);
     }
 
 
