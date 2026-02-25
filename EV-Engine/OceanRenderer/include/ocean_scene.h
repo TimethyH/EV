@@ -10,7 +10,7 @@
 #include <complex>
 
 #define OCEAN_SUBRES 512
-#define OCEAN_SIZE 100.0f
+#define OCEAN_SIZE 128.0f
 #define OCEAN_DEPTH 20.0f
 
 class OceanCompute;
@@ -57,6 +57,7 @@ public:
 	using super = EV::Game;
 	Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVSync = false);
 	virtual ~Ocean();
+	void OnDPIScaleChanged(DPIScaleEventArgs& e);
 	bool LoadContent() override;
 	void UnloadContent() override;
 
@@ -183,6 +184,7 @@ private:
 	bool m_contentLoaded = false;
 	bool m_shift = false;
 	bool m_vSync = false;
+
 
 	std::shared_ptr<EV::Window> m_pWindow = nullptr;
 	std::shared_ptr<EV::SwapChain> m_swapChain = nullptr;

@@ -67,7 +67,7 @@ Ocean::Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVS
     // Hookup Window callbacks.
     m_pWindow->Update += UpdateEvent::slot(&Ocean::OnUpdate, this);
     m_pWindow->Resize += ResizeEvent::slot(&Ocean::OnResize, this);
-    // m_pWindow->DPIScaleChanged += DPIScaleEvent::slot(&Tutorial5::OnDPIScaleChanged, this);
+    m_pWindow->DPIScaleChanged += DPIScaleEvent::slot(&Ocean::OnDPIScaleChanged, this);
     m_pWindow->KeyPressed += KeyboardEvent::slot(&Ocean::OnKeyPress, this);
     m_pWindow->KeyReleased += KeyboardEvent::slot(&Ocean::OnKeyRelease, this);
     m_pWindow->MouseMoved += MouseMotionEvent::slot(&Ocean::OnMouseMove, this);
@@ -88,6 +88,11 @@ Ocean::Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVS
 Ocean::~Ocean()
 {
     _aligned_free(m_pAlignedCameraData);
+}
+
+void Ocean::OnDPIScaleChanged(DPIScaleEventArgs& e)
+{
+    m_GUI->SetScaling(e.DPIScale);
 }
 
 void Ocean::OnResize(ResizeEventArgs& e)
@@ -604,7 +609,7 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
             ImGui::Separator();
             if (ImGui::MenuItem("Exit", "Esc"))
             {
-                // TODO close app
+                Application::Get().Stop();
             }
             ImGui::EndMenu();
         }
@@ -734,6 +739,47 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 
 void Ocean::UnloadContent()
 {
+    m_cubeMesh.reset();
+    m_scene.reset();
+    m_helmet.reset();
+    m_chessboard.reset();
+    m_duck.reset();
+    m_oceanPlane.reset();
+    m_skybox.reset();
+
+    m_defaultTexture.reset();
+    m_rootSignature.reset();
+    m_pipelineState.reset();
+    m_sphere.reset();
+    m_unlitPSO.reset();
+    m_displacementPSO.reset();
+    m_skyboxPSO.reset();
+    m_sdrPSO.reset();
+    m_oceanPSO.reset();
+    m_fftPSO.reset();
+    m_permutePSO.reset();
+    m_H0Texture.reset();
+    m_slopeTexture.reset();
+    m_displacementTexture.reset();
+    m_heightTexture.reset();
+    m_normalTexture.reset();
+    m_intermediateTextureSlope.reset();
+    m_intermediateTextureHeight.reset();
+    m_permutedSlope.reset();
+    m_permutedHeight.reset();
+    m_foamTexture.reset();
+    m_skyboxTexture.reset();
+    m_skyboxCubemap.reset();
+    m_HDRTexture.reset();
+    m_skyboxCubemapSRV.reset();
+    m_skyboxSignature.reset();
+    m_HDRRootSignature.reset();
+    m_SDRRootSignature.reset();
+    m_HDRPSO.reset();
+	m_SDRPipelineState.reset();
+
+    // m_GUI.reset();
+    // m_swapChain.reset();
 
 }
 
@@ -1030,7 +1076,7 @@ void Ocean::OnKeyPress(KeyEventArgs& e)
     switch (e.key)
     {
     case KeyCode::Escape:
-        Application::Get().Quit(0);
+        Application::Get().Stop();
         break;
     case KeyCode::Enter:
         if (e.alt)

@@ -24,7 +24,6 @@ namespace EV
 	public:
 		static const UINT BufferCount = 3;
 		HWND GetWindowHandle() const;
-		void Destroy();
 
 		const std::wstring& GetWindowName() const;
 

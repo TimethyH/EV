@@ -51,8 +51,6 @@ class PipelineStateObject;
 
 		// Window Functions
 		std::shared_ptr<Window> CreateRenderWindow(const std::wstring& windowName, uint32_t windowWidth, uint32_t windowHeight, bool bVSync = true);
-		void DestroyWindow(const std::wstring& name);
-		void DestroyWindow(std::shared_ptr<Window> pWindow);
 		// Find the window using its name
 		std::shared_ptr<Window> GetWindow(const std::wstring& name);
 
@@ -160,6 +158,8 @@ class PipelineStateObject;
 		 */
 		WndProcEvent wndProcHandler;
 
+		void Stop(); // terminate app
+
 	protected:
 		Application(HINSTANCE hInstance);
 		virtual ~Application();
@@ -190,6 +190,8 @@ class PipelineStateObject;
 
 		std::unique_ptr<DescriptorAllocator> m_descriptorAllocators[D3D12_DESCRIPTOR_HEAP_TYPE_NUM_TYPES];
 		D3D_ROOT_SIGNATURE_VERSION m_highestRootSignatureVersion;
+
+		std::atomic_bool m_requestQuit = false;
 
 	};
 }

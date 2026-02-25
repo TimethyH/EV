@@ -37,8 +37,8 @@ bool Game::Initialize()
 
 void Game::Destroy()
 {
-    Application::Get().DestroyWindow(m_pWindow);
-    m_pWindow.reset();
+    // Application::Get().DestroyWindow(m_pWindow);
+    // m_pWindow.reset();
 }
 
 void Game::OnUpdate(UpdateEventArgs& e)
@@ -85,13 +85,5 @@ void Game::OnResize(ResizeEventArgs& e)
 {
     m_width = e.width;
     m_height = e.height;
-}
-
-void Game::OnWindowDestroy()
-{
-    // If the Window which we are registered to is 
-    // destroyed, then any resources which are associated 
-    // to the window must be released.
-    UnloadContent();
 }
 

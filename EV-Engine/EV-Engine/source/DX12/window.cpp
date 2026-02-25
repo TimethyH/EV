@@ -18,13 +18,15 @@ Window::Window(HWND hWnd, const std::wstring& windowName, uint32_t windowWidth, 
 	,m_screenHeight(windowHeight)
 	,m_VSync(bVSync)
 {
+	m_DPIScaling = ::GetDpiForWindow(hWnd) / 96.0f;
 }
 
 Window::~Window()
 {
 	// Window should be destroyed with Application::DestroyWindow before
 	// the window goes out of scope.
-	assert(!m_hWnd && "Use Application::DestroyWindow before destruction.");
+	// assert(!m_hWnd && "Use Application::DestroyWindow before destruction.");
+	::DestroyWindow(m_hWnd);
 }
 
 HWND Window::GetWindowHandle() const
@@ -45,19 +47,6 @@ void Window::Show()
 void Window::Hide()
 {
 	::ShowWindow(m_hWnd, SW_HIDE);
-}
-
-void Window::Destroy()
-{
-	if (auto pGame = m_pGame.lock())
-	{
-		pGame->OnWindowDestroy();
-	}
-	if (m_hWnd)
-	{
-		DestroyWindow(m_hWnd);
-		m_hWnd = nullptr;
-	}
 }
 
 uint32_t Window::GetScreenWidth() const
@@ -265,6 +254,7 @@ void Window::OnResize(ResizeEventArgs& e)
 void Window::OnClose(WindowCloseEventArgs& e)
 {
 	Close(e);
+	Application::Get().Stop();
 }
 
 Microsoft::WRL::ComPtr<IDXGISwapChain4> Window::CreateSwapChain()

@@ -48,6 +48,26 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 ////////////////////////////////////////////////////////////////////////////// TODOs /////////////////////////////////////////////////////////////
 /*
 
+
+												CURRENT PRIORITY
+
+
+[ ] Fix foam calculation
+[ ] Fix Ocean Pixelshader
+	[ ] Skybox lighting
+	[ ] Correct PBR ( NDF, sub surface scatter, roughness )
+[ ] Ocean cascades. (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+[ ]
+
+
 												GENERAL
 
 [ ] Cleanup engine.
@@ -68,7 +88,6 @@ Ocean
 	[ ] (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
 	[ ] Proper PBR water lighting
 	[ ] Foam is incorrect. foam gets added even when the waves dont collapse into themselves
-	[ ] Add tweakable parameters to ImGui
 	[ ] Store gaussian randoms in a texture for GPU sampling. Move wave generation to compute (JONSWAP)
 	[ ] Fully understand every component of the Ocean
 	[ ] Understand how the scene draws its meshes

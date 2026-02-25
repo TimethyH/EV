@@ -24,6 +24,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 {
     const float2 Lambda = float2(1.3f, 1.3f);
 
+    // permuting essentially makes sure that the FFT result is centered. (remmeber 3B1B video)
     float4 htildeDisplacement = Permute(displacementTexture.Load(int3(dispatchThreadID.xy, 0)), dispatchThreadID);
     float4 htildeSlope = Permute(slopeTexture[dispatchThreadID.xy], dispatchThreadID);
 	
@@ -35,6 +36,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 	
     float2 slopes = dyxdyz.xy / (1 + abs(dxxdzz * Lambda));
     float3 displacement = float3(Lambda.x * dxdz.x, dydxz.x, Lambda.y * dxdz.y);
+    float covariance = slopes.x * slopes.y; // covariance is the correlation of change between x and y. 
 
     // Jacobian 
     float jacobian = (1.0f + Lambda.x * dxxdzz.x) * (1.0f + Lambda.y * dxxdzz.y) - Lambda.x * Lambda.y * dydxz.y * dydxz.y;

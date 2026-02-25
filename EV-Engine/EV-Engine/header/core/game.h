@@ -36,7 +36,6 @@ namespace EV
 		virtual void OnMouseButtonRelease(MouseButtonEventArgs& e);
 		virtual void OnMouseWheel(MouseWheelEventArgs& e);
 		virtual void OnResize(ResizeEventArgs& e);
-		virtual void OnWindowDestroy();
 
 		std::shared_ptr<Window> m_pWindow = nullptr;
 

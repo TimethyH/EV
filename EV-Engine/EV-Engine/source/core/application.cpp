@@ -238,6 +238,15 @@ public:
     virtual ~MakePipelineStateObject() {}
 };
 
+void Application::Stop()
+{
+    // When called from another thread other than the main thread,
+    // the WM_QUIT message goes to that thread and will not be handled
+    // in the main thread. To circumvent this, we also set a boolean flag
+    // to indicate that the user has requested to quit the application.
+    m_requestQuit = true;
+}
+
 Application::Application(HINSTANCE hInst)
     : m_hInstance(hInst)
     , m_tearingSupported(false)
@@ -291,9 +300,6 @@ void Application::Destroy()
 {
     if (gs_pSingelton)
     {
-        assert(gs_Windows.empty() && gs_WindowByName.empty() &&
-            "All windows should be destroyed before destroying the application instance.");
-
         delete gs_pSingelton;
         gs_pSingelton = nullptr;
     }
@@ -301,7 +307,8 @@ void Application::Destroy()
 
 Application::~Application()
 {
-    Flush();
+    gs_Windows.clear();
+    gs_WindowByName.clear();
 }
 
 void Application::Initialize()
@@ -529,20 +536,6 @@ std::shared_ptr<Window> Application::CreateRenderWindow(const std::wstring& wind
     return pWindow;
 }
 
-void Application::DestroyWindow(std::shared_ptr<Window> window)
-{
-    if (window) window->Destroy();
-}
-
-void Application::DestroyWindow(const std::wstring& windowName)
-{
-    WindowPtr pWindow = GetWindow(windowName);
-    if (pWindow)
-    {
-        DestroyWindow(pWindow);
-    }
-}
-
 std::shared_ptr<Window> Application::GetWindow(const std::wstring& windowName)
 {
     std::shared_ptr<Window> window;
@@ -571,11 +564,18 @@ int Application::Run(std::shared_ptr<Game> pGame)
             TranslateMessage(&msg);
             DispatchMessage(&msg);
         }
+
+        if (m_requestQuit)
+        {
+            PostQuitMessage(0);
+            m_requestQuit = false;
+            // break;
+        }
     }
 
     // Flush any commands in the commands queues before quiting.
     Flush();
-
+    //
     pGame->UnloadContent();
     pGame->Destroy();
 

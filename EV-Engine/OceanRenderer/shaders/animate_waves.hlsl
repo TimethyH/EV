@@ -1,5 +1,5 @@
 #define OCEAN_RESOLUTION 512
-#define OCEAN_SIZE 100
+#define OCEAN_SIZE 128
 #define PI 3.14159265359f
 #define GRAVITY 9.81f
 #define REPEAT_TIME 500.0f
