@@ -87,8 +87,8 @@ struct DirectionalLight
     //----------------------------------- (16 byte boundary)
     float4 Color;
     //----------------------------------- (16 byte boundary)
+    float3 Position;
     float Ambient;
-    float3 Padding;
     //----------------------------------- (16 byte boundary)
     // Total:                              16 * 4 = 64 bytes
 };

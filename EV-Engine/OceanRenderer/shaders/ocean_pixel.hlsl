@@ -11,8 +11,8 @@ struct DirectionalLight
     float4 DirectionWS;
     float4 DirectionVS;
     float4 Color;
+    float3 Position;
     float Ambient;
-    float3 Padding;
 };
 
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);

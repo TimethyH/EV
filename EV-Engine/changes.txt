@@ -1,0 +1,370 @@
+diff --git a/EV-Engine/EV-Engine/EV-Engine.vcxproj b/EV-Engine/EV-Engine/EV-Engine.vcxproj
+index 24a3bf9..09b2e07 100644
+--- a/EV-Engine/EV-Engine/EV-Engine.vcxproj
++++ b/EV-Engine/EV-Engine/EV-Engine.vcxproj
+@@ -124,24 +124,6 @@
+     <ClInclude Include="thirdparty\imgui\imstb_textedit.h" />
+     <ClInclude Include="thirdparty\imgui\imstb_truetype.h" />
+   </ItemGroup>
+-  <ItemGroup>
+-    <FxCompile Include="shaders\pixel.hlsl">
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">6.0</ShaderModel>
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">6.0</ShaderModel>
+-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
+-      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+-    </FxCompile>
+-    <FxCompile Include="shaders\vertex.hlsl">
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+-      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+-    </FxCompile>
+-  </ItemGroup>
+   <ItemGroup>
+     <None Include="header\DX12\descriptor_allocation.h" />
+   </ItemGroup>
+diff --git a/EV-Engine/EV-Engine/EV-Engine.vcxproj.filters b/EV-Engine/EV-Engine/EV-Engine.vcxproj.filters
+index 5fa39b9..25f750b 100644
+--- a/EV-Engine/EV-Engine/EV-Engine.vcxproj.filters
++++ b/EV-Engine/EV-Engine/EV-Engine.vcxproj.filters
+@@ -324,10 +324,6 @@
+       <Filter>Header Files</Filter>
+     </ClInclude>
+   </ItemGroup>
+-  <ItemGroup>
+-    <FxCompile Include="shaders\pixel.hlsl" />
+-    <FxCompile Include="shaders\vertex.hlsl" />
+-  </ItemGroup>
+   <ItemGroup>
+     <None Include="header\DX12\descriptor_allocation.h" />
+   </ItemGroup>
+diff --git a/EV-Engine/EV-Engine/header/DX12/light.h b/EV-Engine/EV-Engine/header/DX12/light.h
+index 33c645c..4cc0789 100644
+--- a/EV-Engine/EV-Engine/header/DX12/light.h
++++ b/EV-Engine/EV-Engine/header/DX12/light.h
+@@ -105,6 +105,7 @@ namespace EV
+             : directionWS(0.0f, 0.0f, 1.0f, 0.0f)
+             , directionVS(0.0f, 0.0f, 1.0f, 0.0f)
+             , color(1.0f, 1.0f, 1.0f, 1.0f)
++			, position(0.0f,5.0f,20.0f)
+             , ambient(0.01f)
+         {
+         }
+@@ -115,8 +116,8 @@ namespace EV
+         //----------------------------------- (16 byte boundary)
+         DirectX::XMFLOAT4 color;
+         //----------------------------------- (16 byte boundary)
++        DirectX::XMFLOAT3 position;
+         float ambient;
+-        float padding[3];
+         //----------------------------------- (16 byte boundary)
+         // Total:                              16 * 4 = 64 bytes
+     };
+diff --git a/EV-Engine/EV-Engine/source/DX12/scene.cpp b/EV-Engine/EV-Engine/source/DX12/scene.cpp
+index 94a5da3..d114583 100644
+--- a/EV-Engine/EV-Engine/source/DX12/scene.cpp
++++ b/EV-Engine/EV-Engine/source/DX12/scene.cpp
+@@ -224,15 +224,6 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
+         pMaterial->SetRoughness(roughness);
+     }
+ 
+-    // Load ambient textures.
+-    if (material.GetTextureCount(aiTextureType_AMBIENT) > 0 &&
+-        material.GetTexture(aiTextureType_AMBIENT, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+-            &aiBlendOperation) == aiReturn_SUCCESS)
+-    {
+-        fs::path texturePath(aiTexturePath.C_Str());
+-        auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, true);
+-        pMaterial->SetTexture(EV::Material::TextureType::Ambient, texture);
+-    }
+ 
+     // Load emissive textures.
+     if (material.GetTextureCount(aiTextureType_EMISSIVE) > 0 &&
+@@ -284,6 +275,16 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
+         pMaterial->SetTexture(EV::Material::TextureType::MetallicRoughness, texture);
+     }
+ 
++    // Load AO texture.
++    if (material.GetTextureCount(aiTextureType_LIGHTMAP) > 0 &&
++        material.GetTexture(aiTextureType_LIGHTMAP, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
++            &aiBlendOperation) == aiReturn_SUCCESS)
++    {
++        fs::path texturePath(aiTexturePath.C_Str());
++        auto     texture = commandList.LoadTextureFromFile(parentPath / texturePath, false);
++        pMaterial->SetTexture(EV::Material::TextureType::Ambient, texture);
++    }
++
+ 
+     if (material.GetTextureCount(aiTextureType_OPACITY) > 0 &&
+         material.GetTexture(aiTextureType_OPACITY, 0, &aiTexturePath, nullptr, nullptr, &blendFactor,
+diff --git a/EV-Engine/OceanRenderer/OceanRenderer.vcxproj b/EV-Engine/OceanRenderer/OceanRenderer.vcxproj
+index d301668..504639b 100644
+--- a/EV-Engine/OceanRenderer/OceanRenderer.vcxproj
++++ b/EV-Engine/OceanRenderer/OceanRenderer.vcxproj
+@@ -238,6 +238,12 @@
+       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+     </FxCompile>
++    <FxCompile Include="shaders\pixel.hlsl">
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Pixel</ShaderType>
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Pixel</ShaderType>
++    </FxCompile>
+     <FxCompile Include="shaders\skybox_PS.hlsl">
+       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Pixel</ShaderType>
+       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Pixel</ShaderType>
+@@ -250,6 +256,12 @@
+       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
+       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
+     </FxCompile>
++    <FxCompile Include="shaders\vertex.hlsl">
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Vertex</ShaderType>
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Vertex</ShaderType>
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Vertex</ShaderType>
++      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Vertex</ShaderType>
++    </FxCompile>
+   </ItemGroup>
+   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+   <ImportGroup Label="ExtensionTargets">
+diff --git a/EV-Engine/OceanRenderer/OceanRenderer.vcxproj.filters b/EV-Engine/OceanRenderer/OceanRenderer.vcxproj.filters
+index 996b677..5858dab 100644
+--- a/EV-Engine/OceanRenderer/OceanRenderer.vcxproj.filters
++++ b/EV-Engine/OceanRenderer/OceanRenderer.vcxproj.filters
+@@ -50,5 +50,7 @@
+     <FxCompile Include="shaders\pano_to_cubemap_CS.hlsl" />
+     <FxCompile Include="shaders\skybox_PS.hlsl" />
+     <FxCompile Include="shaders\skybox_VS.hlsl" />
++    <FxCompile Include="shaders\pixel.hlsl" />
++    <FxCompile Include="shaders\vertex.hlsl" />
+   </ItemGroup>
+ </Project>
+\ No newline at end of file
+diff --git a/EV-Engine/OceanRenderer/include/ocean_scene.h b/EV-Engine/OceanRenderer/include/ocean_scene.h
+index 7c9be73..c36710d 100644
+--- a/EV-Engine/OceanRenderer/include/ocean_scene.h
++++ b/EV-Engine/OceanRenderer/include/ocean_scene.h
+@@ -96,6 +96,7 @@ private:
+ 	std::shared_ptr<EV::Scene> m_scene;
+ 	std::shared_ptr<EV::Scene> m_helmet;
+ 	std::shared_ptr<EV::Scene> m_chessboard;
++	std::shared_ptr<EV::Scene> m_duck;
+ 
+ 	std::shared_ptr<EV::Scene> m_oceanPlane;
+ 	std::shared_ptr<EV::Scene> m_skybox;
+@@ -110,6 +111,7 @@ private:
+ 	bool m_fullscreen = false;
+ 	double m_FPS;
+ 	bool m_showOceanParams = true;
++	bool m_showLightParams = false;
+ 
+ 	// TODO: add textures
+ 	std::shared_ptr<EV::Texture> m_defaultTexture;
+diff --git a/EV-Engine/EV-Engine/shaders/pixel.hlsl b/EV-Engine/OceanRenderer/shaders/pixel.hlsl
+similarity index 98%
+rename from EV-Engine/EV-Engine/shaders/pixel.hlsl
+rename to EV-Engine/OceanRenderer/shaders/pixel.hlsl
+index 3b71239..1133881 100644
+--- a/EV-Engine/EV-Engine/shaders/pixel.hlsl
++++ b/EV-Engine/OceanRenderer/shaders/pixel.hlsl
+@@ -227,12 +227,14 @@ SamplerState linearSampler : register(s0);
+ float4 main(PixelShaderInput IN) : SV_Target
+ {
+     float4 diffuse = DiffuseTexture.Sample(linearSampler, IN.TexCoord);
+-    float4 texColor = AmbientTexture.Sample(linearSampler, IN.TexCoord);
++    float4 ao = AmbientTexture.Sample(linearSampler, IN.TexCoord);
+     float3 normalTex = NormalTexture.Sample(linearSampler, IN.TexCoord).xyz  * 2.0f - 1.0f;
+     float4 metallicRough = MetallicRoughness.Sample(linearSampler, IN.TexCoord);
+     float4 emissive = EmissiveTexture.Sample(linearSampler, IN.TexCoord);
+     float PI = 3.14159265358979323846264338327950288f;
+ 
++    float3 ambientColor = float3(0.03f, 0.03f, 0.03f);
++    float3 ambient = ambientColor * diffuse.rgb * ao.r;
+ 
+     normalTex = normalize(IN.NormalVS);
+     // return float4(1.0, 0.0, 0.0, 1.0);
+@@ -297,7 +299,8 @@ float4 main(PixelShaderInput IN) : SV_Target
+ 
+ 
+      // Combine ambient, point light, and directional light contributions
+-    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + texColor;
++    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
+     BRDF += emissive + pointLightBRDF + directionalLightBRDF;
++    // BRDF = ambient;
+     return float4(BRDF, 1.0f);
+ }
+\ No newline at end of file
+diff --git a/EV-Engine/EV-Engine/shaders/vertex.hlsl b/EV-Engine/OceanRenderer/shaders/vertex.hlsl
+similarity index 100%
+rename from EV-Engine/EV-Engine/shaders/vertex.hlsl
+rename to EV-Engine/OceanRenderer/shaders/vertex.hlsl
+diff --git a/EV-Engine/OceanRenderer/source/ocean_scene.cpp b/EV-Engine/OceanRenderer/source/ocean_scene.cpp
+index 90fb862..6e4b5c4 100644
+--- a/EV-Engine/OceanRenderer/source/ocean_scene.cpp
++++ b/EV-Engine/OceanRenderer/source/ocean_scene.cpp
+@@ -188,8 +188,11 @@ bool Ocean::LoadContent()
+     app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
+ 
+     // Start the loading task to perform async loading of the scene file.
+-    m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
+-        L"assets/sponza/sponza_nobanner.obj"));
++    // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
++    //     L"assets/sponza/sponza_nobanner.obj"));    
++	
++	// m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
++	//        L"assets/dragon/DragonAttenuation.gltf"));
+ 
+     // Loading helmet to not load big ass sponza.
+     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
+@@ -217,8 +220,9 @@ bool Ocean::LoadContent()
+     commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture);
+ 
+     // m_cubeMesh = commandList->CreateCube();
+-    // m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
++    m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
+     m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
++    m_duck = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
+ 
+     m_sphere = commandList->CreateSphere(0.1f);
+ 
+@@ -342,7 +346,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
+     m_swapChain->WaitForSwapChain();
+ 
+     // Update Camera
+-    float speedMultiplier = (m_shift ? 32.0f : 4.0f);
++    float speedMultiplier = (m_shift ? 64.0f : 8.0f);
+     XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
+     XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
+     m_camera.Translate(cameraTranslate, Space::LOCAL);
+@@ -372,8 +376,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
+ 
+         float angle = lightAnimTime + directionalLightOffset * i;
+ 
+-        XMVECTORF32 positionWS = { 0.0f,
+-                                   5.0f, 20.0f, 1.0f };
++        XMVECTOR positionWS = XMLoadFloat3(&l.position);
+ 
+         XMVECTOR directionWS = XMVector3Normalize(XMVectorNegate(positionWS));
+         XMVECTOR directionVS = XMVector3TransformNormal(directionWS, viewMatrix);
+@@ -381,7 +384,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
+         XMStoreFloat4(&l.directionWS, directionWS);
+         XMStoreFloat4(&l.directionVS, directionVS);
+ 
+-        l.color = XMFLOAT4(LightColors[i]);
++        // l.color = XMFLOAT4(LightColors[i]);
+     }
+ 
+ 
+@@ -494,7 +497,10 @@ void Ocean::OnRender()
+         m_skybox->Accept(skyboxVisitor);
+ 
+ 
+-        m_scene->Accept(visitor);
++        // m_scene->Accept(visitor);
++        XMMATRIX duckTranslation = XMMatrixTranslation(-4.0f, 0.0f, 0.0f);
++        m_duck->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
++        m_duck->Accept(visitor);
+ 
+         // Set Ocean Textures
+         m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
+@@ -515,8 +521,8 @@ void Ocean::OnRender()
+         m_oceanPlane->Accept(oceanVisitor);
+ 
+         XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);
+-        // m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
+-        // m_helmet->Accept(visitor);
++        m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
++        m_helmet->Accept(visitor);
+ 
+         // m_chessboard->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * translation);
+ 
+@@ -598,7 +604,7 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
+             ImGui::Separator();
+             if (ImGui::MenuItem("Exit", "Esc"))
+             {
+-                // TODO
++                // TODO close app
+             }
+             ImGui::EndMenu();
+         }
+@@ -607,6 +613,8 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
+         {
+ 
+             ImGui::MenuItem("Ocean Parameters", nullptr, &m_showOceanParams);
++            
++        	ImGui::MenuItem("Light Parameters", nullptr, &m_showLightParams);
+ 
+             ImGui::EndMenu();
+         }
+@@ -693,6 +701,33 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
+         ImGui::End();
+     }
+ 
++    if (m_showLightParams && ImGui::Begin("Light Parameters", &m_showLightParams))
++    {
++        bool paramsChanged = false;
++
++        ImGui::Separator();
++        ImGui::Text("Directional Light");
++        paramsChanged |= ImGui::DragFloat3("Position", &m_directionalLights[0].position.x);
++        paramsChanged |= ImGui::ColorPicker4("Color", &m_directionalLights[0].color.x);
++
++        ImGui::Separator();
++        ImGui::Text("Point Light");
++        // paramsChanged |= ImGui::SliderFloat("Scale", &m_jonswapParams.scale, 0.0f, 5.0f);
++        // paramsChanged |= ImGui::SliderFloat("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f);
++        // paramsChanged |= ImGui::SliderFloat("Swell", &m_jonswapParams.swell, 0.0f, 1.0f);
++        // paramsChanged |= ImGui::SliderFloat("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f);
++        // paramsChanged |= ImGui::SliderFloat("Short Waves Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f);
++
++        if (paramsChanged)
++        {
++            auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
++            auto commandList = commandQueue.GetCommandList();
++            commandQueue.ExecuteCommandList(commandList);
++        }
++
++        ImGui::End();
++    }
++
+     m_GUI->Render(commandList, renderTarget);
+ }
+ 
+@@ -855,6 +890,8 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
+     subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
+     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
+ 
++    // TODO clean this up... separate the jobs properly
++
+     // Create slope output texture
+     m_slopeTexture = Application::Get().CreateTexture(phaseDesc);
+     m_slopeTexture->SetName(L"Slope Output Texture");
+diff --git a/EV-Engine/imgui.ini b/EV-Engine/imgui.ini
+index fa5658a..1cd7dc4 100644
+--- a/EV-Engine/imgui.ini
++++ b/EV-Engine/imgui.ini
+@@ -9,12 +9,17 @@ Size=429,430
+ Collapsed=0
+ 
+ [Window][Ocean Parameters]
+-Pos=60,60
++Pos=15,48
+ Size=329,352
+ Collapsed=0
+ 
+ [Window][Loading]
+-Pos=480,496
+-Size=960,88
++Pos=480,493
++Size=960,94
++Collapsed=0
++
++[Window][Light Parameters]
++Pos=354,48
++Size=262,305
+ Collapsed=0
+ 
