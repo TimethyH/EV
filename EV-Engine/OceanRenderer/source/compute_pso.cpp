@@ -27,9 +27,9 @@ OceanCompute::OceanCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMET
         D3D12_ROOT_SIGNATURE_FLAG_DENY_DOMAIN_SHADER_ROOT_ACCESS |
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
+    
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    rootSignatureDescription.Init_1_1(numRootParams, rootParams, 0, nullptr, computeFlags);
-
+	rootSignatureDescription.Init_1_1(numRootParams, rootParams, 0, nullptr, computeFlags);
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
@@ -83,6 +83,34 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
     commandList->SetCompute32BitConstants(1, 1, &columnPhase);
 
     commandList->Dispatch(dispatchDimension.x, dispatchDimension.y, dispatchDimension.z);
+
+}
+
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount)
+{
+    commandList->SetPipelineState(m_pipelineStateObject);
+    commandList->SetComputeRootSignature(m_rootSignature);
+
+    // Bind constant buffer (b0)
+    struct IrradianceCB
+    {
+        uint32_t cubemapSize;
+        uint32_t sampleCount;
+        float padding;
+        float padding2;
+    } cb = { cubemapSize, sampleCount, 0.0f, 0.0f };
+
+    commandList->SetCompute32BitConstants(0, cb);
+
+    // Bind source environment cubemap SRV
+    commandList->SetShaderResourceView(1, 0, envCubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+    // Bind destination irradiance map UAV
+    commandList->SetUnorderedAccessView(2, 0, irradianceMap, 0);
+
+    // 6 faces in Z, groups of BLOCK_SIZE (16) in X and Y
+    uint32_t groups = (cubemapSize + 16 - 1) / 16;
+    commandList->Dispatch(groups, groups, 6);
 
 }
 

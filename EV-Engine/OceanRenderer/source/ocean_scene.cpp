@@ -10,6 +10,7 @@
 #include <random>
 
 #include "compute_pso.h"
+#include "convolution_pso.h"
 #include "ocean_pso.h"
 #include "DX12/skybox_pso.h"
 #include "DX12/root_signature.h"
@@ -261,13 +262,21 @@ bool Ocean::LoadContent()
     CD3DX12_ROOT_PARAMETER1 permuteRootParameters[1];
     permuteRootParameters[0].InitAsDescriptorTable(1, &permuteDescriptorRangeUAV); // UAV
 
+    // Convolution
+    CD3DX12_DESCRIPTOR_RANGE1 convolutionSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); 
+    CD3DX12_DESCRIPTOR_RANGE1 convolutionUAVRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); 
 
+    CD3DX12_ROOT_PARAMETER1 convolutionRootParameters[3];
+    convolutionRootParameters[0].InitAsConstants(4, 0);                    
+    convolutionRootParameters[1].InitAsDescriptorTable(1, &convolutionSRVRange);   
+    convolutionRootParameters[2].InitAsDescriptorTable(1, &convolutionUAVRange);   
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
     m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso");
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
+    m_convolutionPSO = std::make_shared<ConvolutionCompute>(L"/ibl_convolution.cso", convolutionRootParameters, _countof(convolutionRootParameters));
     m_skyboxPSO = std::make_shared<SkyboxPSO>(L"/skybox_VS.cso", L"/skybox_PS.cso");
     m_sdrPSO = std::make_shared<SDRPSO>(L"/HDR_to_SDR_VS.cso", L"/HDR_to_SDR_PS.cso");
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
@@ -280,6 +289,25 @@ bool Ocean::LoadContent()
     cubeMapSRVDesc.TextureCube.MipLevels = (UINT)-1;  // Use all mips.
 
     m_skyboxCubemapSRV = app.CreateShaderResourceView(m_skyboxCubemap, &cubeMapSRVDesc);
+
+    commandQueue.WaitForFenceValue(fence);
+
+
+    auto& computeQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    auto computeCommandList = computeQueue.GetCommandList();
+
+    DXGI_FORMAT irradianceFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+
+    auto irradianceDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_convolutionPlaneSize, m_convolutionPlaneSize);
+    irradianceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+	// diffuse irradiance texture
+    m_diffuseIrradianceMap = Application::Get().CreateTexture(irradianceDesc);
+    m_diffuseIrradianceMap->SetName(L"Diffuse Irradiance Texture");
+
+    // Convolution IBL
+    m_convolutionPSO->Dispatch(computeCommandList, m_skyboxCubemapSRV, m_diffuseIrradianceMap, m_convolutionPlaneSize, m_convolutionSampleCount);
+
 
     DXGI_FORMAT HDRbackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
@@ -314,7 +342,9 @@ bool Ocean::LoadContent()
     m_renderTarget.AttachTexture(AttachmentPoint::Color0, m_HDRTexture);
     m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
 
-    commandQueue.WaitForFenceValue(fence);
+    auto convolutionFence = computeQueue.ExecuteCommandList(computeCommandList);
+    computeQueue.WaitForFenceValue(convolutionFence);
+
     m_pWindow->RegisterCallbacks(shared_from_this());
     m_pWindow->Show();
 
@@ -392,7 +422,6 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
         // l.color = XMFLOAT4(LightColors[i]);
     }
 
-
     // skybox 
 
     // auto viewMatrix = XMMatrixTranspose(XMMatrixRotationQuaternion(m_camera.GetRotation()));
@@ -423,6 +452,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     commandList->UAVBarrier(m_displacementTexture);
     // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
     m_permutePSO->Dispatch(commandList, m_slopeTexture,  m_displacementTexture, m_foamTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
@@ -915,6 +945,7 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     auto foamDesc = CD3DX12_RESOURCE_DESC::Tex2D(foamFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     foamDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
+
 	// Copy H0 texture data
     m_H0Texture = Application::Get().CreateTexture(H0Desc);
     m_H0Texture->SetName(L"H0 Texture");
@@ -937,6 +968,7 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
 
     // TODO clean this up... separate the jobs properly
+    // TODO also use one application get rather than keep calling it
 
     // Create slope output texture
     m_slopeTexture = Application::Get().CreateTexture(phaseDesc);
@@ -973,6 +1005,8 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     // foam texture
     m_foamTexture = Application::Get().CreateTexture(foamDesc);
     m_foamTexture->SetName(L"Jacobian foam Texture");
+
+
 
     commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
 }

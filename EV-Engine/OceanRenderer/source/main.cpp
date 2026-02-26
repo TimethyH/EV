@@ -52,11 +52,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 												CURRENT PRIORITY
 
 
-[ ] Fix foam calculation
 [ ] Fix Ocean Pixelshader
 	[ ] Skybox lighting
 	[ ] Correct PBR ( NDF, sub surface scatter, roughness )
 [ ] Ocean cascades. (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
+[ ] Fix foam calculation
 [ ]
 [ ]
 [ ]

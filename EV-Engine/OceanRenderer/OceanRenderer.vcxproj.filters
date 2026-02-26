@@ -24,6 +24,9 @@
     <ClInclude Include="include\ocean_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\convolution_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\main.cpp">
@@ -36,6 +39,9 @@
       <Filter>Source Files</Filter>
     </ClCompile>
     <ClCompile Include="source\ocean_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="source\convolution_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
   </ItemGroup>
@@ -52,5 +58,6 @@
     <FxCompile Include="shaders\skybox_VS.hlsl" />
     <FxCompile Include="shaders\pixel.hlsl" />
     <FxCompile Include="shaders\vertex.hlsl" />
+    <FxCompile Include="shaders\ibl_convolution.hlsl" />
   </ItemGroup>
 </Project>

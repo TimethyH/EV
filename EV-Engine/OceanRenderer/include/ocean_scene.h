@@ -13,6 +13,7 @@
 #define OCEAN_SIZE 128.0f
 #define OCEAN_DEPTH 20.0f
 
+class ConvolutionCompute;
 class OceanCompute;
 class UpdateEventArgs;
 class KeyEventArgs;
@@ -197,6 +198,7 @@ private:
 	std::shared_ptr<OceanCompute> m_oceanPSO;
 	std::shared_ptr<OceanCompute> m_fftPSO;
 	std::shared_ptr<OceanCompute> m_permutePSO;
+	std::shared_ptr<ConvolutionCompute> m_convolutionPSO;
 
 	std::future<bool> m_loadingTask;
 
@@ -237,6 +239,7 @@ private:
 	std::shared_ptr<Texture> m_skyboxTexture; 
 	std::shared_ptr<Texture> m_skyboxCubemap; 
 	std::shared_ptr<Texture> m_HDRTexture; 
+	std::shared_ptr<Texture> m_diffuseIrradianceMap; 
 
 	std::shared_ptr<EV::ShaderResourceView> m_skyboxCubemapSRV; 
 
@@ -250,6 +253,10 @@ private:
 	std::shared_ptr<PipelineStateObject> m_HDRPSO;
 	// HDR -> SDR tone mapping PSO.
 	std::shared_ptr<PipelineStateObject> m_SDRPipelineState;
+
+	// IBL convolution
+	uint32_t m_convolutionPlaneSize = 32;
+	uint32_t m_convolutionSampleCount = 64;
 
 };
 

@@ -11,24 +11,21 @@ struct CD3DX12_ROOT_PARAMETER1;
 
 namespace EV
 {
-	class ShaderResourceView;
-	class PipelineStateObject;
-	class RootSignature;
-	class CommandList;
+    class ShaderResourceView;
+    class PipelineStateObject;
+    class RootSignature;
+    class CommandList;
 }
 
 using namespace EV;
-class OceanCompute
+class ConvolutionCompute
 {
 public:
-    OceanCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams);
+    ConvolutionCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams);
     std::wstring ModulePath();
     // ~OceanCompute();
 
-    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, DirectX::XMUINT3 dispatchDimension);
-    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase);
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount);
-    void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, DirectX::XMUINT3 dispatchDimension);
 
     enum RootParameters
     {
