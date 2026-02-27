@@ -23,24 +23,24 @@ struct Material
     //------------------------------------ ( 16 bytes )
     float4 Reflectance;
     //------------------------------------ ( 16 bytes )
-    float Opacity; // If Opacity < 1, then the material is transparent.
-    float SpecularPower;
-    float IndexOfRefraction; // For transparent materials, IOR > 0.
-    float BumpIntensity; // When using bump textures (height maps) we need
+    float Metallic; // If Opacity < 1, then the material is transparent.
+    float Roughness;
+    float Opacity; // For transparent materials, IOR > 0.
+    float SpecularPower; // When using bump textures (height maps) we need
                               // to scale the height values so the normals are visible.
+    float indexOfRefraction; // For transparent materials, IOR > 0.
+    float bumpIntensity;
     //------------------------------------ ( 16 bytes )
-    float AlphaThreshold; // Pixels with alpha < m_AlphaThreshold will be discarded.
-    bool HasAmbientTexture;
-    bool HasEmissiveTexture;
-    bool HasDiffuseTexture;
-    //------------------------------------ ( 16 bytes )
-    bool HasSpecularTexture;
-    bool HasSpecularPowerTexture;
-    bool HasNormalTexture;
-    bool HasBumpTexture;
-    //------------------------------------ ( 16 bytes )
-    bool HasOpacityTexture;
-    float3 Padding; // Pad to 16 byte boundary.
+    uint hasAmbientTexture;
+    uint hasEmissiveTexture;
+    uint hasDiffuseTexture;
+    uint hasSpecularTexture;
+       // ---------------------------------- ( 16 bytes )
+    uint hasSpecularPowerTexture;
+    uint hasNormalTexture;
+    uint hasBumpTexture;
+    uint hasOpacityTexture;
+    uint hasMetallicRoughnessTexture;
     //------------------------------------ ( 16 bytes )
     // Total:                              ( 16 * 9 = 144 bytes )
 };
@@ -252,7 +252,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3x3 TBN = float3x3(T, B, N);
 
     float3 normalWS;
-    if (material.HasNormalTexture)
+    if (material.hasNormalTexture)
     {
         float3 normalTex = NormalTexture.Sample(anisotropicSampler, IN.TexCoord).xyz * 2.0f - 1.0f;
         float3 T = normalize(IN.TangentWS);

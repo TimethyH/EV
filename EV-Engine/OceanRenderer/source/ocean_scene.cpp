@@ -596,9 +596,9 @@ void Ocean::OnRender()
 
 
         // REMINDER: Transform is built with Scale * Rotation * Translation (SRT)
-        XMMATRIX scale = XMMatrixScaling(10.0f, 10.0f, 10.0f);
+        XMMATRIX scale = XMMatrixScaling(5.0f, 5.0f, 5.0f);
         XMMATRIX rotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(-90.0f), 0.0f, 0.0f);
-        XMMATRIX translation = XMMatrixTranslation(0.0f, -12.0f, 0.0f);
+        XMMATRIX translation = XMMatrixTranslation(5.0f, 0.0f, 0.0f);
 
         
         // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
@@ -609,7 +609,7 @@ void Ocean::OnRender()
         m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
         m_helmet->Accept(visitor);
 
-        // m_chessboard->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * translation);
+        m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
 
         m_chessboard->Accept(visitor);
 
