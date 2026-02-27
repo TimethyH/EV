@@ -263,8 +263,8 @@ bool Ocean::LoadContent()
     permuteRootParameters[0].InitAsDescriptorTable(1, &permuteDescriptorRangeUAV); // UAV
 
     // Convolution
-    CD3DX12_DESCRIPTOR_RANGE1 convolutionSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); 
-    CD3DX12_DESCRIPTOR_RANGE1 convolutionUAVRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); 
+    CD3DX12_DESCRIPTOR_RANGE1 convolutionSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
+    CD3DX12_DESCRIPTOR_RANGE1 convolutionUAVRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
 
     CD3DX12_ROOT_PARAMETER1 convolutionRootParameters[3];
     convolutionRootParameters[0].InitAsConstants(4, 0);                    
@@ -292,13 +292,12 @@ bool Ocean::LoadContent()
 
     commandQueue.WaitForFenceValue(fence);
 
-
     auto& computeQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
     auto computeCommandList = computeQueue.GetCommandList();
 
-    DXGI_FORMAT irradianceFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    DXGI_FORMAT irradianceFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: less precision might also be fine
 
-    auto irradianceDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_convolutionPlaneSize, m_convolutionPlaneSize);
+    auto irradianceDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_convolutionPlaneSize, m_convolutionPlaneSize, 6);
     irradianceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	// diffuse irradiance texture
