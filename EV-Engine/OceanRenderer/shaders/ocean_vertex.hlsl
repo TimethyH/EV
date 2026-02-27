@@ -27,7 +27,7 @@ struct VertexShaderOutput
     float4 Position : SV_Position;
 };
 
-Texture2D DisplacementTexture : register(t12);
+Texture2D DisplacementTexture : register(t13);
 SamplerState linearSampler : register(s0);
 
 static const float HEIGHT_SCALE = 1.0f;

@@ -98,7 +98,7 @@ private:
 	std::shared_ptr<EV::Scene> m_scene;
 	std::shared_ptr<EV::Scene> m_helmet;
 	std::shared_ptr<EV::Scene> m_chessboard;
-	std::shared_ptr<EV::Scene> m_duck;
+	std::shared_ptr<EV::Scene> m_boat;
 
 	std::shared_ptr<EV::Scene> m_oceanPlane;
 	std::shared_ptr<EV::Scene> m_skybox;

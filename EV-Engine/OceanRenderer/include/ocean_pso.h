@@ -86,7 +86,7 @@ namespace EV
 		void Apply(CommandList& commandList) override;
 
 
-
+        void SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture);
 		void SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope, std::shared_ptr<Texture> foam);
         // Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
@@ -129,6 +129,9 @@ namespace EV
 		std::shared_ptr<Texture> m_foamTexture;
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
+
+        // IBL textures
+        std::shared_ptr<ShaderResourceView> m_diffuseIBL;
 
         const EV::Camera& m_camera;
 

@@ -228,7 +228,7 @@ bool Ocean::LoadContent()
     // m_cubeMesh = commandList->CreateCube();
     m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
     m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
-    m_duck = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
+    m_boat = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
 
     m_sphere = commandList->CreateSphere(0.1f);
 
@@ -460,6 +460,10 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
     // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
+    // Set the skybox SRV before rendering
+    m_unlitPSO->SetDiffuseIBL(m_skyboxCubemapSRV);
+    m_displacementPSO->SetDiffuseIBL(m_skyboxCubemapSRV);
+
     float time = static_cast<float>(e.totalTime);
 
     // Initialize point lights BEFORE the scene visitor
@@ -533,8 +537,8 @@ void Ocean::OnRender()
 
         // m_scene->Accept(visitor);
         XMMATRIX duckTranslation = XMMatrixTranslation(-4.0f, 0.0f, 0.0f);
-        m_duck->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
-        m_duck->Accept(visitor);
+        m_boat->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
+        m_boat->Accept(visitor);
 
         // Set Ocean Textures
         m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
@@ -772,7 +776,7 @@ void Ocean::UnloadContent()
     m_scene.reset();
     m_helmet.reset();
     m_chessboard.reset();
-    m_duck.reset();
+    m_boat.reset();
     m_oceanPlane.reset();
     m_skybox.reset();
 

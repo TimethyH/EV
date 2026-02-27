@@ -219,6 +219,7 @@ Texture2D NormalTexture : register(t8);
 Texture2D BumpTexture : register(t9);
 Texture2D OpacityTexture : register(t10);
 Texture2D MetallicRoughness : register(t11);
+TextureCube<float4> environmentMap : register(t12);
 
 
 SamplerState linearSampler : register(s0);
@@ -226,7 +227,7 @@ SamplerState linearSampler : register(s0);
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float4 diffuse = DiffuseTexture.Sample(linearSampler, IN.TexCoord);
+    float3 albedo = DiffuseTexture.Sample(linearSampler, IN.TexCoord).rgb;
     float4 ao = AmbientTexture.Sample(linearSampler, IN.TexCoord);
     float3 normalTex = NormalTexture.Sample(linearSampler, IN.TexCoord).xyz  * 2.0f - 1.0f;
     float4 metallicRough = MetallicRoughness.Sample(linearSampler, IN.TexCoord);
@@ -234,7 +235,6 @@ float4 main(PixelShaderInput IN) : SV_Target
     float PI = 3.14159265358979323846264338327950288f;
 
     float3 ambientColor = float3(0.03f, 0.03f, 0.03f);
-    float3 ambient = ambientColor * diffuse.rgb * ao.r;
 
     normalTex = normalize(IN.NormalVS);
     // return float4(1.0, 0.0, 0.0, 1.0);
@@ -250,7 +250,7 @@ float4 main(PixelShaderInput IN) : SV_Target
 		
     float3 viewDir = normalize(-IN.PositionVS.xyz);
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
-    F0 = F0 * (1.0f - metallic) + diffuse.rgb * metallic;
+    F0 = F0 * (1.0f - metallic) + albedo * metallic;
  
     {
      // -------------------------------
@@ -270,7 +270,7 @@ float4 main(PixelShaderInput IN) : SV_Target
         kd *= float3(1.0f, 1.0f, 1.0f) - metallic;
         float3 lightColor = PointLights[0].Color.xyz * attenuation;
         float intensity = 1.0f;
-        pointLightBRDF += (kd * diffuse / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, normalTex))
+        pointLightBRDF += (kd * albedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, normalTex))
                                  * lightColor * intensity * max(dot(pointLightDir, normalTex), 0.0f);
     }
  
@@ -289,7 +289,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     kd *= float3(1.0f,1.0f,1.0f) - metallic;
     float intensity = 1.0f;
  //  // Directional Light BRDF calculation
-    directionalLightBRDF += (kd * diffuse / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, dirLightDir, normalTex))
+    directionalLightBRDF += (kd * albedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, dirLightDir, normalTex))
                                 * DirectionalLights[0].Color * intensity * max(dot(dirLightDir, normalTex), 0.0f);
  
  
@@ -297,10 +297,13 @@ float4 main(PixelShaderInput IN) : SV_Target
 
     // return float4(normalTex * 0.5 + 0.5, 1.0);
 
+    float3 irradiance = environmentMap.Sample(linearSampler, normalTex).rgb;
+    float3 diffuse = irradiance * albedo;
+    float3 ambient = (kd * diffuse) * ao.r;
 
      // Combine ambient, point light, and directional light contributions
-    // BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
-    BRDF += emissive + pointLightBRDF + directionalLightBRDF;
+    BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
+    // BRDF += emissive + pointLightBRDF + directionalLightBRDF;
     // BRDF = ambient;
     return float4(BRDF, 1.0f);
 }

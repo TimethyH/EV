@@ -44,7 +44,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 9, 3 );
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 3 );
 
 
     // clang-format off
@@ -173,6 +173,10 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
+
+            // bind IBL textures
+            commandList.SetShaderResourceView(RootParameters::Textures, 9, m_diffuseIBL,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             
         }
        
@@ -214,18 +218,7 @@ void EffectPSO::Apply(CommandList& commandList)
     m_dirtyFlags = DF_None;
 }
 
-
-void EffectPSO::SetHeightTexture(std::shared_ptr<Texture> inTexture)
+void EffectPSO::SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture)
 {
-    m_heightmap = inTexture;
+    m_diffuseIBL = inTexture;
 }
-
-void EffectPSO::SetSlopeTexture(std::shared_ptr<Texture> inTexture)
-{
-    m_slopemap = inTexture;
-}
-void EffectPSO::SetFoamTexture(std::shared_ptr<Texture> inTexture)
-{
-    m_foamTexture = inTexture;
-}
-

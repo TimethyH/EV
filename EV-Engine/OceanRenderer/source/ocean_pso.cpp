@@ -37,7 +37,7 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 13, 3);
 
 
     // clang-format off
@@ -153,6 +153,7 @@ void EV::OceanPSO::Apply(CommandList& commandList)
 
             using TextureType = Material::TextureType;
 
+            // TODO: cleanup, most of these (or all) textures are not being used for the ocean.
 
             BindTexture(commandList, 0, m_material->GetTexture(TextureType::Ambient));
             BindTexture(commandList, 1, m_material->GetTexture(TextureType::Emissive));
@@ -164,6 +165,9 @@ void EV::OceanPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
 
+            // bind IBL textures
+            commandList.SetShaderResourceView(RootParameters::Textures, 9, m_diffuseIBL,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         }
 
     }
@@ -182,12 +186,12 @@ void EV::OceanPSO::Apply(CommandList& commandList)
         // TODO: use bind texture since this binds a default texture if invalid.
         D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 9, m_displacementTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 10, m_displacementTexture,
             shaderRead);
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 10, m_slopeTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 11, m_slopeTexture,
             shaderRead);
-        commandList.SetShaderResourceView(RootParameters::Textures, 11, m_foamTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 12, m_foamTexture,
             shaderRead);
 
     // if (m_dirtyFlags & DF_SpotLights)
@@ -212,6 +216,11 @@ void EV::OceanPSO::Apply(CommandList& commandList)
 
     // Clear the dirty flags to avoid setting any states the next time the effect is applied.
     m_dirtyFlags = DF_None;
+}
+
+void EV::OceanPSO::SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture)
+{
+    m_diffuseIBL = inTexture;
 }
 
 void EV::OceanPSO::SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope,

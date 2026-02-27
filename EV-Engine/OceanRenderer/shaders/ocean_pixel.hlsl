@@ -17,8 +17,9 @@ struct DirectionalLight
 
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
 
-Texture2D SlopeTexture : register(t13);
-Texture2D FoamTexture : register(t14);
+TextureCube<float4> environmentMap : register(t12);
+Texture2D SlopeTexture : register(t14);
+Texture2D FoamTexture : register(t15);
 SamplerState linearSampler : register(s0);
 
 cbuffer CameraCB : register(b1, space0)
@@ -175,8 +176,13 @@ float4 main(PixelShaderInput IN) : SV_Target
     // return float4(normalTex * 0.5 + 0.5, 1.0);
 
 
+
+    float3 irradiance = environmentMap.Sample(linearSampler, normal).rgb;
+    float3 diffuse = irradiance * shallowColor;
+    float3 ambient = (kd * diffuse) ; // TODO: ocean doesnt have an AO so cannot be multiplied heree. look at how atlas/warthunnder do it.
+
      // Combine ambient, point light, and directional light contributions
-    float3 ambient = shallowColor * 0.15f;
+    // float3 ambient = shallowColor * 0.15f;
     BRDF += ambient + pointLightBRDF + directionalLightBRDF;
 	// Add Foam
     float3 foamColor = float3(1.0f, 1.0f, 1.0f);

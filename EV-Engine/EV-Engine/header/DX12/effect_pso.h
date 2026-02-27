@@ -173,9 +173,8 @@ namespace EV
 
         // Apply this effect to the rendering pipeline.
         void Apply(CommandList& commandList) override; 
-        void SetHeightTexture(std::shared_ptr<Texture> inTexture);
-        void SetSlopeTexture(std::shared_ptr<Texture> inTexture);
-        void SetFoamTexture(std::shared_ptr<Texture> inTexture);
+        void SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture);
+
 
     private:
     	// Helper function to bind a texture to the rendering pipeline.
@@ -191,16 +190,12 @@ namespace EV
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
 
+        // IBL textures
+        std::shared_ptr<ShaderResourceView> m_diffuseIBL;
 
         // If the command list changes, all parameters need to be rebound.
         CommandList* m_pPreviousCommandList;
 
         EV::Camera& m_camera;
-
-        // height tex for vertex shader
-        std::shared_ptr<Texture> m_heightmap;
-        std::shared_ptr<Texture> m_slopemap;
-        std::shared_ptr<Texture> m_foamTexture;
-		
     };
 }
