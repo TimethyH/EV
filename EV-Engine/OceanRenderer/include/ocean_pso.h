@@ -84,9 +84,10 @@ namespace EV
             return m_pAlignedMVP->projection;
         }
 		void Apply(CommandList& commandList) override;
+		void SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, std::shared_ptr<ShaderResourceView> specular,
+		                    std::shared_ptr<ShaderResourceView> lut);
 
 
-        void SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture);
 		void SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope, std::shared_ptr<Texture> foam);
         // Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
@@ -129,9 +130,12 @@ namespace EV
 		std::shared_ptr<Texture> m_foamTexture;
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
+        std::shared_ptr<ShaderResourceView> m_defaultCubeSRV;
 
         // IBL textures
         std::shared_ptr<ShaderResourceView> m_diffuseIBL;
+        std::shared_ptr<ShaderResourceView> m_specularIBL;
+        std::shared_ptr<ShaderResourceView> m_lutIBL;
 
         const EV::Camera& m_camera;
 

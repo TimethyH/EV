@@ -199,6 +199,8 @@ private:
 	std::shared_ptr<OceanCompute> m_fftPSO;
 	std::shared_ptr<OceanCompute> m_permutePSO;
 	std::shared_ptr<ConvolutionCompute> m_convolutionPSO;
+	std::shared_ptr<ConvolutionCompute> m_specularConvolutionPSO;
+	std::shared_ptr<ConvolutionCompute> m_brdfLutPSO;
 
 	std::future<bool> m_loadingTask;
 
@@ -240,8 +242,13 @@ private:
 	std::shared_ptr<Texture> m_skyboxCubemap; 
 	std::shared_ptr<Texture> m_HDRTexture; 
 	std::shared_ptr<Texture> m_diffuseIrradianceMap; 
+	std::shared_ptr<Texture> m_specularIrradianceMap; 
+	std::shared_ptr<Texture> m_brdfLUT; 
 
 	std::shared_ptr<EV::ShaderResourceView> m_skyboxCubemapSRV; 
+	std::shared_ptr<EV::ShaderResourceView> m_diffuseCubemapSRV; 
+	std::shared_ptr<EV::ShaderResourceView> m_specularCubemapSRV; 
+	std::shared_ptr<EV::ShaderResourceView> m_brdfLUTSRV;
 
 	// Root signatures
 	std::shared_ptr<RootSignature> m_skyboxSignature;

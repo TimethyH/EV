@@ -1,5 +1,7 @@
 // #include "DX12/effect_pso.h"
 #include "DX12/effect_pso.h"
+
+#include <array>
 #include <DX12/command_list.h>
 #include <utility/helpers.h>
 #include <resources/material.h>
@@ -44,7 +46,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 10, 3 );
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3 );
 
 
     // clang-format off
@@ -60,8 +62,19 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
+    CD3DX12_STATIC_SAMPLER_DESC linearClampSampler(
+        1, // s1
+        D3D12_FILTER_MIN_MAG_MIP_POINT,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+    );
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription; 
-    rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, 1, &anisotropicSampler, rootSignatureFlags);
+    std::array<CD3DX12_STATIC_SAMPLER_DESC, 2> samplers = { anisotropicSampler, linearClampSampler };
+
+    rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters,samplers.size(), samplers.data(), rootSignatureFlags);
+
     // clang-format on
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
@@ -116,6 +129,16 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     defaultSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
     m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
+
+    // Default dubemapSRV
+    D3D12_SHADER_RESOURCE_VIEW_DESC defaultCubeSRV = {};
+    defaultCubeSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    defaultCubeSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    defaultCubeSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    defaultCubeSRV.TextureCube.MipLevels = 1;
+    defaultCubeSRV.TextureCube.MostDetailedMip = 0;
+
+    m_defaultCubeSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultCubeSRV);
 }
 
 EffectPSO::~EffectPSO()
@@ -173,21 +196,30 @@ void EffectPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
-
-            // bind IBL textures
-            commandList.SetShaderResourceView(RootParameters::Textures, 9, m_diffuseIBL,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
             
         }
        
     }
+
+    // bind IBL textures
+    commandList.SetShaderResourceView(RootParameters::Textures, 9,
+        m_diffuseIBL ? m_diffuseIBL : m_defaultCubeSRV,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    commandList.SetShaderResourceView(RootParameters::Textures, 10,
+        m_specularIBL ? m_specularIBL : m_defaultCubeSRV,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    commandList.SetShaderResourceView(RootParameters::Textures, 11,
+        m_lutIBL,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
     // if (m_dirtyFlags & DF_Camera)
     {
         // // TODO: Move camera data in its own class so we can retrieve it here and get rid of Demo.
         auto position = m_camera.GetTranslation();
         CameraData cameraData;
         cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
-        commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData.position);
+        cameraData.pad = 0.0f;
+        commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData);
     }
     if (m_dirtyFlags & DF_PointLights)
     {
@@ -218,7 +250,9 @@ void EffectPSO::Apply(CommandList& commandList)
     m_dirtyFlags = DF_None;
 }
 
-void EffectPSO::SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture)
+void EffectPSO::SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, std::shared_ptr<ShaderResourceView> specular, std::shared_ptr<ShaderResourceView> lut)
 {
-    m_diffuseIBL = inTexture;
+    m_diffuseIBL = diffuse;
+    m_specularIBL = specular;
+    m_lutIBL = lut;
 }

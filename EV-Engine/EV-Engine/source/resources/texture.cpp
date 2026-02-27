@@ -270,22 +270,25 @@ void Texture::CreateViews()
                     m_unorderedAccessView.GetDescriptorHandle(i));
             }
         }
-        // Create UAV for texture arrays (single descriptor covering all slices, mip 0)
+        // Create UAV for texture arrays - one descriptor per mip level
         if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS) != 0 && CheckUAVSupport() &&
             desc.DepthOrArraySize > 1)
         {
             m_unorderedAccessView =
-                app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, 1);
+                app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV, desc.MipLevels); 
 
-            D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
-            uavDesc.Format = desc.Format;
-            uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
-            uavDesc.Texture2DArray.MipSlice = 0;
-            uavDesc.Texture2DArray.FirstArraySlice = 0;
-            uavDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
+            for (int i = 0; i < desc.MipLevels; ++i)
+            {
+                D3D12_UNORDERED_ACCESS_VIEW_DESC uavDesc = {};
+                uavDesc.Format = desc.Format;
+                uavDesc.ViewDimension = D3D12_UAV_DIMENSION_TEXTURE2DARRAY;
+                uavDesc.Texture2DArray.MipSlice = i; 
+                uavDesc.Texture2DArray.FirstArraySlice = 0;
+                uavDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
 
-            device->CreateUnorderedAccessView(m_resource.Get(), nullptr, &uavDesc,
-                m_unorderedAccessView.GetDescriptorHandle(0));
+                device->CreateUnorderedAccessView(m_resource.Get(), nullptr, &uavDesc,
+                    m_unorderedAccessView.GetDescriptorHandle(i));
+            }
         }
     }
 }

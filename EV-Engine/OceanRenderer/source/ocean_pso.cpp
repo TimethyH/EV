@@ -1,5 +1,6 @@
 #include "ocean_pso.h"
 
+#include <array>
 #include <d3dcompiler.h>
 
 #include "core/application.h"
@@ -37,7 +38,7 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 13, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 15, 3);
 
 
     // clang-format off
@@ -53,8 +54,18 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
+    CD3DX12_STATIC_SAMPLER_DESC linearClampSampler(
+        1, // s1
+        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
+        D3D12_TEXTURE_ADDRESS_MODE_CLAMP
+    );
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, 1, &anisotropicSampler, rootSignatureFlags);
+    std::array<CD3DX12_STATIC_SAMPLER_DESC, 2> samplers = { anisotropicSampler, linearClampSampler };
+
+    rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, samplers.size(), samplers.data(), rootSignatureFlags);
     // clang-format on
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
@@ -111,6 +122,16 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
     defaultSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
 
     m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
+
+    // Default dubemapSRV
+    D3D12_SHADER_RESOURCE_VIEW_DESC defaultCubeSRV = {};
+    defaultCubeSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    defaultCubeSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    defaultCubeSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    defaultCubeSRV.TextureCube.MipLevels = 1;
+    defaultCubeSRV.TextureCube.MostDetailedMip = 0;
+
+    m_defaultCubeSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultCubeSRV);
 }
 
 inline void EV::OceanPSO::BindTexture(CommandList& commandList, uint32_t offset, const std::shared_ptr<Texture>& texture)
@@ -165,18 +186,27 @@ void EV::OceanPSO::Apply(CommandList& commandList)
             BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
             BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
 
-            // bind IBL textures
-            commandList.SetShaderResourceView(RootParameters::Textures, 9, m_diffuseIBL,
-                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         }
 
     }
+    // bind IBL textures
+    commandList.SetShaderResourceView(RootParameters::Textures, 9,
+        m_diffuseIBL ? m_diffuseIBL : m_defaultCubeSRV,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    commandList.SetShaderResourceView(RootParameters::Textures, 10,
+        m_specularIBL ? m_specularIBL : m_defaultCubeSRV,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    commandList.SetShaderResourceView(RootParameters::Textures, 11,
+        m_lutIBL,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
     // if (m_dirtyFlags & DF_Camera)
     {
         // // TODO: Move camera data in its own class so we can retrieve it here and get rid of Demo.
         auto position = m_camera.GetTranslation();
         CameraData cameraData;
         cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
+        cameraData.pad = 0.0f;
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData.position);
     }
     if (m_dirtyFlags & DF_PointLights)
@@ -186,12 +216,12 @@ void EV::OceanPSO::Apply(CommandList& commandList)
         // TODO: use bind texture since this binds a default texture if invalid.
         D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 10, m_displacementTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 12, m_displacementTexture,
             shaderRead);
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 11, m_slopeTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 13, m_slopeTexture,
             shaderRead);
-        commandList.SetShaderResourceView(RootParameters::Textures, 12, m_foamTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 14, m_foamTexture,
             shaderRead);
 
     // if (m_dirtyFlags & DF_SpotLights)
@@ -218,11 +248,12 @@ void EV::OceanPSO::Apply(CommandList& commandList)
     m_dirtyFlags = DF_None;
 }
 
-void EV::OceanPSO::SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture)
+void EV::OceanPSO::SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, std::shared_ptr<ShaderResourceView> specular, std::shared_ptr<ShaderResourceView> lut)
 {
-    m_diffuseIBL = inTexture;
+    m_diffuseIBL = diffuse;
+    m_specularIBL = specular;
+    m_lutIBL = lut;
 }
-
 void EV::OceanPSO::SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope,
                                     std::shared_ptr<Texture> foam)
 {

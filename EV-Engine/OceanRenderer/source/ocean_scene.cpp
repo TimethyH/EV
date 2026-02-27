@@ -271,12 +271,19 @@ bool Ocean::LoadContent()
     convolutionRootParameters[1].InitAsDescriptorTable(1, &convolutionSRVRange);   
     convolutionRootParameters[2].InitAsDescriptorTable(1, &convolutionUAVRange);   
 
+    // brdf 
+    CD3DX12_DESCRIPTOR_RANGE1 brdfUAVRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+    CD3DX12_ROOT_PARAMETER1 brdfLutRootParameters[1];
+    brdfLutRootParameters[0].InitAsDescriptorTable(1, &brdfUAVRange);
+
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
     m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso");
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
     m_convolutionPSO = std::make_shared<ConvolutionCompute>(L"/ibl_convolution.cso", convolutionRootParameters, _countof(convolutionRootParameters));
+    m_specularConvolutionPSO = std::make_shared<ConvolutionCompute>(L"/ibl_specular.cso", convolutionRootParameters, _countof(convolutionRootParameters));
+    m_brdfLutPSO = std::make_shared<ConvolutionCompute>(L"/brdf_lut.cso", brdfLutRootParameters, _countof(brdfLutRootParameters));
     m_skyboxPSO = std::make_shared<SkyboxPSO>(L"/skybox_VS.cso", L"/skybox_PS.cso");
     m_sdrPSO = std::make_shared<SDRPSO>(L"/HDR_to_SDR_VS.cso", L"/HDR_to_SDR_PS.cso");
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
@@ -296,16 +303,56 @@ bool Ocean::LoadContent()
     auto computeCommandList = computeQueue.GetCommandList();
 
     DXGI_FORMAT irradianceFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: less precision might also be fine
+    DXGI_FORMAT brdfLutFormat = DXGI_FORMAT_R16G16_FLOAT; // TODO: less precision might also be fine
+    uint32_t specularMipLevels = 5;
+    uint32_t brdfTextureSize = 512;
 
     auto irradianceDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_convolutionPlaneSize, m_convolutionPlaneSize, 6);
     irradianceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    auto iblSpecularDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, brdfTextureSize, brdfTextureSize, 6, specularMipLevels);
+    iblSpecularDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    auto BRDFDesc = CD3DX12_RESOURCE_DESC::Tex2D(brdfLutFormat, brdfTextureSize, brdfTextureSize);
+    BRDFDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
 	// diffuse irradiance texture
     m_diffuseIrradianceMap = Application::Get().CreateTexture(irradianceDesc);
     m_diffuseIrradianceMap->SetName(L"Diffuse Irradiance Texture");
+    // IBL specular texture
+    m_specularIrradianceMap = Application::Get().CreateTexture(iblSpecularDesc);
+    m_specularIrradianceMap->SetName(L"Specular Irradiance Texture");
+    // BRDF LUT
+    m_brdfLUT = Application::Get().CreateTexture(BRDFDesc);
+    m_brdfLUT->SetName(L"BRDF LUT ");
+
+    // Create cubemap SRVs for IBL
+    D3D12_SHADER_RESOURCE_VIEW_DESC cubeSRVDesc = {};
+    cubeSRVDesc.Format = irradianceFormat;
+    cubeSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    cubeSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    cubeSRVDesc.TextureCube.MostDetailedMip = 0;
+    cubeSRVDesc.TextureCube.MipLevels = 1;
+
+	m_diffuseCubemapSRV = Application::Get().CreateShaderResourceView(m_diffuseIrradianceMap, &cubeSRVDesc);
+
+    cubeSRVDesc.TextureCube.MipLevels = specularMipLevels;
+    m_specularCubemapSRV = Application::Get().CreateShaderResourceView(m_specularIrradianceMap, &cubeSRVDesc);
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC brdfSRVDesc = {};
+    brdfSRVDesc.Format = DXGI_FORMAT_R16G16_FLOAT;
+    brdfSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    brdfSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    brdfSRVDesc.Texture2D.MostDetailedMip = 0;
+    brdfSRVDesc.Texture2D.MipLevels = 1;
+
+    m_brdfLUTSRV = app.CreateShaderResourceView(m_brdfLUT, &brdfSRVDesc);
 
     // Convolution IBL
     m_convolutionPSO->Dispatch(computeCommandList, m_skyboxCubemapSRV, m_diffuseIrradianceMap, m_convolutionPlaneSize, m_convolutionSampleCount);
+    // specular
+    // computeCommandList->TransitionBarrier(m_specularIrradianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    m_specularConvolutionPSO->DispatchSpecular(computeCommandList, m_skyboxCubemapSRV, m_specularIrradianceMap, brdfTextureSize, 4096, specularMipLevels);
+    // LUT
+    m_brdfLutPSO->DispatchBRDFLUT(computeCommandList, m_brdfLUT, brdfTextureSize);
 
 
     DXGI_FORMAT HDRbackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
@@ -380,7 +427,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_swapChain->WaitForSwapChain();
 
     // Update Camera
-    float speedMultiplier = (m_shift ? 64.0f : 8.0f);
+    float speedMultiplier = (m_shift ? 64.0f : 2.0f);
     XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     m_camera.Translate(cameraTranslate, Space::LOCAL);
@@ -461,8 +508,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
     // Set the skybox SRV before rendering
-    m_unlitPSO->SetDiffuseIBL(m_skyboxCubemapSRV);
-    m_displacementPSO->SetDiffuseIBL(m_skyboxCubemapSRV);
+    m_unlitPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
+    m_displacementPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
 
     float time = static_cast<float>(e.totalTime);
 
@@ -542,7 +589,7 @@ void Ocean::OnRender()
 
         // Set Ocean Textures
         m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
-
+        
         m_displacementPSO->SetDirectionalLights(m_directionalLights);
         m_displacementPSO->SetPointLights(m_pointLights);
 

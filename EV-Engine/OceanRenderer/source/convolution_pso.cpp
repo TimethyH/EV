@@ -10,6 +10,16 @@
 #include "DX12/root_signature.h"
 #include "utility/helpers.h"
 
+// The min/max macros conflict with like-named member functions.
+// Only use std::min and std::max defined in <algorithm>.
+#if defined(min)
+#undef min
+#endif
+
+#if defined(max)
+#undef max
+#endif
+
 ConvolutionCompute::ConvolutionCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams)
 {
     // Get the folder of the running executable.
@@ -91,3 +101,56 @@ void ConvolutionCompute::Dispatch(std::shared_ptr<CommandList> commandList, cons
 
 }
 
+void ConvolutionCompute::DispatchSpecular(
+    std::shared_ptr<CommandList> commandList,
+    const std::shared_ptr<ShaderResourceView>& envCubemap,
+    const std::shared_ptr<Texture>& specularMap,
+    uint32_t cubemapSize,
+    uint32_t sampleCount,
+    uint32_t mipLevels)
+{
+    commandList->SetPipelineState(m_pipelineStateObject);
+    commandList->SetComputeRootSignature(m_rootSignature);
+
+    for (uint32_t mip = 0; mip < mipLevels; mip++)
+    {
+        uint32_t mipSize = cubemapSize >> mip;
+        if (mipSize < 1) mipSize = 1;
+
+        float roughness = (float)mip / (float)(mipLevels - 1);
+
+        struct SpecularCB
+        {
+            uint32_t cubemapSize;
+            uint32_t sampleCount;
+            float roughness;
+            float padding;
+        } cb = { mipSize, sampleCount, roughness, 0.0f };
+
+        commandList->SetCompute32BitConstants(0, cb);
+
+        // Bind source environment cubemap SRV
+        commandList->SetShaderResourceView(1, 0, envCubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+
+        // Bind UAV for this specific mip slice
+        commandList->SetUnorderedAccessView(2, 0, specularMap, mip); // <-- mip index here
+
+        uint32_t groups = std::max(1u, (mipSize + 16 - 1) / 16);
+        commandList->Dispatch(groups, groups, 6);
+    }
+}
+
+void ConvolutionCompute::DispatchBRDFLUT(
+    std::shared_ptr<CommandList> commandList,
+    const std::shared_ptr<Texture>& brdfLUT,
+    uint32_t lutSize)
+{
+    commandList->SetPipelineState(m_pipelineStateObject);
+    commandList->SetComputeRootSignature(m_rootSignature);
+
+    // No cbuffer needed, but UAV at root param 0
+    commandList->SetUnorderedAccessView(0, 0, brdfLUT, 0);
+
+    uint32_t groups = (lutSize + 16 - 1) / 16;
+    commandList->Dispatch(groups, groups, 1); // Z=1, not a cubemap
+}

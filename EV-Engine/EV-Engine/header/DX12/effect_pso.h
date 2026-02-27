@@ -172,8 +172,9 @@ namespace EV
         }
 
         // Apply this effect to the rendering pipeline.
-        void Apply(CommandList& commandList) override; 
-        void SetDiffuseIBL(std::shared_ptr<ShaderResourceView> inTexture);
+        void Apply(CommandList& commandList) override;
+        void SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, std::shared_ptr<ShaderResourceView> specular,
+                            std::shared_ptr<ShaderResourceView> lut);
 
 
     private:
@@ -189,9 +190,12 @@ namespace EV
 
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
+        std::shared_ptr<ShaderResourceView> m_defaultCubeSRV;
 
         // IBL textures
         std::shared_ptr<ShaderResourceView> m_diffuseIBL;
+        std::shared_ptr<ShaderResourceView> m_specularIBL;
+        std::shared_ptr<ShaderResourceView> m_lutIBL;
 
         // If the command list changes, all parameters need to be rebound.
         CommandList* m_pPreviousCommandList;

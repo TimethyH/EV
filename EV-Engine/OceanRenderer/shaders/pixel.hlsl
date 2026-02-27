@@ -1,8 +1,13 @@
 struct PixelShaderInput
 {
     float4 PositionVS : POSITION;
+    float4 PositionWS : TEXCOORD1;
     float3 NormalVS : NORMAL;
-    float2 TexCoord : TEXCOORD;
+    float3 NormalWS : TEXCOORD2;
+    float3 TangentWS : TEXCOORD3;
+    float3 BitangentWS : TEXCOORD4;
+    float2 TexCoord : TEXCOORD0;
+    float4 Position : SV_Position;
 };
 
 
@@ -125,6 +130,7 @@ cbuffer MaterialCB : register(b0, space1)
 struct Camera
 {
     float3 Position;
+    float pad;
 };
 
 cbuffer CameraCB : register(b1, space0)
@@ -153,10 +159,10 @@ float PBRCalculateGeometryGGX(float NdotV, float roughness)
 {
     // Roughness here is dependent on IBL or Direct lighting.
     // This implementation will only take into account Direct Lighting.
-    float kDirect = ((roughness + 1.0f) * (roughness + 1.0f)) / 8.0f;
-    // float kIBL = (roughness * roughness) * 0.5f;
+    // float kDirect = ((roughness + 1.0f) * (roughness + 1.0f)) / 8.0f;
+    float kIBL = (roughness * roughness) * 0.5f;
     float nom = NdotV;
-    float denom = NdotV * (1.0f - kDirect) + kDirect;
+    float denom = NdotV * (1.0f - kIBL) + kIBL;
     denom = max(denom, 0.000001f); // prevent / 0
     return nom / denom;
 }
@@ -173,26 +179,26 @@ float PBRCalculateGeometry(const float3 normal, const float3 viewDir, const floa
 }
 
 
-float3 fresnelSchlick(float cosTheta, float3 F0, float roughness)
+float3 fresnelSchlick(float cosTheta, float3 F0)
 {
+    return F0 + (float3(1.0f, 1.0f, 1.0f) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
 
-   // #ifdef IBL
+float3 fresnelSchlickRoughness(float cosTheta, float3 F0, float roughness)
+{
     return F0 + (max(float3(1.0 - roughness, 1.0 - roughness, 1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
-   // #else
-   // return F0 + (float3(1.0f) - F0) * pow(1.0f - cosTheta, 5.0f);
 }
 
-float3 PBRCalculateFresnel(const float cosTheta, float3 F0, float roughness)
+float3 PBRCalculateFresnel(const float cosTheta, float3 F0)
 {
-
-	//float3 F0 = float3(0.04f);  // Base reflectivity for dielectrics
-
-    // Calculate dot product between the half vector and view direction
-    // float HdotV = max(dot(view, normal), 0.0f);
-    float3 fresnel = fresnelSchlick(cosTheta, F0, roughness);
-
-    return fresnel;
+    return fresnelSchlick(cosTheta, F0);
 }
+
+float3 PBRCalculateFresnelIBL(const float cosTheta, float3 F0, float roughness)
+{
+    return fresnelSchlickRoughness(cosTheta, F0, roughness);
+}
+
 
 float3 PBRDiffuse(float3 color)
 {
@@ -219,26 +225,46 @@ Texture2D NormalTexture : register(t8);
 Texture2D BumpTexture : register(t9);
 Texture2D OpacityTexture : register(t10);
 Texture2D MetallicRoughness : register(t11);
-TextureCube<float4> environmentMap : register(t12);
+// IBL
+TextureCube<float4> diffuseMap : register(t12);
+TextureCube<float4> specularMap : register(t13);
+Texture2D<float2> brdfLUT : register(t14);
 
 
-SamplerState linearSampler : register(s0);
+SamplerState anisotropicSampler : register(s0); // for material textures
+SamplerState linearClampSampler : register(s1); // for IBL
 
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float3 albedo = DiffuseTexture.Sample(linearSampler, IN.TexCoord).rgb;
-    float4 ao = AmbientTexture.Sample(linearSampler, IN.TexCoord);
-    float3 normalTex = NormalTexture.Sample(linearSampler, IN.TexCoord).xyz  * 2.0f - 1.0f;
-    float4 metallicRough = MetallicRoughness.Sample(linearSampler, IN.TexCoord);
-    float4 emissive = EmissiveTexture.Sample(linearSampler, IN.TexCoord);
+    float3 albedo = DiffuseTexture.Sample(anisotropicSampler, IN.TexCoord).rgb;
+    float4 ao = AmbientTexture.Sample(anisotropicSampler, IN.TexCoord);
+    float3 normalTex = NormalTexture.Sample(anisotropicSampler, IN.TexCoord).xyz * 2.0f - 1.0f;
+    float4 metallicRough = MetallicRoughness.Sample(anisotropicSampler, IN.TexCoord);
+    float4 emissive = EmissiveTexture.Sample(anisotropicSampler, IN.TexCoord);
     float PI = 3.14159265358979323846264338327950288f;
 
     float3 ambientColor = float3(0.03f, 0.03f, 0.03f);
 
-    normalTex = normalize(IN.NormalVS);
-    // return float4(1.0, 0.0, 0.0, 1.0);
-    // return float4(diffuse); // Removed unnecessary parentheses
+    float3 T = normalize(IN.TangentWS);
+    float3 B = normalize(IN.BitangentWS);
+    float3 N = normalize(IN.NormalWS);
+    float3x3 TBN = float3x3(T, B, N);
+
+    float3 normalWS;
+    if (material.HasNormalTexture)
+    {
+        float3 normalTex = NormalTexture.Sample(anisotropicSampler, IN.TexCoord).xyz * 2.0f - 1.0f;
+        float3 T = normalize(IN.TangentWS);
+        float3 B = normalize(IN.BitangentWS);
+        float3 N = normalize(IN.NormalWS);
+        float3x3 TBN = float3x3(T, B, N);
+        normalWS = normalize(mul(normalTex, TBN));
+    }
+    else
+    {
+        normalWS = normalize(IN.NormalWS);
+    }
 
     // PBR stuff
  
@@ -248,62 +274,56 @@ float4 main(PixelShaderInput IN) : SV_Target
     float roughness = metallicRough.g;
     float metallic = metallicRough.b;
 		
-    float3 viewDir = normalize(-IN.PositionVS.xyz);
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
     F0 = F0 * (1.0f - metallic) + albedo * metallic;
  
-    {
-     // -------------------------------
-         // Point Light Contribution
-         // -------------------------------
-        float3 lightPos = PointLights[0].PositionVS;
-        float3 pointLightDir = normalize(lightPos - IN.PositionVS);
-        float3 halfVec = normalize(viewDir + pointLightDir);
-        float dist = length(lightPos - IN.PositionVS);
-        float HdotV = max(dot(halfVec, viewDir), 0.0);
-        float attenuation = 1.0f / (dist * dist);
-        // float3 pointLightColor = pLight.color * attenuation;
-        float normDist = PBRCalculateNormalDistribution(roughness, normalTex, halfVec);
-        float geometryFunc = PBRCalculateGeometry(normalTex, viewDir, pointLightDir, roughness);
-        float3 fresnel = PBRCalculateFresnel(HdotV, F0, roughness);
-        float3 kd = float3(1.0f, 1.0f, 1.0f) - fresnel;
-        kd *= float3(1.0f, 1.0f, 1.0f) - metallic;
-        float3 lightColor = PointLights[0].Color.xyz * attenuation;
-        float intensity = 1.0f;
-        pointLightBRDF += (kd * albedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, pointLightDir, normalTex))
-                                 * lightColor * intensity * max(dot(pointLightDir, normalTex), 0.0f);
-    }
- 
- 
-    // -------------------------------
-    // Directional Light Contribution
-    // -------------------------------
-    float3 dirLightDir = normalize(-DirectionalLights[0].DirectionVS.xyz);
-    float3 halfVec = normalize(viewDir + dirLightDir);
-    float HdotV = max(dot(halfVec, viewDir), 0.0);
-    
-    float normDist = PBRCalculateNormalDistribution(roughness, normalTex, halfVec);
-    float geometryFunc = PBRCalculateGeometry(normalTex, viewDir, dirLightDir, roughness);
-    float3 fresnel = PBRCalculateFresnel(HdotV, F0, roughness);
-    float3 kd = float3(1.0f,1.0f,1.0f) - fresnel;
-    kd *= float3(1.0f,1.0f,1.0f) - metallic;
-    float intensity = 1.0f;
- //  // Directional Light BRDF calculation
-    directionalLightBRDF += (kd * albedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDir, dirLightDir, normalTex))
-                                * DirectionalLights[0].Color * intensity * max(dot(dirLightDir, normalTex), 0.0f);
- 
- 
-    // return float4(roughness, roughness, roughness, roughness);
+    float3 viewDirWS = normalize(camera.Position - IN.PositionWS.xyz);
 
-    // return float4(normalTex * 0.5 + 0.5, 1.0);
+// Point light
+    float3 lightPosWS = PointLights[0].PositionWS.xyz;
+    float3 pointLightDir = normalize(lightPosWS - IN.PositionWS.xyz);
+    float3 halfVec = normalize(viewDirWS + pointLightDir);
+    float dist = length(lightPosWS - IN.PositionWS.xyz);
+    float HdotV = max(dot(halfVec, viewDirWS), 0.0);
+    float attenuation = 1.0f / (dist * dist);
+    float normDist = PBRCalculateNormalDistribution(roughness, normalWS, halfVec);
+    float geometryFunc = PBRCalculateGeometry(normalWS, viewDirWS, pointLightDir, roughness);
+    float3 fresnel = PBRCalculateFresnel(HdotV, F0);
+    float3 kd = float3(1.0f, 1.0f, 1.0f) - fresnel;
+    kd *= float3(1.0f, 1.0f, 1.0f) - metallic;
+    float3 lightColor = PointLights[0].Color.xyz * attenuation;
+    pointLightBRDF += (kd * albedo / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDirWS, pointLightDir, normalWS))
+                 * lightColor * max(dot(pointLightDir, normalWS), 0.0f);
 
-    float3 irradiance = environmentMap.Sample(linearSampler, normalTex).rgb;
+// Directional light
+    float3 dirLightDir = normalize(-DirectionalLights[0].DirectionWS.xyz);
+    float3 halfVecDir = normalize(viewDirWS + dirLightDir);
+    float HdotVDir = max(dot(halfVecDir, viewDirWS), 0.0);
+    float normDistDir = PBRCalculateNormalDistribution(roughness, normalWS, halfVecDir);
+    float geometryFuncDir = PBRCalculateGeometry(normalWS, viewDirWS, dirLightDir, roughness);
+    float3 fresnelDir = PBRCalculateFresnel(HdotVDir, F0);
+    float3 kdDir = (float3(1.0f, 1.0f, 1.0f) - fresnelDir) * (1.0f - metallic);
+    directionalLightBRDF += (kdDir * albedo / PI + PBRSpecular(normDistDir, geometryFuncDir, fresnelDir, viewDirWS, dirLightDir, normalWS))
+                       * DirectionalLights[0].Color * max(dot(dirLightDir, normalWS), 0.0f);
+ 
+
+    float3 R = reflect(-viewDirWS, normalWS);
+    const float MAX_REFLECTION_LOD = 4.0f;
+    float3 specularColor = specularMap.SampleLevel(linearClampSampler, R, roughness * MAX_REFLECTION_LOD);
+
+
+    float NdotV = max(dot(normalWS, viewDirWS), 0.0f);
+    float2 lutUV = float2(NdotV, roughness);
+    float2 envBRDF = brdfLUT.Sample(linearClampSampler, lutUV).rg;
+
+    float3 irradiance = diffuseMap.Sample(linearClampSampler, normalWS).rgb;
     float3 diffuse = irradiance * albedo;
-    float3 ambient = (kd * diffuse) * ao.r;
+    float3 fresnelIBL = PBRCalculateFresnelIBL(NdotV, F0, roughness);
+    float3 kd_ibl = (float3(1.0f, 1.0f, 1.0f) - fresnelIBL) * (1.0f - metallic);
+    float3 specular = specularColor * (fresnelIBL * envBRDF.x + envBRDF.y);
+    float3 ambient = (kd_ibl * diffuse + specular) * ao.r;
 
      // Combine ambient, point light, and directional light contributions
     BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
-    // BRDF += emissive + pointLightBRDF + directionalLightBRDF;
-    // BRDF = ambient;
     return float4(BRDF, 1.0f);
 }

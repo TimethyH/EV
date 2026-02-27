@@ -26,6 +26,12 @@ public:
     // ~OceanCompute();
 
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount);
+    void DispatchSpecular(std::shared_ptr<CommandList> commandList,
+                          const std::shared_ptr<ShaderResourceView>& envCubemap,
+                          const std::shared_ptr<Texture>& specularMap, uint32_t cubemapSize, uint32_t sampleCount,
+                          uint32_t mipLevels);
+    void DispatchBRDFLUT(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& brdfLUT,
+                         uint32_t lutSize);
 
     enum RootParameters
     {

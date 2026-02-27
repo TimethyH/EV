@@ -59,5 +59,7 @@
     <FxCompile Include="shaders\pixel.hlsl" />
     <FxCompile Include="shaders\vertex.hlsl" />
     <FxCompile Include="shaders\ibl_convolution.hlsl" />
+    <FxCompile Include="shaders\ibl_specular.hlsl" />
+    <FxCompile Include="shaders\brdf_lut.hlsl" />
   </ItemGroup>
 </Project>
