@@ -80,7 +80,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
     if (DTid.x >= cubemapSize || DTid.y >= cubemapSize)
         return;
 
-    float3 N = float3(DTid.xy / float(cubemapSize) - 0.5f, 0.5f);
+    float2 uv = (float2(DTid.xy) + 0.5f) / float(cubemapSize) * 2.0f - 1.0f;
+    float3 N = float3(uv, 1.0f);
     N = normalize(mul(RotateUV[DTid.z], N));
 
     float3 R = N;

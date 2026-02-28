@@ -225,7 +225,7 @@ namespace EV
         /**
          * Generate a cubemap texture from a panoramic (equirectangular) texture.
          */
-        void PanoToCubemap(const std::shared_ptr<Texture>& cubemapTexture, const std::shared_ptr<Texture>& panoTexture);
+        void PanoToCubemap(const std::shared_ptr<Texture>& cubemapTexture, const std::shared_ptr<Texture>& panoTexture, UINT mip);
 
         /**
          * Copy subresource data to a texture.

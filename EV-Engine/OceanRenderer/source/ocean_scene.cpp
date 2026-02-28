@@ -211,7 +211,7 @@ bool Ocean::LoadContent()
     m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, false);
 
     m_skybox = commandList->CreateCube(1.0f, true);
-    m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/cloudSky.hdr", true);
+    m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/bay2k.hdr", true);
 
     // Create a cubemap for the HDR panorama.
     auto cubemapDesc = m_skyboxTexture->GetD3D12ResourceDesc();
@@ -223,7 +223,7 @@ bool Ocean::LoadContent()
     m_skyboxCubemap->SetName(L"Cloud Cubemap");
 
     // Convert the 2D panorama to a 3D cubemap.
-    commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture);
+    commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture, 2); // tweak mip quality to blur HDR
 
     // m_cubeMesh = commandList->CreateCube();
     m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");

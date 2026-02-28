@@ -273,6 +273,9 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 BRDF = 0;
     float roughness = metallicRough.g;
     float metallic = metallicRough.b;
+
+    // return float4(roughness, roughness, roughness, 1.0);
+		
 		
     float3 F0 = float3(0.04f, 0.04f, 0.04f);
     F0 = F0 * (1.0f - metallic) + albedo * metallic;

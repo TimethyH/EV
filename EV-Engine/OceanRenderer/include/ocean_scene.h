@@ -249,6 +249,7 @@ private:
 	std::shared_ptr<EV::ShaderResourceView> m_diffuseCubemapSRV; 
 	std::shared_ptr<EV::ShaderResourceView> m_specularCubemapSRV; 
 	std::shared_ptr<EV::ShaderResourceView> m_brdfLUTSRV;
+	std::shared_ptr<ShaderResourceView> m_skyboxTextureMip1; 
 
 	// Root signatures
 	std::shared_ptr<RootSignature> m_skyboxSignature;

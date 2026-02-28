@@ -19,7 +19,7 @@ enum TonemapMethod : uint32_t
 struct TonemapParameters
 {
     TonemapParameters()
-        : TonemapMethod(TM_Reinhard)
+        : TonemapMethod(TM_ACESFilmic)
         , Exposure(0.0f)
         , MaxLuminance(1.0f)
         , K(1.0f)

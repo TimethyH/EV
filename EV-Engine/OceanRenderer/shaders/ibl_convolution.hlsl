@@ -63,7 +63,8 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID)
     }
 
     // Get the worldspace normal for the
-    float3 N = float3(texCoord.xy / float(cubemapSize) - 0.5f, 0.5f);
+    float2 uv = (float2(texCoord.xy) + 0.5f) / float(cubemapSize) * 2.0f - 1.0f;
+    float3 N = float3(uv, 1.0f);
     N = normalize(mul(RotateUV[texCoord.z], N));
 
     float3 T;
@@ -72,7 +73,7 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID)
 
     // Riemann sum
     float3 irradiance = 0;
-    float sampleDelta = (PI / 2.0f) / float(sampleCount);
+    float sampleDelta = 0.025;
     uint numSamples = 0;
 
     // phi  = azimuth, which is the horizontal angle
