@@ -61,6 +61,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 	[ ] Change skybox + mip lvl
 	[ ] Better ocean slider control
 	[ ] Adjust camera speed
+	[ ] Adjust foam parameters
 [ ] Write blogpost
 [ ]
 [ ]

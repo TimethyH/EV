@@ -698,8 +698,8 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
         {
 
             ImGui::MenuItem("Ocean Parameters", nullptr, &m_showOceanParams);
-            
-        	ImGui::MenuItem("Light Parameters", nullptr, &m_showLightParams);
+
+            ImGui::MenuItem("Light Parameters", nullptr, &m_showLightParams);
 
             ImGui::EndMenu();
         }
@@ -750,19 +750,24 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
     {
         bool paramsChanged = false;
 
+        auto SliderWithRelease = [&](auto&&... args) -> bool {
+            ImGui::SliderFloat(args...);
+            return ImGui::IsItemDeactivatedAfterEdit();
+            };
+
         ImGui::Separator();
         ImGui::Text("Wind");
-        paramsChanged |= ImGui::SliderFloat("Wind Speed", &m_jonswapParams.windSpeed, 0.0f, 100.0f);
-        paramsChanged |= ImGui::SliderFloat("Wind Direction", &m_jonswapParams.windDirection, 0.0f, 360.0f);
-        paramsChanged |= ImGui::SliderFloat("Fetch", &m_jonswapParams.fetch, 1000.0f, 1000000.0f);
+        paramsChanged |= SliderWithRelease("Wind Speed", &m_jonswapParams.windSpeed, 0.0f, 100.0f);
+        paramsChanged |= SliderWithRelease("Wind Direction", &m_jonswapParams.windDirection, 0.0f, 360.0f);
+        paramsChanged |= SliderWithRelease("Fetch", &m_jonswapParams.fetch, 1000.0f, 1000000.0f);
 
         ImGui::Separator();
         ImGui::Text("Spectrum");
-        paramsChanged |= ImGui::SliderFloat("Scale", &m_jonswapParams.scale, 0.0f, 5.0f);
-        paramsChanged |= ImGui::SliderFloat("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f);
-        paramsChanged |= ImGui::SliderFloat("Swell", &m_jonswapParams.swell, 0.0f, 1.0f);
-        paramsChanged |= ImGui::SliderFloat("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f);
-        paramsChanged |= ImGui::SliderFloat("Short Waves Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f);
+        paramsChanged |= SliderWithRelease("Scale", &m_jonswapParams.scale, 0.0f, 5.0f);
+        paramsChanged |= SliderWithRelease("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f);
+        paramsChanged |= SliderWithRelease("Swell", &m_jonswapParams.swell, 0.0f, 1.0f);
+        paramsChanged |= SliderWithRelease("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f);
+        paramsChanged |= SliderWithRelease("Short Waves Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f);
 
         ImGui::Separator();
         ImGui::Text("Derived (read-only)");
@@ -771,7 +776,6 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 
         if (paramsChanged)
         {
-            // Recompute derived params and regenerate H0
             m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
             m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
             m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
@@ -780,7 +784,6 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
             auto commandList = commandQueue.GetCommandList();
             GenerateH0(commandList);
             commandQueue.ExecuteCommandList(commandList);
-            // commandQueue.Flush();
         }
 
         ImGui::End();
@@ -815,7 +818,6 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 
     m_GUI->Render(commandList, renderTarget);
 }
-
 
 void Ocean::UnloadContent()
 {
