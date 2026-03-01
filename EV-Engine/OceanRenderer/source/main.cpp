@@ -59,7 +59,7 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 [ ] Fix foam calculation
 [ ] Add more ImGUI features
 	[ ] Change skybox + mip lvl
-	[ ] Better ocean slider control
+	[ ] keyboard input support
 	[ ] Adjust camera speed
 	[ ] Adjust foam parameters
 [ ] Write blogpost
