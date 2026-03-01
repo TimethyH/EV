@@ -57,10 +57,11 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 	[ ] Correct PBR ( NDF, sub surface scatter, roughness )
 [ ] Ocean cascades. (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
 [ ] Fix foam calculation
-[ ]
-[ ]
-[ ]
-[ ]
+[ ] Add more ImGUI features
+	[ ] Change skybox + mip lvl
+	[ ] Better ocean slider control
+	[ ] Adjust camera speed
+[ ] Write blogpost
 [ ]
 [ ]
 [ ]
@@ -104,16 +105,10 @@ Scene
 Engine
 	[ ] ECS oriented engine
 	[ ] Add custom profiler. (Y3)
-	[ ] Setup ImGUI in a way, so it can adjust metrics of the scene at runtime (so you dont have to reload for every iteration)
-	[ ] Make model assets downloadable with a batchfile
 
 
 Features
-	[ ] PBR
-	[ ] IBL
 	[ ] Cascaded Shadowmaps
-	[ ] Ocean rendering using FFT
-	[ ] NormalMapping
 	[ ]
 
 
