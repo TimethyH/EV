@@ -3,7 +3,8 @@ struct PixelShaderInput
     float3 PositionWS : POSITION_WS;
     float4 PositionVS : POSITION;
     float3 NormalVS : NORMAL;
-    float2 TexCoord : TEXCOORD;
+    float2 TexCoord : TEXCOORD0;
+    float WaveHeight : TEXCOORD1;
 };
 
 struct DirectionalLight
@@ -14,6 +15,7 @@ struct DirectionalLight
     float3 Position;
     float Ambient;
 };
+
 
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
 
@@ -31,6 +33,16 @@ cbuffer CameraCB : register(b1, space0)
 {
     float3 cameraPosition;
     float camPad;
+}
+
+cbuffer OceanCB : register(b2)
+{
+    float4 oceanColor;
+    float4 scatteredColor;
+    float heightModifier;
+    float peakScatterIntensity;
+    float IBLIntensity;
+    float pad1;
 }
 
 
@@ -123,7 +135,6 @@ float4 main(PixelShaderInput IN) : SV_Target
 
     // TODO: add ImGUi for color change during runtime
     // float3 shallowColor = float3(0.0f, 0.2f, 0.35f);
-    float3 shallowColor = float3(0.0f, 0.1f, 0.25f);
 
     // PBR stuff
     float3 viewDirWS = normalize(cameraPosition - IN.PositionWS.xyz);
@@ -135,7 +146,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float metallic = 0.0f;
 		
     float3 F0 = float3(0.02f, 0.02f, 0.02f);
-    F0 = F0 * (1.0f - metallic) + shallowColor * metallic;
+    F0 = F0 * (1.0f - metallic) + oceanColor * metallic;
  
     // {
     //  // -------------------------------
@@ -174,7 +185,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     kd *= float3(1.0f, 1.0f, 1.0f) - metallic;
     float intensity = 1.0f;
    // Directional Light BRDF calculation
-    directionalLightBRDF += (kd * shallowColor / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDirWS, dirLightDir, normal))
+    directionalLightBRDF += (kd * oceanColor / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDirWS, dirLightDir, normal))
                                 * DirectionalLights[0].Color * intensity * max(dot(dirLightDir, normal), 0.0f);
 
 
@@ -189,16 +200,21 @@ float4 main(PixelShaderInput IN) : SV_Target
     float2 envBRDF = brdfLUT.Sample(linearClampSampler, lutUV).rg;
 
     float3 irradiance = diffuseMap.Sample(linearClampSampler, normal).rgb;
-    float3 diffuse = irradiance * shallowColor;
+    float3 diffuse = irradiance * oceanColor;
     float3 fresnelIBL = PBRCalculateFresnelIBL(NdotV, F0, roughness);
     float3 kd_ibl = (float3(1.0f, 1.0f, 1.0f) - fresnelIBL) * (1.0f - metallic);
     float3 specular = specularColor * (fresnelIBL * envBRDF.x + envBRDF.y);
     float3 ambient = (kd_ibl * diffuse + specular);
 
+    // SubSurfaceScatter
+	// https://github.com/GarrettGunnell/Water/blob/1673a12e796c5745aea6fa26eda53261da8efa80/Assets/Shaders/FFTWater.shader
+    float H = max(IN.WaveHeight, 0.0f) * heightModifier;
+    float k1 = peakScatterIntensity * H * pow(saturate(dot(dirLightDir, -viewDirWS)), 4.0f) * pow(0.5f - 0.5f * dot(dirLightDir, normal), 3.0f);
 
+    float3 sss = (1 - fresnel) * k1 * scatteredColor * DirectionalLights[0].Color;
 
      // Combine ambient, point light, and directional light contributions
-    BRDF += ambient + pointLightBRDF + directionalLightBRDF;
+    BRDF += sss + ambient * IBLIntensity + pointLightBRDF + directionalLightBRDF;
 	// Add Foam
     float3 foamColor = float3(1.0f, 1.0f, 1.0f);
 

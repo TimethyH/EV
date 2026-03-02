@@ -51,6 +51,7 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
     // rootParameters[RootParameters::SpotLights].InitAsShaderResourceView(1, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_ALL);
+    rootParameters[RootParameters::RenderParams].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
@@ -208,6 +209,8 @@ void EV::OceanPSO::Apply(CommandList& commandList)
     {
         commandList.SetGraphicsDynamicStructuredBuffer(RootParameters::DirectionalLights, m_directionalLights);
     }
+
+    commandList.SetGraphicsDynamicConstantBuffer(RootParameters::RenderParams, sizeof(OceanRenderParams), &m_oceanRenderParams);
 
     // if (m_dirtyFlags & (DF_PointLights | DF_SpotLights | DF_DirectionalLights))
     // {

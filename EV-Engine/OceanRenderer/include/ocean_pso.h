@@ -93,6 +93,17 @@ namespace EV
         inline void BindTexture(CommandList& commandList, uint32_t offset,
             const std::shared_ptr<Texture>& texture);
 
+        struct alignas(16) OceanRenderParams
+        {
+            DirectX::XMFLOAT4 oceanrColor = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+            DirectX::XMFLOAT4 scatterColor = DirectX::XMFLOAT4(0.0f, 0.0f, 0.0f, 0.0f);
+            float heightMod = 0.0f;
+            float peakScatterIntensity = 0.0f;
+            float IBLIntensity = 0.0f;
+            float pad1 = 0.0f;
+
+            // 48 bytes.
+        }m_oceanRenderParams;
 
 	private:
         enum RootParameters
@@ -117,6 +128,7 @@ namespace EV
             // Texture2D BumpTexture : register( t9 );
             // Texture2D OpacityTexture : register( t10 );
             Camera, // just its position
+            RenderParams,
             NumRootParameters
         };
         struct alignas(16) CameraData
@@ -124,6 +136,7 @@ namespace EV
             DirectX::XMFLOAT3 position;
             float pad;
         };
+
 
 		std::shared_ptr<Texture> m_displacementTexture;
 		std::shared_ptr<Texture> m_slopeTexture;

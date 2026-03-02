@@ -23,8 +23,9 @@ struct VertexShaderOutput
     float3 PositionWS : POSITION_WS;
     float4 PositionVS : POSITION;
     float3 NormalVS : NORMAL;
-    float2 TexCoord : TEXCOORD;
+    float2 TexCoord : TEXCOORD0;
     float4 Position : SV_Position;
+    float WaveHeight : TEXCOORD1;
 };
 
 Texture2D DisplacementTexture : register(t6);
@@ -45,6 +46,7 @@ VertexShaderOutput main(VertexPositionNormalTexture data)
     OUT.PositionWS = mul(matrixBuffer.modelMatrix, float4(displacedPosition, 1.0f)).xyz;
     OUT.NormalVS = mul((float3x3) matrixBuffer.invTransposeModelViewMatrix, data.Normal);
     OUT.TexCoord = data.TexCoord;
+    OUT.WaveHeight = displacement.y;
 
     return OUT;
 }

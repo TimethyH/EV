@@ -211,7 +211,7 @@ bool Ocean::LoadContent()
     m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, false);
 
     m_skybox = commandList->CreateCube(1.0f, true);
-    m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/bay2k.hdr", true);
+    m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
 
     // Create a cubemap for the HDR panorama.
     auto cubemapDesc = m_skyboxTexture->GetD3D12ResourceDesc();
@@ -354,6 +354,12 @@ bool Ocean::LoadContent()
     // LUT
     m_brdfLutPSO->DispatchBRDFLUT(computeCommandList, m_brdfLUT, brdfTextureSize);
 
+    // Update Render params for the ocean.
+    m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(0.0f, 0.5f, 0.4f, 1.0f);
+    m_displacementPSO->m_oceanRenderParams.oceanrColor = XMFLOAT4(0.0f, 0.15f, 0.3f, 1.0f);
+    m_displacementPSO->m_oceanRenderParams.IBLIntensity = 0.4f;
+    m_displacementPSO->m_oceanRenderParams.heightMod = 2.0f;
+    m_displacementPSO->m_oceanRenderParams.peakScatterIntensity = 0.6f;
 
     DXGI_FORMAT HDRbackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
@@ -769,6 +775,14 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
         paramsChanged |= SliderWithRelease("Swell", &m_jonswapParams.swell, 0.0f, 1.0f);
         paramsChanged |= SliderWithRelease("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f);
         paramsChanged |= SliderWithRelease("Short Waves Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f);
+
+        ImGui::Separator();
+        ImGui::Text("Lighting");
+        ImGui::ColorPicker4 ("Ocean Color", &m_displacementPSO->m_oceanRenderParams.oceanrColor.x);
+        ImGui::ColorPicker4("Scatter Color", &m_displacementPSO->m_oceanRenderParams.scatterColor.x);
+        SliderWithRelease("Height Modifier", &m_displacementPSO->m_oceanRenderParams.heightMod, 0.0f, 5.0f);
+        SliderWithRelease("Peak color intensity", &m_displacementPSO->m_oceanRenderParams.peakScatterIntensity, 0.0f, 1.0f);
+        SliderWithRelease("IBL intensity", &m_displacementPSO->m_oceanRenderParams.IBLIntensity, 0.0f, 1.0f);
 
         ImGui::Separator();
         ImGui::Text("Derived (read-only)");

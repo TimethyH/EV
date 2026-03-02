@@ -224,6 +224,7 @@ private:
 		float peakOmega = 0.0f;
 	}m_jonswapParams;
 
+
 	std::complex<float> H0[OCEAN_SUBRES][OCEAN_SUBRES];
 	std::complex<float> heightMap[OCEAN_SUBRES][OCEAN_SUBRES];
 	std::complex<float> H0Conj[OCEAN_SUBRES][OCEAN_SUBRES];
