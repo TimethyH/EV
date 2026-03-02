@@ -388,6 +388,11 @@ bool Ocean::LoadContent()
     m_renderTarget.AttachTexture(AttachmentPoint::Color0, m_HDRTexture);
     m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
 
+    // Set the skybox SRV before rendering
+    m_unlitPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
+    m_displacementPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
+
+
     auto convolutionFence = computeQueue.ExecuteCommandList(computeCommandList);
     computeQueue.WaitForFenceValue(convolutionFence);
 
@@ -507,10 +512,6 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
     // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
-    // Set the skybox SRV before rendering
-    m_unlitPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
-    m_displacementPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
-
     float time = static_cast<float>(e.totalTime);
 
     // Initialize point lights BEFORE the scene visitor
@@ -584,14 +585,14 @@ void Ocean::OnRender()
 
         // m_scene->Accept(visitor);
         XMMATRIX duckTranslation = XMMatrixTranslation(-4.0f, 0.0f, 0.0f);
-        m_boat->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
-        m_boat->Accept(visitor);
+        // m_boat->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
+        // m_boat->Accept(visitor);
 
         // Set Ocean Textures
         m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
         
-        m_displacementPSO->SetDirectionalLights(m_directionalLights);
-        m_displacementPSO->SetPointLights(m_pointLights);
+        // m_displacementPSO->SetDirectionalLights(m_directionalLights);
+        // m_displacementPSO->SetPointLights(m_pointLights);
 
 
 
@@ -609,9 +610,9 @@ void Ocean::OnRender()
         m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
         m_helmet->Accept(visitor);
 
-        m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
-
-        m_chessboard->Accept(visitor);
+        // m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
+        //
+        // m_chessboard->Accept(visitor);
 
     	// Visualize the point light as a small sphere
         for (const auto& l : m_pointLights)

@@ -43,8 +43,6 @@ public:
 
 private:
     std::shared_ptr<RootSignature> m_rootSignature;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_phasePSO;
-    Microsoft::WRL::ComPtr<ID3D12PipelineState> m_fftPSO;
     std::shared_ptr<PipelineStateObject> m_pipelineStateObject;
 
     // Think about: h0 spectrum, phase update output, 

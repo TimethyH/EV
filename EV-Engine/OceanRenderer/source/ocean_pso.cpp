@@ -38,7 +38,7 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 15, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 3);
 
 
     // clang-format off
@@ -164,41 +164,16 @@ void EV::OceanPSO::Apply(CommandList& commandList)
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::MatricesCB, m);
     }
 
-    if (m_dirtyFlags & DF_Material)
-    {
-        if (m_material)
-        {
-            const auto& materialProps = m_material->GetMaterialProperties();
-
-            commandList.SetGraphicsDynamicConstantBuffer(RootParameters::MaterialCB, materialProps);
-
-            using TextureType = Material::TextureType;
-
-            // TODO: cleanup, most of these (or all) textures are not being used for the ocean.
-
-            BindTexture(commandList, 0, m_material->GetTexture(TextureType::Ambient));
-            BindTexture(commandList, 1, m_material->GetTexture(TextureType::Emissive));
-            BindTexture(commandList, 2, m_material->GetTexture(TextureType::Diffuse));
-            BindTexture(commandList, 3, m_material->GetTexture(TextureType::Specular));
-            BindTexture(commandList, 4, m_material->GetTexture(TextureType::SpecularPower));
-            BindTexture(commandList, 5, m_material->GetTexture(TextureType::Normal));
-            BindTexture(commandList, 6, m_material->GetTexture(TextureType::Bump));
-            BindTexture(commandList, 7, m_material->GetTexture(TextureType::Opacity));
-            BindTexture(commandList, 8, m_material->GetTexture(TextureType::MetallicRoughness));
-
-        }
-
-    }
     // bind IBL textures
-    commandList.SetShaderResourceView(RootParameters::Textures, 9,
+    commandList.SetShaderResourceView(RootParameters::Textures, 0,
         m_diffuseIBL ? m_diffuseIBL : m_defaultCubeSRV,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    commandList.SetShaderResourceView(RootParameters::Textures, 10,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    commandList.SetShaderResourceView(RootParameters::Textures, 1,
         m_specularIBL ? m_specularIBL : m_defaultCubeSRV,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
-    commandList.SetShaderResourceView(RootParameters::Textures, 11,
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+    commandList.SetShaderResourceView(RootParameters::Textures, 2,
         m_lutIBL,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
     // if (m_dirtyFlags & DF_Camera)
     {
@@ -216,12 +191,12 @@ void EV::OceanPSO::Apply(CommandList& commandList)
         // TODO: use bind texture since this binds a default texture if invalid.
         D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 12, m_displacementTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 3, m_displacementTexture,
             shaderRead);
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 13, m_slopeTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 4, m_slopeTexture,
             shaderRead);
-        commandList.SetShaderResourceView(RootParameters::Textures, 14, m_foamTexture,
+        commandList.SetShaderResourceView(RootParameters::Textures, 5, m_foamTexture,
             shaderRead);
 
     // if (m_dirtyFlags & DF_SpotLights)

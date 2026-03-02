@@ -17,12 +17,12 @@ struct DirectionalLight
 
 StructuredBuffer<DirectionalLight> DirectionalLights : register(t2);
 
-TextureCube<float4> diffuseMap : register(t12);
-TextureCube<float4> specularMap : register(t13);
-Texture2D<float2> brdfLUT : register(t14);
+TextureCube<float4> diffuseMap : register(t3);
+TextureCube<float4> specularMap : register(t4);
+Texture2D<float2> brdfLUT : register(t5);
 
-Texture2D SlopeTexture : register(t16);
-Texture2D FoamTexture : register(t17);
+Texture2D SlopeTexture : register(t7);
+Texture2D FoamTexture : register(t8);
 
 SamplerState anisotropicSampler : register(s0); // for material textures
 SamplerState linearClampSampler : register(s1); // for IBL

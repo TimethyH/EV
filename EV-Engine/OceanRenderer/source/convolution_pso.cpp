@@ -133,7 +133,7 @@ void ConvolutionCompute::DispatchSpecular(
         commandList->SetShaderResourceView(1, 0, envCubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
         // Bind UAV for this specific mip slice
-        commandList->SetUnorderedAccessView(2, 0, specularMap, mip); // <-- mip index here
+        commandList->SetUnorderedAccessView(2, 0, specularMap, mip);
 
         uint32_t groups = std::max(1u, (mipSize + 16 - 1) / 16);
         commandList->Dispatch(groups, groups, 6);
@@ -152,5 +152,5 @@ void ConvolutionCompute::DispatchBRDFLUT(
     commandList->SetUnorderedAccessView(0, 0, brdfLUT, 0);
 
     uint32_t groups = (lutSize + 16 - 1) / 16;
-    commandList->Dispatch(groups, groups, 1); // Z=1, not a cubemap
+    commandList->Dispatch(groups, groups, 1);
 }
