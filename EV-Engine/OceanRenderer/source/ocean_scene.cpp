@@ -223,7 +223,7 @@ bool Ocean::LoadContent()
     m_skyboxCubemap->SetName(L"Cloud Cubemap");
 
     // Convert the 2D panorama to a 3D cubemap.
-    commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture, 2); // tweak mip quality to blur HDR
+    commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture, 0); // tweak mip quality to blur HDR
 
     // m_cubeMesh = commandList->CreateCube();
     m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
