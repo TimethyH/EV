@@ -72,12 +72,12 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												GENERAL
 
+[ ] Look for Tracy Profiler!
 [ ] Cleanup engine.
 [ ] Understand ins and outs of the engine, how it works in its entirety. (Make a good mindmap)
 [ ] Find all TODOs in the engine and adres them
 [ ] Code cleanup. Remove all unused comments, structure the layout of demo, cleanup the class instantiation functions in Application.cpp (all in the top)
 [ ] Add ImGui for proper UI support.
-[ ]
 [ ]
 [ ]
 [ ]
@@ -95,6 +95,8 @@ Ocean
 	[ ] Understand how the scene draws its meshes
 	[ ] Understand how the SDR and skybox pass work
 	[ ] Make a blogpost
+	[ ] Add refraction for transparancy
+	[ ] Add caustics
 	[ ] Make texture resolution DXGI_FORMAT_R16G16B16A16_FLOAT instead of 32bit
 	[ ] 
 

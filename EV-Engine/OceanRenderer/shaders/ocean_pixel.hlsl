@@ -217,7 +217,6 @@ float4 main(PixelShaderInput IN) : SV_Target
     BRDF += sss + ambient * IBLIntensity + pointLightBRDF + directionalLightBRDF;
 	// Add Foam
     float3 foamColor = float3(1.0f, 1.0f, 1.0f);
-
     BRDF = lerp(BRDF, foamColor, saturate(foam));
     return float4(BRDF, 1.0f);
 }

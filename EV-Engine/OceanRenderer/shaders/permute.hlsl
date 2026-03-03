@@ -27,6 +27,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     // permuting essentially makes sure that the FFT result is centered. (remmeber 3B1B video)
     float4 htildeDisplacement = Permute(displacementTexture.Load(int3(dispatchThreadID.xy, 0)), dispatchThreadID);
     float4 htildeSlope = Permute(slopeTexture[dispatchThreadID.xy], dispatchThreadID);
+    float foamData = foamTexture.Load(int3(dispatchThreadID.xy, 0));
 	
     float2 dxdz = htildeDisplacement.rg;
     float2 dydxz = htildeDisplacement.ba;
@@ -42,7 +43,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     float jacobian = (1.0f + Lambda.x * dxxdzz.x) * (1.0f + Lambda.y * dxxdzz.y) - Lambda.x * Lambda.y * dydxz.y * dydxz.y;
 	
 	// TODO: this is most probably garbage data. check how you're storing the data. 
-    float foam = htildeDisplacement.a;
+    float foam = foamData;
     foam *= exp(-FOAM_DECAY);
     foam = saturate(foam);
 	
