@@ -54,7 +54,8 @@ std::wstring OceanCompute::ModulePath()
     return std::wstring(buffer);
 }
 
-void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, DirectX::XMUINT3 dispatchDimension)
+// TODO: make more clear which dispatch belongs to which pass since they are all different anyway
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, float patchSize, DirectX::XMUINT3 dispatchDimension)
 {
     commandList->SetPipelineState(m_pipelineStateObject);
     commandList->SetComputeRootSignature(m_rootSignature);
@@ -66,7 +67,15 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
     commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 0, slopeTexture, 0);
     commandList->SetUnorderedAccessView(RootParameters::WriteTextures, 1, displacementTexture, 0);
     // Set Time 
-    commandList->SetCompute32BitConstants(RootParameters::Time, 1, &totalTime);
+    struct constants
+    {
+        float time;
+        float patchSize;
+    }cbv;
+
+    cbv.time = totalTime;
+    cbv.patchSize = patchSize;
+    commandList->SetCompute32BitConstants(RootParameters::Constants, 2, &cbv);
 
     commandList->Dispatch(dispatchDimension.x, dispatchDimension.y, dispatchDimension.z);
     

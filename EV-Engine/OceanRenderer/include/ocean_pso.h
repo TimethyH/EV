@@ -12,7 +12,7 @@ namespace EV
 	class OceanPSO : public BasePSO
 	{
 	public:
-		OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, const std::wstring& pixelPath);
+		OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, const std::wstring& pixelPath, const UINT cascadeCount, const std::vector<float>& patchSizes);
         const std::vector<PointLight>& GetPointLights() const
         {
             return m_pointLights;
@@ -88,7 +88,7 @@ namespace EV
 		                    std::shared_ptr<ShaderResourceView> lut);
 
 
-		void SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope, std::shared_ptr<Texture> foam);
+		void SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope, std::shared_ptr<Texture> foam, const UINT cascade);
         // Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
             const std::shared_ptr<Texture>& texture);
@@ -129,6 +129,7 @@ namespace EV
             // Texture2D OpacityTexture : register( t10 );
             Camera, // just its position
             RenderParams,
+            Constants,
             NumRootParameters
         };
         struct alignas(16) CameraData
@@ -137,10 +138,13 @@ namespace EV
             float pad;
         };
 
+        struct FFTTextures
+        {
+            std::shared_ptr<Texture> displacementTexture;
+            std::shared_ptr<Texture> slopeTexture;
+            std::shared_ptr<Texture> foamTexture;
+        };
 
-		std::shared_ptr<Texture> m_displacementTexture;
-		std::shared_ptr<Texture> m_slopeTexture;
-		std::shared_ptr<Texture> m_foamTexture;
         // An SRV used pad unused texture slots.
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
         std::shared_ptr<ShaderResourceView> m_defaultCubeSRV;
@@ -159,5 +163,9 @@ namespace EV
 
         // If the command list changes, all parameters need to be rebound.
         CommandList* m_pPreviousCommandList;
+
+        const UINT m_cascadeCount;
+        std::vector<FFTTextures> m_textures;
+        std::vector<float> m_cascadeSizes;
 	};
 }

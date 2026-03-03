@@ -208,7 +208,7 @@ bool Ocean::LoadContent()
     auto& commandQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
     auto commandList = commandQueue.GetCommandList();
 
-    m_oceanPlane = commandList->CreatePlane(OCEAN_SIZE, OCEAN_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, false);
+    m_oceanPlane = commandList->CreatePlane(OCEAN_PLANE_SIZE, OCEAN_PLANE_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, false);
 
     m_skybox = commandList->CreateCube(1.0f, true);
     m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
@@ -233,8 +233,16 @@ bool Ocean::LoadContent()
     m_sphere = commandList->CreateSphere(0.1f);
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
+    // Set the patch sizes for the cascades.
+    m_oceanPatchSizes.resize(m_oceanCascadesNumber);
+    m_oceanPatchSizes[0] = 250.0f;
+    m_oceanPatchSizes[1] = 17.0f;
+    m_oceanPatchSizes[2] = 5.0f;
     UpdateSpectrumParameters();
-    GenerateH0(commandList);
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+    {
+    	GenerateH0(commandList, i);
+    }
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
@@ -247,7 +255,7 @@ bool Ocean::LoadContent()
     CD3DX12_ROOT_PARAMETER1 H0RootParameters[OceanCompute::RootParameters::NumRootParameters];
     H0RootParameters[OceanCompute::RootParameters::ReadTextures].InitAsDescriptorTable(1, &h0DescriptorRangeSRV); // SRV t0
     H0RootParameters[OceanCompute::RootParameters::WriteTextures].InitAsDescriptorTable(1, &h0DescriptorRangeUAV); // UAV u0
-    H0RootParameters[OceanCompute::RootParameters::Time].InitAsConstants(1, 0); // CBV b0
+    H0RootParameters[OceanCompute::RootParameters::Constants].InitAsConstants(2, 0); // CBV b0
 
     // FFT 
     CD3DX12_DESCRIPTOR_RANGE1 FFTDescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0, 0,
@@ -277,7 +285,7 @@ bool Ocean::LoadContent()
     brdfLutRootParameters[0].InitAsDescriptorTable(1, &brdfUAVRange);
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
-    m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso");
+    m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", m_oceanCascadesNumber, m_oceanPatchSizes);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
@@ -490,26 +498,32 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_skyboxPSO->SetProjectionMatrix(projMatrix);
 
     uint32_t phaseDispatchSize = OCEAN_SUBRES / 16;
-    m_oceanPSO->Dispatch(commandList, m_H0Texture, m_slopeTexture, m_displacementTexture, oceanTime, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
-    commandList->UAVBarrier(m_slopeTexture);
-    commandList->UAVBarrier(m_displacementTexture);
-	
-    // Displacement
-	m_fftPSO->Dispatch(commandList, m_displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
-    commandList->UAVBarrier(m_displacementTexture);
-	m_fftPSO->Dispatch(commandList, m_displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+    {
+        m_oceanPSO->Dispatch(commandList, m_oceanCascades[i].H0Texture, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, oceanTime, m_oceanPatchSizes[i], XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
+        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
 
-    // Slope
-	m_fftPSO->Dispatch(commandList, m_slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
-    commandList->UAVBarrier(m_slopeTexture);
-	m_fftPSO->Dispatch(commandList, m_slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
-	
-    // Permutation
-    commandList->UAVBarrier(m_slopeTexture);
-    commandList->UAVBarrier(m_displacementTexture);
-    // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
-    m_permutePSO->Dispatch(commandList, m_slopeTexture,  m_displacementTexture, m_foamTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+        // Displacement
+        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
+        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
 
+        // Slope
+        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
+        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
+        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
+
+        // Permutation
+        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
+        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
+        m_permutePSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, m_oceanCascades[i].foamTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+
+        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
+        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        commandList->UAVBarrier(m_oceanCascades[i].foamTexture);
+    }
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
@@ -595,7 +609,10 @@ void Ocean::OnRender()
         // m_boat->Accept(visitor);
 
         // Set Ocean Textures
-        m_displacementPSO->SetOceanTextures(m_displacementTexture, m_slopeTexture, m_foamTexture);
+        for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+        {
+        	m_displacementPSO->SetOceanTextures(m_oceanCascades[i].displacementTexture, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].foamTexture, i);
+        }
         
         // m_displacementPSO->SetDirectionalLights(m_directionalLights);
         // m_displacementPSO->SetPointLights(m_pointLights);
@@ -644,9 +661,12 @@ void Ocean::OnRender()
 
     }
 
-	    commandList->TransitionBarrier(m_slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	    commandList->TransitionBarrier(m_displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-	    commandList->TransitionBarrier(m_foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+    {
+        commandList->TransitionBarrier(m_oceanCascades[i].slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->TransitionBarrier(m_oceanCascades[i].displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+        commandList->TransitionBarrier(m_oceanCascades[i].foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
+    }
 	    // Render the GUI on the render target
 	    OnGUI(commandList, m_swapChain->GetRenderTarget());
 	    commandQueue.ExecuteCommandList(commandList);
@@ -797,7 +817,10 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 
             auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
             auto commandList = commandQueue.GetCommandList();
-            GenerateH0(commandList);
+            for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+            {
+				GenerateH0(commandList, i);
+            }
             commandQueue.ExecuteCommandList(commandList);
         }
 
@@ -855,16 +878,13 @@ void Ocean::UnloadContent()
     m_oceanPSO.reset();
     m_fftPSO.reset();
     m_permutePSO.reset();
-    m_H0Texture.reset();
-    m_slopeTexture.reset();
-    m_displacementTexture.reset();
-    m_heightTexture.reset();
-    m_normalTexture.reset();
-    m_intermediateTextureSlope.reset();
-    m_intermediateTextureHeight.reset();
-    m_permutedSlope.reset();
-    m_permutedHeight.reset();
-    m_foamTexture.reset();
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+    {
+    	m_oceanCascades[i].H0Texture.reset();
+        m_oceanCascades[i].slopeTexture.reset();
+        m_oceanCascades[i].displacementTexture.reset();
+        m_oceanCascades[i].foamTexture.reset();
+    }
     m_skyboxTexture.reset();
     m_skyboxCubemap.reset();
     m_HDRTexture.reset();
@@ -884,7 +904,7 @@ float Ocean::InitPhillipsSpectrum(XMFLOAT2 k, XMFLOAT2 windDir, float windSpeed,
 {
     // A * exp(-1/(magnitudeK * L)^2)/k^4 * dot(k,w)^2 * exp(-k^2 * L^2)
     
-    const float l = OCEAN_SIZE * 0.00001; // Patch size
+    const float l = 128 * 0.00001; // Patch size hardcoded because i dont want to remove this function yet.
 
     float g = 9.81f;
     float magnitudeK = sqrtf(k.x * k.x + k.y * k.y);
@@ -949,12 +969,18 @@ float Ocean::ShortWavesFade(float kLength)
 }
 
 
-void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
-    const float L = OCEAN_SIZE; // Patch size
-    float deltaK = 2.0f * PI / L;
+void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList, const UINT cascade) {
 
-    const float lowCutoff = 0.0001f;
-    const float highCutoff = 9000.0f;
+    float patchSize = m_oceanPatchSizes[cascade];
+    float deltaK = 2.0f * PI / patchSize;
+    float highestK = (OCEAN_SUBRES / 2.0f) * deltaK; // nyquist limit
+
+    // moved to heap to avoid stack overflow
+    std::vector<std::complex<float>> H0(OCEAN_SUBRES * OCEAN_SUBRES, { 0,0 });
+    std::vector<std::complex<float>> H0Conj(OCEAN_SUBRES * OCEAN_SUBRES, { 0,0 });
+
+    const float lowCutoff = cascade == 0 ? 0.001f : (OCEAN_SUBRES * PI / m_oceanPatchSizes[cascade - 1]); // nyquist limit of previous cascade;
+    const float highCutoff = highestK;
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             // Get wave vector for this frequency
@@ -983,7 +1009,7 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
             // Equation 42: h0(k) = (1/√2) * (gausRandom + i*gausRandomI) * sqrt(Ph(k))
             // H0[m][n] = (1.0f / sqrtf(2.0f)) * std::complex<float>(xiR, xiI) * sqrtf(Ph);
             float amplitude = sqrtf(2.0f * spectrum * fabsf(dOmegadk) / k * deltaK * deltaK);
-            H0[m][n] = std::complex<float>(xiR * amplitude, xiI * amplitude);
+            H0[m * OCEAN_SUBRES + n] = std::complex<float>(xiR * amplitude, xiI * amplitude);
             }
         }
     }
@@ -993,8 +1019,7 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             int m_minus = (OCEAN_SUBRES - m) % OCEAN_SUBRES;
             int n_minus = (OCEAN_SUBRES - n) % OCEAN_SUBRES;
-
-            H0Conj[m][n] = std::conj(H0[m_minus][n_minus]);
+            H0Conj[m * OCEAN_SUBRES + n] = std::conj(H0[m_minus * OCEAN_SUBRES + n_minus]);
         }
     }
 	
@@ -1014,18 +1039,18 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
 
 
 	// Copy H0 texture data
-    m_H0Texture = Application::Get().CreateTexture(H0Desc);
-    m_H0Texture->SetName(L"H0 Texture");
+    m_oceanCascades[cascade].H0Texture = Application::Get().CreateTexture(H0Desc);
+    m_oceanCascades[cascade].H0Texture->SetName(L"H0 Texture" + std::to_wstring(cascade));
 
     std::vector<float> combinedData(OCEAN_SUBRES * OCEAN_SUBRES * 4);
 
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             int index = (m * OCEAN_SUBRES + n) * 4;
-            combinedData[index + 0] = H0[m][n].real();        // R: H0 real
-            combinedData[index + 1] = H0[m][n].imag();        // G: H0 imaginary
-            combinedData[index + 2] = H0Conj[m][n].real();    // B: H0_conj real
-            combinedData[index + 3] = H0Conj[m][n].imag();    // A: H0_conj imaginary
+            combinedData[index + 0] = H0[m * OCEAN_SUBRES + n].real();        // R: H0 real
+            combinedData[index + 1] = H0[m * OCEAN_SUBRES + n].imag();        // G: H0 imaginary
+            combinedData[index + 2] = H0Conj[m * OCEAN_SUBRES + n].real();    // B: H0_conj real
+            combinedData[index + 3] = H0Conj[m * OCEAN_SUBRES + n].imag();    // A: H0_conj imaginary
         }
     }
 
@@ -1038,44 +1063,20 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList) {
     // TODO also use one application get rather than keep calling it
 
     // Create slope output texture
-    m_slopeTexture = Application::Get().CreateTexture(phaseDesc);
-    m_slopeTexture->SetName(L"Slope Output Texture");
+    m_oceanCascades[cascade].slopeTexture = Application::Get().CreateTexture(phaseDesc);
+    m_oceanCascades[cascade].slopeTexture->SetName(L"Slope Output Texture" + std::to_wstring(cascade));
 
     // Create phase output texture
-    m_displacementTexture = Application::Get().CreateTexture(phaseDesc);
-    m_displacementTexture->SetName(L"Displacement Output Texture");
-
-    // Create height texture
-    m_heightTexture = Application::Get().CreateTexture(phaseDesc);
-    m_heightTexture->SetName(L"Heightmap Texture");
-
-    // Create intermediate height texture
-    m_normalTexture = Application::Get().CreateTexture(phaseDesc);
-    m_normalTexture->SetName(L"Normal Texture");
-
-    // Create height texture
-    m_intermediateTextureSlope = Application::Get().CreateTexture(phaseDesc);
-    m_intermediateTextureSlope->SetName(L"inter slopemap Texture");
-
-    // Create intermediate height texture
-    m_intermediateTextureHeight = Application::Get().CreateTexture(phaseDesc);
-    m_intermediateTextureHeight->SetName(L"inter heightmap Texture");
-
-    // Create intermediate height texture
-    m_permutedSlope = Application::Get().CreateTexture(phaseDesc);
-    m_permutedSlope->SetName(L"permuted slopemap Texture");
-
-    // Create intermediate height texture
-    m_permutedHeight = Application::Get().CreateTexture(phaseDesc);
-    m_permutedHeight->SetName(L"permuted heightmap Texture");
+    m_oceanCascades[cascade].displacementTexture = Application::Get().CreateTexture(phaseDesc);
+    m_oceanCascades[cascade].displacementTexture->SetName(L"Displacement Output Texture" + std::to_wstring(cascade));
 
     // foam texture
-    m_foamTexture = Application::Get().CreateTexture(foamDesc);
-    m_foamTexture->SetName(L"Jacobian foam Texture");
+    m_oceanCascades[cascade].foamTexture = Application::Get().CreateTexture(foamDesc);
+    m_oceanCascades[cascade].foamTexture->SetName(L"Jacobian foam Texture" + std::to_wstring(cascade));
 
 
 
-    commandList->CopyTextureSubresource(m_H0Texture, 0, 1, &subData);
+    commandList->CopyTextureSubresource(m_oceanCascades[cascade].H0Texture, 0, 1, &subData);
 }
 
 float Ocean::GaussianRandom() {
@@ -1085,37 +1086,6 @@ float Ocean::GaussianRandom() {
 
     return dist(gen);
 }
-
-// TODO: Do this in a compute shader?!
-void Ocean::UpdateSpectrum(float time) {
-    const float g = 9.81f;  // Gravity
-
-    for (int m = 0; m < OCEAN_SUBRES; m++) {
-        for (int n = 0; n < OCEAN_SUBRES; n++) {
-            // Calculate k TODO: already computed, store and reuse
-            float kx = (2.0f * PI * (n - OCEAN_SUBRES / 2.0f)) / OCEAN_SIZE;
-            float ky = (2.0f * PI * (m - OCEAN_SUBRES / 2.0f)) / OCEAN_SIZE;
-            float k_length = sqrtf(kx * kx + ky * ky);
-
-            // Dispersion: ω(k) = sqrt(g * |k|)
-            float omega = sqrtf(g * k_length);
-
-            // phase: ω(k) * t
-            float phase = omega * time;
-
-            // exp(iωt) = cos(ωt) + i*sin(ωt)
-            std::complex<float> iwt(cosf(phase), sinf(phase));
-
-            // exp(-iωt) = cos(ωt) - i*sin(ωt)
-            std::complex<float> negIwt(cosf(phase), -sinf(phase));
-
-            // Equation 43: height(k,t) = h0(k)*exp(iωt) + h0*(-k)*exp(-iωt)
-            heightMap[m][n] = H0[m][n] * iwt +
-                H0Conj[m][n] * negIwt;
-        }
-    }
-}
-
 
 float TMACorrection(float omega)
 {

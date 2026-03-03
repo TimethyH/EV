@@ -1,5 +1,5 @@
 #define OCEAN_RESOLUTION 512
-#define OCEAN_SIZE 128
+
 #define PI 3.14159265359f
 #define GRAVITY 9.81f
 #define REPEAT_TIME 500.0f
@@ -19,6 +19,7 @@ float2 EulerFormula(float x)
 cbuffer Constants : register(b0)
 {
     float time;
+    float patchSize;
 }
 
 Texture2D<float4> H0Texture : register(t0);
@@ -32,11 +33,8 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID )
     float2 h0 = H0Data.rg;
     float2 h0conj = H0Data.ba;
 
-    const uint lengthScale = OCEAN_RESOLUTION / 16;
-
-
-    float kx = 2.0f * PI * (dispatchThreadID.x - OCEAN_RESOLUTION / 2.0f) / OCEAN_SIZE;
-    float ky = 2.0f * PI * (dispatchThreadID.y - OCEAN_RESOLUTION / 2.0f) / OCEAN_SIZE;
+    float kx = 2.0f * PI * (dispatchThreadID.x - OCEAN_RESOLUTION / 2.0f) / patchSize;
+    float ky = 2.0f * PI * (dispatchThreadID.y - OCEAN_RESOLUTION / 2.0f) / patchSize;
     float k = length(float2(kx,ky));
     float kRcp = rcp(k);
 

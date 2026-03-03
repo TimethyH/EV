@@ -12,11 +12,15 @@
 #include "utility/helpers.h"
 #include "DX12/light.h"
 
-EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, const std::wstring& pixelPath)
+EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, const std::wstring& pixelPath, const UINT cascadeCount, const std::vector<float>& patchSizes)
     : m_pPreviousCommandList(nullptr)
+	, m_cascadeCount(cascadeCount)
+	, m_cascadeSizes(patchSizes)
 	, m_camera(cam)
 {
     m_pAlignedMVP = (MVP*)_aligned_malloc(sizeof(MVP), 16);
+    m_textures.resize(m_cascadeCount);
+
 
     // Get the folder of the running executable.
     std::wstring parentPath = GetModulePath();
@@ -38,7 +42,7 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 6, 3);
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3);
 
 
     // clang-format off
@@ -52,9 +56,11 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
     rootParameters[RootParameters::DirectionalLights].InitAsShaderResourceView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
     rootParameters[RootParameters::Textures].InitAsDescriptorTable(1, &descriptorRage, D3D12_SHADER_VISIBILITY_ALL);
     rootParameters[RootParameters::RenderParams].InitAsConstantBufferView(2, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[RootParameters::Constants].InitAsConstantBufferView(3, 0, D3D12_ROOT_DESCRIPTOR_FLAG_NONE, D3D12_SHADER_VISIBILITY_ALL);
 
     CD3DX12_STATIC_SAMPLER_DESC anisotropicSampler(0, D3D12_FILTER_ANISOTROPIC);
 
+    // used for IBL
     CD3DX12_STATIC_SAMPLER_DESC linearClampSampler(
         1, // s1
         D3D12_FILTER_MIN_MAG_MIP_LINEAR,
@@ -63,8 +69,17 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP
     );
 
+    // used for displacement sinds it tiles and we can wrap it
+    CD3DX12_STATIC_SAMPLER_DESC linearWrapSampler(
+        2, // s2
+        D3D12_FILTER_MIN_MAG_MIP_LINEAR,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP,
+        D3D12_TEXTURE_ADDRESS_MODE_WRAP
+    );
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    std::array<CD3DX12_STATIC_SAMPLER_DESC, 2> samplers = { anisotropicSampler, linearClampSampler };
+    std::array<CD3DX12_STATIC_SAMPLER_DESC, 3> samplers = { anisotropicSampler, linearClampSampler, linearWrapSampler };
 
     rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters, samplers.size(), samplers.data(), rootSignatureFlags);
     // clang-format on
@@ -192,13 +207,12 @@ void EV::OceanPSO::Apply(CommandList& commandList)
         // TODO: use bind texture since this binds a default texture if invalid.
         D3D12_RESOURCE_STATES shaderRead = D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE | D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE;
 
-        commandList.SetShaderResourceView(RootParameters::Textures, 3, m_displacementTexture,
-            shaderRead);
-
-        commandList.SetShaderResourceView(RootParameters::Textures, 4, m_slopeTexture,
-            shaderRead);
-        commandList.SetShaderResourceView(RootParameters::Textures, 5, m_foamTexture,
-            shaderRead);
+        for (UINT i = 0; i < m_cascadeCount; ++i)
+        {
+            commandList.SetShaderResourceView(RootParameters::Textures, 3 + i * 3 + 0, m_textures[i].displacementTexture, shaderRead);
+            commandList.SetShaderResourceView(RootParameters::Textures, 3 + i * 3 + 1, m_textures[i].slopeTexture, shaderRead);
+            commandList.SetShaderResourceView(RootParameters::Textures, 3 + i * 3 + 2, m_textures[i].foamTexture, shaderRead);
+        }
 
     // if (m_dirtyFlags & DF_SpotLights)
     // {
@@ -212,6 +226,12 @@ void EV::OceanPSO::Apply(CommandList& commandList)
 
     commandList.SetGraphicsDynamicConstantBuffer(RootParameters::RenderParams, sizeof(OceanRenderParams), &m_oceanRenderParams);
 
+    // Send OceanCascade params
+    {
+        UINT padAmount = 4 - m_cascadeCount; // 4 - cascadecount because we use floats and want 16byte alignment. Padding is hardcoded in the shader but taken care of here.
+        commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Constants, (m_cascadeCount + padAmount) * sizeof(float), m_cascadeSizes.data());
+	    
+    }
     // if (m_dirtyFlags & (DF_PointLights | DF_SpotLights | DF_DirectionalLights))
     // {
     //     LightProperties lightProps;
@@ -233,9 +253,9 @@ void EV::OceanPSO::SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, s
     m_lutIBL = lut;
 }
 void EV::OceanPSO::SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope,
-                                    std::shared_ptr<Texture> foam)
+                                    std::shared_ptr<Texture> foam, const UINT cascade)
 {
-    m_displacementTexture = displacement;
-    m_slopeTexture = slope;
-    m_foamTexture = foam;
+   m_textures[cascade].displacementTexture = displacement;
+   m_textures[cascade].slopeTexture = slope;
+   m_textures[cascade].foamTexture = foam;
 }

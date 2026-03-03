@@ -10,7 +10,7 @@
 #include <complex>
 
 #define OCEAN_SUBRES 512
-#define OCEAN_SIZE 128.0f
+#define OCEAN_PLANE_SIZE 128.0f
 #define OCEAN_DEPTH 20.0f
 
 class ConvolutionCompute;
@@ -65,9 +65,8 @@ public:
 	float InitPhillipsSpectrum(DirectX::XMFLOAT2 k, DirectX::XMFLOAT2 windDir, float windSpeed, float A = 0.05f);
 	float DirectionSpectrum(float theta, float omega);
 	float ShortWavesFade(float kLength);
-	void GenerateH0(std::shared_ptr<CommandList> commandList);
+	void GenerateH0(std::shared_ptr<CommandList> commandList, UINT cascade);
 	float GaussianRandom();
-	void UpdateSpectrum(float time);
 	float JONSWAP(float omega);
 
 	float JonswapAlpha(float fetch, float windSpeed);
@@ -224,21 +223,9 @@ private:
 		float peakOmega = 0.0f;
 	}m_jonswapParams;
 
+	
+	// skybox
 
-	std::complex<float> H0[OCEAN_SUBRES][OCEAN_SUBRES];
-	std::complex<float> heightMap[OCEAN_SUBRES][OCEAN_SUBRES];
-	std::complex<float> H0Conj[OCEAN_SUBRES][OCEAN_SUBRES];
-
-	std::shared_ptr<Texture> m_H0Texture;
-	std::shared_ptr<Texture> m_slopeTexture;
-	std::shared_ptr<Texture> m_displacementTexture;
-	std::shared_ptr<Texture> m_heightTexture;
-	std::shared_ptr<Texture> m_normalTexture; 
-	std::shared_ptr<Texture> m_intermediateTextureSlope; 
-	std::shared_ptr<Texture> m_intermediateTextureHeight; 
-	std::shared_ptr<Texture> m_permutedSlope; 
-	std::shared_ptr<Texture> m_permutedHeight; 
-	std::shared_ptr<Texture> m_foamTexture; 
 	std::shared_ptr<Texture> m_skyboxTexture; 
 	std::shared_ptr<Texture> m_skyboxCubemap; 
 	std::shared_ptr<Texture> m_HDRTexture; 
@@ -266,6 +253,25 @@ private:
 	// IBL convolution
 	uint32_t m_convolutionPlaneSize = 32;
 	uint32_t m_convolutionSampleCount = 64;
+
+	struct OceanH0Values
+	{
+		std::complex<float> H0[OCEAN_SUBRES][OCEAN_SUBRES];
+		std::complex<float> heightMap[OCEAN_SUBRES][OCEAN_SUBRES];
+		std::complex<float> H0Conj[OCEAN_SUBRES][OCEAN_SUBRES];
+	};
+	struct OceanData
+	{
+		std::shared_ptr<Texture> H0Texture;
+		std::shared_ptr<Texture> slopeTexture;
+		std::shared_ptr<Texture> displacementTexture;
+		std::shared_ptr<Texture> foamTexture;
+		// OceanH0Values data;
+	};
+
+	static const UINT m_oceanCascadesNumber = 3;
+	OceanData m_oceanCascades[m_oceanCascadesNumber];
+	std::vector<float> m_oceanPatchSizes;
 
 };
 

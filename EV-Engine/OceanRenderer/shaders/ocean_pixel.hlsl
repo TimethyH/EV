@@ -23,8 +23,17 @@ TextureCube<float4> diffuseMap : register(t3);
 TextureCube<float4> specularMap : register(t4);
 Texture2D<float2> brdfLUT : register(t5);
 
-Texture2D SlopeTexture : register(t7);
-Texture2D FoamTexture : register(t8);
+// Cascade 0
+Texture2D SlopeTexture0 : register(t7);
+Texture2D FoamTexture0 : register(t8);
+
+// Cascade 1
+Texture2D SlopeTexture1 : register(t10);
+Texture2D FoamTexture1 : register(t11);
+
+// Cascade 2
+Texture2D SlopeTexture2 : register(t13);
+Texture2D FoamTexture2 : register(t14);
 
 SamplerState anisotropicSampler : register(s0); // for material textures
 SamplerState linearClampSampler : register(s1); // for IBL
@@ -45,6 +54,13 @@ cbuffer OceanCB : register(b2)
     float pad1;
 }
 
+cbuffer Constants : register(b3)
+{
+    float patchSize0;
+    float patchSize1;
+    float patchSize2;
+    float padding;
+}
 
 float PBRCalculateNormalDistribution(float roughness, const float3 normal, const float3 halfvec)
 {
@@ -124,9 +140,21 @@ float3 PBRSpecular(float normalDist, float geometry, float3 fresnel, float3 view
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
+
+    float2 uv0 = IN.PositionWS.xz / patchSize0;
+    float2 uv1 = IN.PositionWS.xz / patchSize1;
+    float2 uv2 = IN.PositionWS.xz / patchSize2;
+
     // Slope texture contains analytical slopes after IFFT + permute
-    float4 slope = SlopeTexture.Sample(anisotropicSampler, IN.TexCoord);
-    float foam = FoamTexture.Sample(anisotropicSampler, IN.TexCoord);
+    float4 slope0 = SlopeTexture0.Sample(anisotropicSampler, uv0);
+    float4 slope1 = SlopeTexture1.Sample(anisotropicSampler, uv1);
+    float4 slope2 = SlopeTexture2.Sample(anisotropicSampler, uv2);
+    float4 slope = slope0 + slope1 + slope2;
+
+    float foam0 = FoamTexture0.Sample(anisotropicSampler, uv0).r;
+    float foam1 = FoamTexture1.Sample(anisotropicSampler, uv1).r;
+    float foam2 = FoamTexture2.Sample(anisotropicSampler, uv2).r;
+    float foam = max(foam0, max(foam1, foam2));
 
     // Reconstruct normal from slopes (object space, Y-up)
     float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
