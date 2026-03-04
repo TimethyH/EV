@@ -508,6 +508,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
         commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
+        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
 
         // Slope
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
