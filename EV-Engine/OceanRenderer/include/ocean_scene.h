@@ -272,6 +272,7 @@ private:
 	static const UINT m_oceanCascadesNumber = 3;
 	OceanData m_oceanCascades[m_oceanCascadesNumber];
 	std::vector<float> m_oceanPatchSizes;
+	std::vector<float> m_foamParameters;
 
 };
 

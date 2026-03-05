@@ -1,16 +1,13 @@
-#define FOAM_DECAY 0.05f
-#define FOAM_BIAS -0.5f
-#define FOAM_ADD 0.5f
-#define FOAM_THRESHOLD 0.0f
-
-
 float4 Permute(float4 data, float3 id)
 {
     return data * (1.0f - 2.0f * ((id.x + id.y) % 2));
 }
 cbuffer Constants : register(b0)
 {
-    uint nada;
+    float foamDecay;
+    float foamBias;
+    float foamAdd;
+    float foamThreshold;
 }
 
 RWTexture2D<float4> displacementTexture : register(u0);
@@ -44,13 +41,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
 	
 	// TODO: this is most probably garbage data. check how you're storing the data. 
     float foam = foamData;
-    foam *= exp(-FOAM_DECAY);
+    foam *= exp(-foamDecay);
     foam = saturate(foam);
 	
-    float biasedJacobian = max(0.0f, -(jacobian - FOAM_BIAS));
+    float biasedJacobian = max(0.0f, -(jacobian - foamBias));
 	
-    if (biasedJacobian > FOAM_THRESHOLD)
-        foam += FOAM_ADD * biasedJacobian;
+    if (biasedJacobian > foamThreshold)
+        foam += foamAdd * biasedJacobian;
 	
     slopeTexture[dispatchThreadID.xy] = float4(slopes, 0.0f, 1.0f);
     displacementTexture[dispatchThreadID.xy] = float4(displacement, foam);

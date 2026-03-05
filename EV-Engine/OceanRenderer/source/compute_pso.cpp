@@ -123,7 +123,7 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
 
 }
 
-void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, DirectX::XMUINT3 dispatchDimension)
+void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, std::vector<float> foamData, DirectX::XMUINT3 dispatchDimension)
 {
     commandList->SetPipelineState(m_pipelineStateObject);
     commandList->SetComputeRootSignature(m_rootSignature);
@@ -133,7 +133,7 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
     commandList->SetUnorderedAccessView(0, 1, RWSlopeTexture, 0);
     commandList->SetUnorderedAccessView(0, 2, foamTexture, 0);
 
-
+    commandList->SetCompute32BitConstants(1, foamData.size(), foamData.data());
     commandList->Dispatch(dispatchDimension.x, dispatchDimension.y, dispatchDimension.z);
 
 }

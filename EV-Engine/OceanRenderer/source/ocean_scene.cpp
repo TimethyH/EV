@@ -267,8 +267,9 @@ bool Ocean::LoadContent()
 
     // Permute
     CD3DX12_DESCRIPTOR_RANGE1 permuteDescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);
-    CD3DX12_ROOT_PARAMETER1 permuteRootParameters[1];
+    CD3DX12_ROOT_PARAMETER1 permuteRootParameters[2];
     permuteRootParameters[0].InitAsDescriptorTable(1, &permuteDescriptorRangeUAV); // UAV
+    permuteRootParameters[1].InitAsConstants(4, 0); // 4 floats, register b0
 
     // Convolution
     CD3DX12_DESCRIPTOR_RANGE1 convolutionSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -369,6 +370,22 @@ bool Ocean::LoadContent()
     m_displacementPSO->m_oceanRenderParams.heightMod = 2.0f;
     m_displacementPSO->m_oceanRenderParams.peakScatterIntensity = 0.6f;
 
+
+    struct Constants
+    {
+        float foamDecay;
+        float foamBias;
+        float foamAdd;
+        float foamThreshold;
+    } cbv;
+    cbv.foamDecay = 0.005f;
+    cbv.foamBias = 0.3f;
+    cbv.foamAdd = 1.0f;
+    cbv.foamThreshold = 0.0f;
+
+    m_foamParameters.resize(sizeof(Constants) / 4);
+    m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamThreshold };
+    
     DXGI_FORMAT HDRbackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
 
@@ -519,7 +536,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
         commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
         commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
         // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
-        m_permutePSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, m_oceanCascades[i].foamTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
+        m_permutePSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, m_oceanCascades[i].foamTexture, m_foamParameters, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
 
         commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
         commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
@@ -809,6 +826,13 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
         ImGui::Text("Derived (read-only)");
         ImGui::LabelText("Alpha", "%.6f", m_jonswapParams.alpha);
         ImGui::LabelText("Peak Omega", "%.4f", m_jonswapParams.peakOmega);
+
+        ImGui::Separator();
+        ImGui::Text("Foam");
+        ImGui::SliderFloat("Foam Decay", &m_foamParameters[0], 0.0f, 0.1f);
+        ImGui::SliderFloat("Foam Bias", &m_foamParameters[1], -1.0f, 1.0f);
+        ImGui::SliderFloat("Foam Add", &m_foamParameters[2], 0.0f, 2.0f);
+        ImGui::SliderFloat("Foam Threshold", &m_foamParameters[3], 0.0f, 1.0f);
 
         if (paramsChanged)
         {
