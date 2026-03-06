@@ -35,6 +35,10 @@ Texture2D FoamTexture1 : register(t11);
 Texture2D SlopeTexture2 : register(t13);
 Texture2D FoamTexture2 : register(t14);
 
+// Cascade 3
+Texture2D SlopeTexture3 : register(t16);
+Texture2D FoamTexture3 : register(t17);
+
 SamplerState anisotropicSampler : register(s0); // for material textures
 SamplerState linearClampSampler : register(s1); // for IBL
 
@@ -59,7 +63,7 @@ cbuffer Constants : register(b3)
     float patchSize0;
     float patchSize1;
     float patchSize2;
-    float padding;
+    float patchSize3;
 }
 
 float PBRCalculateNormalDistribution(float roughness, const float3 normal, const float3 halfvec)
@@ -144,17 +148,20 @@ float4 main(PixelShaderInput IN) : SV_Target
     float2 uv0 = IN.PositionWS.xz / patchSize0;
     float2 uv1 = IN.PositionWS.xz / patchSize1;
     float2 uv2 = IN.PositionWS.xz / patchSize2;
+    float2 uv3 = IN.PositionWS.xz / patchSize3;
 
     // Slope texture contains analytical slopes after IFFT + permute
     float4 slope0 = SlopeTexture0.Sample(anisotropicSampler, uv0);
     float4 slope1 = SlopeTexture1.Sample(anisotropicSampler, uv1);
     float4 slope2 = SlopeTexture2.Sample(anisotropicSampler, uv2);
-    float4 slope = slope0 + slope1 + slope2;
+    float4 slope3 = SlopeTexture3.Sample(anisotropicSampler, uv3);
+    float4 slope = slope0 + slope1 + slope2 + slope3;
 
     float foam0 = FoamTexture0.Sample(anisotropicSampler, uv0).r;
     float foam1 = FoamTexture1.Sample(anisotropicSampler, uv1).r;
     float foam2 = FoamTexture2.Sample(anisotropicSampler, uv2).r;
-    float foam = max(foam0, max(foam1, foam2));
+    float foam3 = FoamTexture3.Sample(anisotropicSampler, uv3).r;
+    float foam = max(foam0, max(foam1, max(foam2, foam3)));
 
     // Reconstruct normal from slopes (object space, Y-up)
     float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));

@@ -235,9 +235,10 @@ bool Ocean::LoadContent()
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
     // Set the patch sizes for the cascades.
     m_oceanPatchSizes.resize(m_oceanCascadesNumber);
-    m_oceanPatchSizes[0] = 250.0f;
-    m_oceanPatchSizes[1] = 17.0f;
-    m_oceanPatchSizes[2] = 5.0f;
+    m_oceanPatchSizes[0] = 1500.0f;
+    m_oceanPatchSizes[1] = 250.0f;
+    m_oceanPatchSizes[2] = 17.0f;
+    m_oceanPatchSizes[3] = 5.0f;
     UpdateSpectrumParameters();
     for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
     {

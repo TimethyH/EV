@@ -16,7 +16,7 @@ cbuffer Constants : register(b3)
     float patchSize0;
     float patchSize1;
     float patchSize2;
-    float padding;
+    float patchSize3;
 }
 
 struct VertexPositionNormalTexture
@@ -39,6 +39,7 @@ struct VertexShaderOutput
 Texture2D DisplacementTexture0 : register(t6);
 Texture2D DisplacementTexture1 : register(t9);
 Texture2D DisplacementTexture2 : register(t12);
+Texture2D DisplacementTexture3 : register(t15);
 
 SamplerState linearWrapSampler : register(s2);
 static const float HEIGHT_SCALE = 1.0f;
@@ -48,11 +49,13 @@ VertexShaderOutput main(VertexPositionNormalTexture data)
     float2 uv0 = data.Position.xz / patchSize0;
     float2 uv1 = data.Position.xz / patchSize1;
     float2 uv2 = data.Position.xz / patchSize2;
+    float2 uv3 = data.Position.xz / patchSize3;
 
     float3 displacement0 = DisplacementTexture0.SampleLevel(linearWrapSampler, uv0, 0).rgb;
     float3 displacement1 = DisplacementTexture1.SampleLevel(linearWrapSampler, uv1, 0).rgb;
     float3 displacement2 = DisplacementTexture2.SampleLevel(linearWrapSampler, uv2, 0).rgb;
-    float3 displacement = displacement0 + displacement1 + displacement2;
+    float3 displacement3 = DisplacementTexture3.SampleLevel(linearWrapSampler, uv3, 0).rgb;
+    float3 displacement = displacement0 + displacement1 + displacement2 + displacement3;
 
     float3 displacedPosition = data.Position;
     displacedPosition += displacement * HEIGHT_SCALE;
