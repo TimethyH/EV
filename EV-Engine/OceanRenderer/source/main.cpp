@@ -55,13 +55,13 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 [ ] Fix Ocean Pixelshader
 	[ ] Skybox lighting
 	[ ] Correct PBR ( NDF, sub surface scatter, roughness )
+[ ] Add clipmap gemoetry LOD 
 [ ] Ocean cascades. (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
 [ ] Fix foam calculation
 [ ] Add more ImGUI features
 	[ ] Change skybox + mip lvl
 	[ ] keyboard input support
 	[ ] Adjust camera speed
-	[ ] Adjust foam parameters
 [ ] Write blogpost
 [ ]
 [ ]

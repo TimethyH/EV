@@ -10,7 +10,7 @@
 #include <complex>
 
 #define OCEAN_SUBRES 512
-#define OCEAN_PLANE_SIZE 128.0f
+#define OCEAN_PLANE_SIZE 4096.0f
 #define OCEAN_DEPTH 20.0f
 
 class ConvolutionCompute;

@@ -378,10 +378,17 @@ bool Ocean::LoadContent()
         float foamAdd;
         float foamThreshold;
     } cbv;
+    // // old foam settings (mayb good mayb shit)
+    // cbv.foamDecay = 0.005f;
+    // cbv.foamBias = 0.3f;
+    // cbv.foamAdd = 1.0f;
+    // cbv.foamThreshold = 0.0f;
+
+    // Foam settings after playing with it
     cbv.foamDecay = 0.005f;
-    cbv.foamBias = 0.3f;
-    cbv.foamAdd = 1.0f;
-    cbv.foamThreshold = 0.0f;
+    cbv.foamBias = 0.096f;
+    cbv.foamAdd = 0.185f;
+    cbv.foamThreshold = 0.17f;
 
     m_foamParameters.resize(sizeof(Constants) / 4);
     m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamThreshold };
