@@ -150,7 +150,6 @@ float4 main(PixelShaderInput IN) : SV_Target
     float2 uv2 = IN.PositionWS.xz / patchSize2;
     float2 uv3 = IN.PositionWS.xz / patchSize3;
 
-    // Slope texture contains analytical slopes after IFFT + permute
     float4 slope0 = SlopeTexture0.Sample(anisotropicSampler, uv0);
     float4 slope1 = SlopeTexture1.Sample(anisotropicSampler, uv1);
     float4 slope2 = SlopeTexture2.Sample(anisotropicSampler, uv2);
@@ -161,7 +160,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float foam1 = FoamTexture1.Sample(anisotropicSampler, uv1).r;
     float foam2 = FoamTexture2.Sample(anisotropicSampler, uv2).r;
     float foam3 = FoamTexture3.Sample(anisotropicSampler, uv3).r;
-    float foam = max(foam0, max(foam1, max(foam2, foam3)));
+    float foam = saturate(foam0 + foam1 + foam2 + foam3);
 
     // Reconstruct normal from slopes (object space, Y-up)
     float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
@@ -177,7 +176,12 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 pointLightBRDF = 0;
     float3 directionalLightBRDF = 0;
     float3 BRDF = 0;
-    float roughness = 0.2f; // TODO: hardcoded here AND ibl_specular
+    
+    float foamRoughnessModifier = 0.8f;
+	float roughness = 0.2f + foam * foamRoughnessModifier;
+    roughness = saturate(roughness);
+	
+	// float roughness = 0.2f; // TODO: hardcoded here AND ibl_specular
     float metallic = 0.0f;
 		
     float3 F0 = float3(0.02f, 0.02f, 0.02f);

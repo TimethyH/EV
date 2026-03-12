@@ -459,6 +459,7 @@ namespace EV
                                            uint32_t subdivisionDepth,
                                            bool reverseWinding = false);
 
+
     protected:
         // friend class CommandQueue;
         // friend class DynamicDescriptorHeap;

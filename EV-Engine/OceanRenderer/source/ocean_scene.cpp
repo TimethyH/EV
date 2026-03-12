@@ -104,7 +104,7 @@ void Ocean::OnResize(ResizeEventArgs& e)
     m_swapChain->Resize(m_width, m_height);
 
     float aspectRatio = m_width / (float)m_height;
-    m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 100.0f);
+    m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 
     m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height));
 
@@ -235,7 +235,7 @@ bool Ocean::LoadContent()
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
     // Set the patch sizes for the cascades.
     m_oceanPatchSizes.resize(m_oceanCascadesNumber);
-    m_oceanPatchSizes[0] = 1500.0f;
+    m_oceanPatchSizes[0] = 500.0f;
     m_oceanPatchSizes[1] = 250.0f;
     m_oceanPatchSizes[2] = 17.0f;
     m_oceanPatchSizes[3] = 5.0f;
@@ -386,10 +386,10 @@ bool Ocean::LoadContent()
     // cbv.foamThreshold = 0.0f;
 
     // Foam settings after playing with it
-    cbv.foamDecay = 0.005f;
-    cbv.foamBias = 0.096f;
-    cbv.foamAdd = 0.185f;
-    cbv.foamThreshold = 0.17f;
+    cbv.foamDecay = 0.008f;
+    cbv.foamBias = 0.311f;
+    cbv.foamAdd = 0.023f;
+    cbv.foamThreshold = 0.023f;
 
     m_foamParameters.resize(sizeof(Constants) / 4);
     m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamThreshold };
@@ -652,6 +652,7 @@ void Ocean::OnRender()
 
         
         // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
+
 
         m_oceanPlane->Accept(oceanVisitor);
 
@@ -1164,7 +1165,6 @@ void Ocean::UpdateSpectrumParameters()
     m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
     m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
 }
-
 
 void Ocean::OnKeyPress(KeyEventArgs& e)
 {

@@ -24,7 +24,26 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     // permuting essentially makes sure that the FFT result is centered. (remmeber 3B1B video)
     float4 htildeDisplacement = Permute(displacementTexture.Load(int3(dispatchThreadID.xy, 0)), dispatchThreadID);
     float4 htildeSlope = Permute(slopeTexture[dispatchThreadID.xy], dispatchThreadID);
+    
     float foamData = foamTexture.Load(int3(dispatchThreadID.xy, 0));
+
+    // // Blur kernel. Adjusting centerweight for blur amount
+    //int2 texel = int2(dispatchThreadID.xy);
+    //float centerWeight = 1.0f;
+    //float foamData = foamTexture.Load(int3(texel, 0)) * centerWeight;
+    //float neighborSum = 0.0f;
+	//[unroll]
+    //for (int dx = -1; dx <= 1; dx++)
+    //{
+    //[unroll]
+    //    for (int dy = -1; dy <= 1; dy++)
+    //    {
+    //        if (dx == 0 && dy == 0)
+    //            continue;
+    //        neighborSum += foamTexture.Load(int3(texel + int2(dx, dy), 0));
+    //    }
+    //}
+    //foamData += neighborSum * ((1.0f - centerWeight) / 8.0f);
 	
     float2 dxdz = htildeDisplacement.rg;
     float2 dydxz = htildeDisplacement.ba;
