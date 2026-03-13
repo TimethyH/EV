@@ -52,17 +52,15 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 												CURRENT PRIORITY
 
 
-[ ] Fix Ocean Pixelshader
-	[ ] Skybox lighting
-	[ ] Correct PBR ( NDF, sub surface scatter, roughness )
+[ ] Write blogpost
+[ ] Look for Tracy Profiler! (implement it)
+[ ] Profile and optimize the ocean (with Manon?!)
 [ ] Add clipmap gemoetry LOD 
 [ ] Ocean cascades. (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
-[ ] Fix foam calculation
 [ ] Add more ImGUI features
 	[ ] Change skybox + mip lvl
 	[ ] keyboard input support
 	[ ] Adjust camera speed
-[ ] Write blogpost
 [ ]
 [ ]
 [ ]
@@ -72,7 +70,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 
 												GENERAL
 
-[ ] Look for Tracy Profiler!
 [ ] Cleanup engine.
 [ ] Understand ins and outs of the engine, how it works in its entirety. (Make a good mindmap)
 [ ] Find all TODOs in the engine and adres them
@@ -88,9 +85,6 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 												
 Ocean
 	[ ] (Tesselation?) Make ocean detail close to camera higher resolition while further waves get less precision ( Or wave cascades, JumpTrajectory )
-	[ ] Proper PBR water lighting
-	[ ] Foam is incorrect. foam gets added even when the waves dont collapse into themselves
-	[ ] Store gaussian randoms in a texture for GPU sampling. Move wave generation to compute (JONSWAP)
 	[ ] Fully understand every component of the Ocean
 	[ ] Understand how the scene draws its meshes
 	[ ] Understand how the SDR and skybox pass work
