@@ -286,6 +286,7 @@ bool Ocean::LoadContent()
     CD3DX12_ROOT_PARAMETER1 brdfLutRootParameters[1];
     brdfLutRootParameters[0].InitAsDescriptorTable(1, &brdfUAVRange);
 
+    // TODO: rename pso's to make sence, displacement uses ocean for example but ocean uses compute?!
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
     m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", m_oceanCascadesNumber, m_oceanPatchSizes);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));

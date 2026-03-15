@@ -23,7 +23,7 @@ TextureCube<float4> diffuseMap : register(t3);
 TextureCube<float4> specularMap : register(t4);
 Texture2D<float2> brdfLUT : register(t5);
 
-// Cascade 0
+// Cascade 0 (lowest freq)
 Texture2D SlopeTexture0 : register(t7);
 Texture2D FoamTexture0 : register(t8);
 
@@ -35,12 +35,13 @@ Texture2D FoamTexture1 : register(t11);
 Texture2D SlopeTexture2 : register(t13);
 Texture2D FoamTexture2 : register(t14);
 
-// Cascade 3
+// Cascade 3 (highest freq)
 Texture2D SlopeTexture3 : register(t16);
 Texture2D FoamTexture3 : register(t17);
 
 SamplerState anisotropicSampler : register(s0); // for material textures
 SamplerState linearClampSampler : register(s1); // for IBL
+SamplerState linearWrapSampler : register(s2); // for cubic foam
 
 cbuffer CameraCB : register(b1, space0)
 {
@@ -65,6 +66,49 @@ cbuffer Constants : register(b3)
     float patchSize2;
     float patchSize3;
 }
+
+
+// Cubic B-spline weights (same math as Atlas talk)
+float4 CubicWeights(float a)
+{
+    float a2 = a * a;
+    float a3 = a2 * a;
+    float w0 = -a3 + a2 * 3.0 - a * 3.0 + 1.0;
+    float w1 = a3 * 3.0 - a2 * 6.0 + 4.0;
+    float w2 = -a3 * 3.0 + a2 * 3.0 + a * 3.0 + 1.0;
+    float w3 = a3;
+    return float4(w0, w1, w2, w3) / 6.0;
+}
+
+float SampleFoamBicubic(Texture2D foamTex, SamplerState linearSampler, float2 uv)
+{
+    float2 dims;
+    foamTex.GetDimensions(dims.x, dims.y);
+    float2 dimsInv = 1.0 / dims;
+
+    // Move to texel space
+    float2 tc = uv * dims + 0.5;
+    float2 fuv = frac(tc);
+
+    float4 wx = CubicWeights(fuv.x);
+    float4 wy = CubicWeights(fuv.y);
+
+    // Merge pairs of weights so we can use 4 bilinear taps instead of 16 point taps
+    float4 g = float4(wx.xz + wx.yw, wy.xz + wy.yw); // g.xy = x merged weights, g.zw = y merged weights
+    float4 h = (float4(wx.yw, wy.yw) / g + float2(-1.5, 0.5).xyxy + floor(tc).xxyy) * dimsInv.xxyy;
+
+    // h.x, h.y = two sample x positions in UV space
+    // h.z, h.w = two sample y positions in UV space
+    float2 w = g.xz / (g.xz + g.yw);
+
+    return lerp(
+        lerp(foamTex.SampleLevel(linearSampler, float2(h.y, h.w), 0).r,
+             foamTex.SampleLevel(linearSampler, float2(h.x, h.w), 0).r, w.x),
+        lerp(foamTex.SampleLevel(linearSampler, float2(h.y, h.z), 0).r,
+             foamTex.SampleLevel(linearSampler, float2(h.x, h.z), 0).r, w.x),
+        w.y);
+}
+
 
 float PBRCalculateNormalDistribution(float roughness, const float3 normal, const float3 halfvec)
 {
@@ -145,6 +189,7 @@ float3 PBRSpecular(float normalDist, float geometry, float3 fresnel, float3 view
 float4 main(PixelShaderInput IN) : SV_Target
 {
 
+    float foamCascadeMod = 1.0f;
     float2 uv0 = IN.PositionWS.xz / patchSize0;
     float2 uv1 = IN.PositionWS.xz / patchSize1;
     float2 uv2 = IN.PositionWS.xz / patchSize2;
@@ -156,10 +201,10 @@ float4 main(PixelShaderInput IN) : SV_Target
     float4 slope3 = SlopeTexture3.Sample(anisotropicSampler, uv3);
     float4 slope = slope0 + slope1 + slope2 + slope3;
 
-    float foam0 = FoamTexture0.Sample(anisotropicSampler, uv0).r;
-    float foam1 = FoamTexture1.Sample(anisotropicSampler, uv1).r;
-    float foam2 = FoamTexture2.Sample(anisotropicSampler, uv2).r;
-    float foam3 = FoamTexture3.Sample(anisotropicSampler, uv3).r;
+    float foam0 = SampleFoamBicubic(FoamTexture0, linearWrapSampler, uv0);
+    float foam1 = SampleFoamBicubic(FoamTexture1, linearWrapSampler, uv1);
+    float foam2 = SampleFoamBicubic(FoamTexture2, linearWrapSampler, uv2);
+    float foam3 = SampleFoamBicubic(FoamTexture3, linearWrapSampler, uv3) * foamCascadeMod;
     float foam = saturate(foam0 + foam1 + foam2 + foam3);
 
     // Reconstruct normal from slopes (object space, Y-up)
