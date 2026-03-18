@@ -117,8 +117,7 @@ namespace EV
          * flushed before a command (draw, dispatch, or copy) that expects the resource
          * to be in a particular state can run.
          */
-        void UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers = false);
-        void UAVBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> resource, bool flushBarriers);
+        void UAVBarrier(bool flushBarriers = false);
 
         /**
          * Add an aliasing barrier to indicate a transition between usages of two

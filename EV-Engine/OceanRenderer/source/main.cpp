@@ -49,6 +49,16 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, PWSTR lpCmdL
 /*
 
 
+MANON TIPS:
+
+Banking Conflicts:
+	https://rocm.docs.amd.com/projects/composable_kernel/en/latest/conceptual/ck_tile/hardware/lds_bank_conflicts.html
+	https://gpuopen.com/learn/rdna-performance-guide/#compute-shader
+
+- Kleinere textures, 16bit fmt
+- dynamic indexing kan duur zijn door global memory read + index. instead gebruik inlined ifstatements ibl.spec file
+
+
 												CURRENT PRIORITY
 
 
