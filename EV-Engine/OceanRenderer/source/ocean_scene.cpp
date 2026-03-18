@@ -526,29 +526,25 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
     {
         m_oceanPSO->Dispatch(commandList, m_oceanCascades[i].H0Texture, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, oceanTime, m_oceanPatchSizes[i], XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
-        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
-        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        commandList->UAVBarrier(true);
 
         // Displacement
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
-        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        commandList->UAVBarrier(true);
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
-        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        commandList->UAVBarrier(true);
 
         // Slope
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
-        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
+        commandList->UAVBarrier(true);
         m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
 
         // Permutation
-        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
-        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
+        commandList->UAVBarrier(true);
         // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
         m_permutePSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, m_oceanCascades[i].foamTexture, m_foamParameters, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
 
-        commandList->UAVBarrier(m_oceanCascades[i].slopeTexture);
-        commandList->UAVBarrier(m_oceanCascades[i].displacementTexture);
-        commandList->UAVBarrier(m_oceanCascades[i].foamTexture);
+        commandList->UAVBarrier(true);
     }
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
@@ -681,6 +677,9 @@ void Ocean::OnRender()
         // commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
 
 	    // Perform HDR -> SDR tonemapping directly to the SwapChain's render target.
+        
+
+        // barrier
 
 	    commandList->SetRenderTarget(m_swapChain->GetRenderTarget());
         m_sdrPSO->SetHDRTexture(m_HDRTexture);

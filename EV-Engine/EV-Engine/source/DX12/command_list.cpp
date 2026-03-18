@@ -87,10 +87,9 @@ void CommandList::TransitionBarrier(const std::shared_ptr<Resource>& resource, D
 	}
 }
 
-
-void CommandList::UAVBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> resource, bool flushBarriers)
+void CommandList::UAVBarrier(bool flushBarriers)
 {
-	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(resource.Get());
+	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(nullptr);
 
 	m_resourceStateTracker->ResourceBarrier(barrier);
 
@@ -98,12 +97,6 @@ void CommandList::UAVBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> resource, bo
 	{
 		FlushResourceBarriers();
 	}
-}
-
-void CommandList::UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers)
-{
-	auto d3d12Resource = resource ? resource->GetD3D12Resource() : nullptr;
-	UAVBarrier(d3d12Resource, flushBarriers);
 }
 
 void CommandList::AliasingBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> beforeResource,
@@ -600,7 +593,7 @@ void CommandList::GenerateMips_UAV(const std::shared_ptr<Texture>& texture, bool
 
 		Dispatch(Math::DivideByMultiple(dstWidth, 8), Math::DivideByMultiple(dstHeight, 8));
 
-		UAVBarrier(texture);
+		UAVBarrier(true);
 
 		srcMip += mipCount;
 	}

@@ -82,6 +82,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
 
     float2 uv = (float2(DTid.xy) + 0.5f) / float(cubemapSize) * 2.0f - 1.0f;
     float3 N = float3(uv, 1.0f);
+/*
+    if (DTid.z == 0)
+    {
+        N = asfdjaspoidfj;
+    } else if (DTid.z == 1)
+    {
+        N = asdpofijsdf;
+    }
+*/
     N = normalize(mul(RotateUV[DTid.z], N));
 
     float3 R = N;
