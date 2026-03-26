@@ -44,6 +44,22 @@ XMMATRIX XM_CALLCONV LookAtMatrix(FXMVECTOR position, FXMVECTOR direction, FXMVE
     return matrix;
 }
 
+// 32bit to 16bit precision helper
+static uint16_t FloatToHalf(float f) {
+    uint32_t x;
+    memcpy(&x, &f, sizeof(float));
+    uint16_t sign = (x >> 31) << 15;
+    uint16_t exponent = ((x >> 23) & 0xFF);
+    uint32_t mantissa = x & 0x7FFFFF;
+    if (exponent == 0)       return sign;               // zero/denormal -> zero
+    if (exponent == 255)     return sign | 0x7C00 | (mantissa ? 0x200 : 0); // inf/nan
+    int16_t e = (int16_t)exponent - 127 + 15;
+    if (e >= 31)             return sign | 0x7C00;      // overflow -> inf
+    if (e <= 0)              return sign;               // underflow -> zero
+    return sign | (e << 10) | (uint16_t)(mantissa >> 13);
+}
+
+
 Ocean::Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVSync)
     : super(name, width, height, bVSync)
     , m_scissorRect(CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX))
@@ -1052,11 +1068,11 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList, const UINT casc
 	
     // TODO: the tex formats can probably be 16bit rather than 32
     // Input texture SRV
-	DXGI_FORMAT H0Format = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    DXGI_FORMAT H0Format = DXGI_FORMAT_R16G16B16A16_FLOAT;
     auto H0Desc = CD3DX12_RESOURCE_DESC::Tex2D(H0Format, OCEAN_SUBRES, OCEAN_SUBRES);
     
     // output phase texture UAV
-    DXGI_FORMAT phaseFormat = DXGI_FORMAT_R32G32B32A32_FLOAT;
+    DXGI_FORMAT phaseFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     auto phaseDesc = CD3DX12_RESOURCE_DESC::Tex2D(phaseFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     phaseDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
@@ -1069,22 +1085,23 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList, const UINT casc
     m_oceanCascades[cascade].H0Texture = Application::Get().CreateTexture(H0Desc);
     m_oceanCascades[cascade].H0Texture->SetName(L"H0 Texture" + std::to_wstring(cascade));
 
-    std::vector<float> combinedData(OCEAN_SUBRES * OCEAN_SUBRES * 4);
+    std::vector<uint16_t> combinedData(OCEAN_SUBRES * OCEAN_SUBRES * 4);
 
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             int index = (m * OCEAN_SUBRES + n) * 4;
-            combinedData[index + 0] = H0[m * OCEAN_SUBRES + n].real();        // R: H0 real
-            combinedData[index + 1] = H0[m * OCEAN_SUBRES + n].imag();        // G: H0 imaginary
-            combinedData[index + 2] = H0Conj[m * OCEAN_SUBRES + n].real();    // B: H0_conj real
-            combinedData[index + 3] = H0Conj[m * OCEAN_SUBRES + n].imag();    // A: H0_conj imaginary
+            combinedData[index + 0] = FloatToHalf(H0[m * OCEAN_SUBRES + n].real());       // R: H0 real
+            combinedData[index + 1] = FloatToHalf(H0[m * OCEAN_SUBRES + n].imag());       // G: H0 imaginary
+            combinedData[index + 2] = FloatToHalf(H0Conj[m * OCEAN_SUBRES + n].real());   // B: H0_conj real
+            combinedData[index + 3] = FloatToHalf(H0Conj[m * OCEAN_SUBRES + n].imag());   // A: H0_conj imaginary
         }
     }
 
     D3D12_SUBRESOURCE_DATA subData = {};
     subData.pData = combinedData.data();
-    subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(float);
+    subData.RowPitch = OCEAN_SUBRES * 4 * sizeof(uint16_t); // 4 channels * 2 bytes
     subData.SlicePitch = subData.RowPitch * OCEAN_SUBRES;
+
 
     // TODO clean this up... separate the jobs properly
     // TODO also use one application get rather than keep calling it
