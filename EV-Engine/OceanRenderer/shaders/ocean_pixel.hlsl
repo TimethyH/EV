@@ -210,10 +210,17 @@ float4 main(PixelShaderInput IN) : SV_Target
     // }
  
  
+    float3 mainLightDirection = normalize(-DirectionalLights[0].DirectionWS.xyz);
+    float3 halfVecMain = normalize(viewDirWS + mainLightDirection);
+    float HdotVMain = max(dot(halfVecMain, viewDirWS), 0.0);
+    float3 fresnelMain = PBRCalculateFresnel(HdotVMain, F0);
+    for (int i = 0; i < 2; ++i)
+    {
+	    
     // -------------------------------
     // Directional Light Contribution
     // -------------------------------
-    float3 dirLightDir = normalize(-DirectionalLights[0].DirectionWS.xyz);
+        float3 dirLightDir = normalize(-DirectionalLights[i].DirectionWS.xyz);
     float3 halfVec = normalize(viewDirWS + dirLightDir);
     float HdotV = max(dot(halfVec, viewDirWS), 0.0);
     
@@ -225,7 +232,8 @@ float4 main(PixelShaderInput IN) : SV_Target
     float intensity = 1.0f;
    // Directional Light BRDF calculation
     directionalLightBRDF += (kd * oceanColor / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDirWS, dirLightDir, normal))
-                                * DirectionalLights[0].Color * intensity * max(dot(dirLightDir, normal), 0.0f);
+                                * DirectionalLights[i].Color * intensity * max(dot(dirLightDir, normal), 0.0f);
+    }
 
 
 
@@ -248,9 +256,9 @@ float4 main(PixelShaderInput IN) : SV_Target
     // SubSurfaceScatter
 	// https://github.com/GarrettGunnell/Water/blob/1673a12e796c5745aea6fa26eda53261da8efa80/Assets/Shaders/FFTWater.shader
     float H = max(IN.WaveHeight, 0.0f) * heightModifier;
-    float k1 = peakScatterIntensity * H * pow(saturate(dot(dirLightDir, -viewDirWS)), 4.0f) * pow(0.5f - 0.5f * dot(dirLightDir, normal), 3.0f);
+    float k1 = peakScatterIntensity * H * pow(saturate(dot(mainLightDirection, -viewDirWS)), 4.0f) * pow(0.5f - 0.5f * dot(mainLightDirection, normal), 3.0f);
 
-    float3 sss = (1 - fresnel) * k1 * scatteredColor * DirectionalLights[0].Color;
+    float3 sss = (1 - fresnelMain) * k1 * scatteredColor * DirectionalLights[0].Color;
 
      // Combine ambient, point light, and directional light contributions
     BRDF += sss + ambient * IBLIntensity + pointLightBRDF + directionalLightBRDF;

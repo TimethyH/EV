@@ -251,7 +251,7 @@ bool Ocean::LoadContent()
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
     // Set the patch sizes for the cascades.
     m_oceanPatchSizes.resize(m_oceanCascadesNumber);
-    m_oceanPatchSizes[0] = 500.0f;
+    m_oceanPatchSizes[0] = 1500.0f;
     m_oceanPatchSizes[1] = 250.0f;
     m_oceanPatchSizes[2] = 17.0f;
     m_oceanPatchSizes[3] = 5.0f;
@@ -402,10 +402,10 @@ bool Ocean::LoadContent()
     // cbv.foamThreshold = 0.0f;
 
     // Foam settings after playing with it
-    cbv.foamDecay = 0.008f;
-    cbv.foamBias = 0.311f;
-    cbv.foamAdd = 0.023f;
-    cbv.foamThreshold = 0.023f;
+    cbv.foamDecay = 0.006f;
+    cbv.foamBias = 0.407f;
+    cbv.foamAdd = 0.051f;
+    cbv.foamThreshold = 0.181f;
 
     m_foamParameters.resize(sizeof(Constants) / 4);
     m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamThreshold };
@@ -487,7 +487,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_swapChain->WaitForSwapChain();
 
     // Update Camera
-    float speedMultiplier = (m_shift ? 64.0f : 2.0f);
+    float speedMultiplier = (m_shift ? 64.0f : 16.0f);
     XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     XMVECTOR cameraPan = XMVectorSet(0.0f, m_up - m_down, 0.0f, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
     m_camera.Translate(cameraTranslate, Space::LOCAL);
@@ -511,6 +511,7 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     float       directionalLightOffset = numDirectionalLights > 0 ? 2.0f * XM_PI / numDirectionalLights : 0;
 
     m_directionalLights.resize(numDirectionalLights);
+    m_directionalLights[1].position = XMFLOAT3(0.0f, 30.0f, 0.0f);
     for (int i = 0; i < numDirectionalLights; ++i)
     {
         DirectionalLight& l = m_directionalLights[i];

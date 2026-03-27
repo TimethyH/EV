@@ -105,7 +105,7 @@ namespace EV
             : directionWS(0.0f, 0.0f, 1.0f, 0.0f)
             , directionVS(0.0f, 0.0f, 1.0f, 0.0f)
             , color(1.0f, 1.0f, 1.0f, 1.0f)
-			, position(5.0f,5.0f,-20.0f)
+			, position(264.3f,5.0f,341.0f)
             , ambient(0.01f)
         {
         }
