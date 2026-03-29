@@ -52,15 +52,13 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID )
     float2 htilde = complex_multiply(h0, exponent) + complex_multiply(h0conj, float2(exponent.x, -exponent.y));
     float2 ih = float2(-htilde.y, htilde.x);
 
-    // Derivatives TODO: UNDERSTAND HOW THESE WORK!~~!~!~!
-
-    float2 displacementX = ih * kx * kRcp;
     float2 displacementY = htilde;
+    float2 displacementX = ih * kx * kRcp;
     float2 displacementZ = ih * ky * kRcp;
-    float2 displacementX_dx = -htilde * kx * kx * kRcp;
     float2 displacementY_dx = ih * kx;
-    float2 displacementZ_dx = -htilde * kx * ky * kRcp;
     float2 displacementY_dz = ih * ky;
+    float2 displacementX_dx = -htilde * kx * kx * kRcp;
+    float2 displacementZ_dx = -htilde * kx * ky * kRcp;
     float2 displacementZ_dz = -htilde * ky * ky * kRcp;
 
 
@@ -73,14 +71,5 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID )
 
     displacementTexture[dispatchThreadID.xy] = float4(htildeDisplacementX, htildeDisplacementZ);
     slopeTexture[dispatchThreadID.xy] = float4(htildeSlopeX, htildeSlopeZ);
-
-    // float phase = w * time;
-    //
-    // float2 iwt = float2(cos(phase), sin(phase));
-    // float2 iwtNeg = float2(cos(phase), -sin(phase));
-    //
-    // float2 complexH0 = complex_multiply(h0, iwt) + complex_multiply(h0conj, iwtNeg);
-    //
-    // outputTexture[dispatchThreadID.xy] = complexH0;
 
 }
