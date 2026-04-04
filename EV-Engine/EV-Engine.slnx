@@ -7,4 +7,5 @@
   <Project Path="OceanRenderer/OceanRenderer.vcxproj" Id="07d68a50-789e-4360-8466-307280f8cdc7">
     <BuildDependency Project="EV-Engine/EV-Engine.vcxproj" />
   </Project>
+  <Project Path="ShaderArt/ShaderArt.vcxproj" Id="be7dc341-2ecd-4f11-90ca-78f6fd15728d" />
 </Solution>
