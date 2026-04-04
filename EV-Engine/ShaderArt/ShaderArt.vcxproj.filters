@@ -37,4 +37,7 @@
     <FxCompile Include="shaders\canvas_VS.hlsl" />
     <FxCompile Include="shaders\canvas_PS.hlsl" />
   </ItemGroup>
+  <ItemGroup>
+    <None Include="shaders\noise.hlsli" />
+  </ItemGroup>
 </Project>

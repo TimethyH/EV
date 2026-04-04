@@ -1,3 +1,5 @@
+#include "noise.hlsli"
+
 struct PSInput
 {
     float2 TexCoord : TEXCOORD;
@@ -6,5 +8,7 @@ struct PSInput
 
 float4 main(PSInput IN) : SV_TARGET
 {
-    return float4(IN.TexCoord, 0.0f, 1.0f); // debug: visualize UVs
+    float2 p = floor(IN.TexCoord * 20.0);
+    float h = hash1(p);
+    return float4(h, h, h, 1.0);
 }
