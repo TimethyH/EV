@@ -13,8 +13,11 @@ class ResizeEventArgs;
 
 namespace EV
 {
+	class LandscapePSO;
+	class GUI;
+	class SwapChain;
 
-class Landscape : public EV::Game
+	class Landscape : public EV::Game
 {
 
 public:
@@ -36,6 +39,17 @@ protected:
 	void OnMouseWheel(MouseWheelEventArgs& e) override;
 	void OnResize(ResizeEventArgs& e) override;
 private:
+
+
+	std::shared_ptr<EV::Window> m_pWindow = nullptr;
+	std::shared_ptr<EV::SwapChain> m_swapChain = nullptr;
+	std::shared_ptr<EV::GUI> m_GUI = nullptr;
+
+	std::shared_ptr<LandscapePSO> m_landscapePSO;
+
+	EV::RenderTarget m_renderTarget = {};
+
+	std::shared_ptr<Texture> m_colorTexture;
 
 	D3D12_VIEWPORT m_viewport = {};
 	D3D12_RECT m_scissorRect = {};

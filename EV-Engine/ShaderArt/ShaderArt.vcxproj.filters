@@ -21,10 +21,20 @@
     <ClCompile Include="source\main.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\landscape_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="include\landscape.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\landscape_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+  </ItemGroup>
+  <ItemGroup>
+    <FxCompile Include="shaders\canvas_VS.hlsl" />
+    <FxCompile Include="shaders\canvas_PS.hlsl" />
   </ItemGroup>
 </Project>

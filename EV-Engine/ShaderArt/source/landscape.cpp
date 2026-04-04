@@ -1,5 +1,6 @@
 #include "landscape.h"
 
+#include "landscape_pso.h"
 #include "core/EV.h"
 #include "core/application.h"
 
@@ -53,7 +54,20 @@ Landscape::~Landscape()
 
 bool Landscape::LoadContent()
 {
-    return 1;
+    auto& app = Application::Get();
+
+    m_swapChain = app.CreateSwapchain(m_pWindow->GetWindowHandle(), DXGI_FORMAT_R8G8B8A8_UNORM);
+    m_swapChain->SetVSync(false);
+
+    m_GUI = app.CreateGUI(m_pWindow->GetWindowHandle(), m_swapChain->GetRenderTarget());
+    app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
+
+    m_landscapePSO = std::make_shared<LandscapePSO>(L"/canvas_VS.cso", L"/canvas_PS.cso");
+
+    m_pWindow->RegisterCallbacks(shared_from_this());
+    m_pWindow->Show();
+
+    return true;
 }
 
 void Landscape::UnloadContent()
@@ -62,17 +76,35 @@ void Landscape::UnloadContent()
 
 void Landscape::OnUpdate(UpdateEventArgs& e)
 {
-	Game::OnUpdate(e);
+    OnRender();
 }
 
 void Landscape::OnRender()
 {
-	Game::OnRender();
+    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
+    auto commandList = commandQueue.GetCommandList();
+
+    auto& swapChainRT = m_swapChain->GetRenderTarget();
+
+    FLOAT clearColor[] = { 0.0f, 0.0f, 0.0f, 1.0f };
+    commandList->ClearTexture(swapChainRT.GetTexture(AttachmentPoint::Color0), clearColor);
+
+    commandList->SetViewport(m_viewport);
+    commandList->SetScissorRect(m_scissorRect);
+    commandList->SetRenderTarget(swapChainRT);
+
+    m_landscapePSO->Apply(*commandList);
+
+    OnGUI(commandList, swapChainRT);
+    commandQueue.ExecuteCommandList(commandList);
+
+    m_swapChain->Present();
 }
 
 void Landscape::OnGUI(const std::shared_ptr<EV::CommandList>& commandList, const EV::RenderTarget& renderTarget)
 {
-
+    m_GUI->NewFrame();
+    m_GUI->Render(commandList, renderTarget);
 }
 
 void Landscape::OnKeyPress(KeyEventArgs& e)
