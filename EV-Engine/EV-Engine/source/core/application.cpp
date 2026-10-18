@@ -20,6 +20,7 @@
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 
 using namespace EV;
@@ -267,7 +268,7 @@ Application::Application(HINSTANCE hInst)
 
     wndClass.cbSize = sizeof(WNDCLASSEX);
     wndClass.style = CS_HREDRAW | CS_VREDRAW;
-    wndClass.lpfnWndProc = &WndProc;
+    wndClass.lpfnWndProc = &SafeWndProc;
     wndClass.hInstance = m_hInstance;
     wndClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
     wndClass.hIcon = LoadIcon(m_hInstance, NULL);
@@ -732,6 +733,38 @@ static WindowState DecodeWindowState(WPARAM wParam)
     }
 
     return windowState;
+}
+
+// Exceptions cannot cross the window procedure (Windows reports 0xC000041D without any detail),
+// so report them here before exiting.
+static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
+{
+    try
+    {
+        return WndProc(hwnd, message, wParam, lParam);
+    }
+    catch (const std::exception& e)
+    {
+        std::string text = std::string("Unhandled exception: ") + e.what() + "\n";
+        OutputDebugStringA(text.c_str());
+        fprintf(stderr, "%s", text.c_str());
+        if (FILE* log = fopen("ev_crash.log", "w"))
+        {
+            fputs(text.c_str(), log);
+            fclose(log);
+        }
+
+        char isCI[8] = {};
+        if (IsDebuggerPresent())
+        {
+            __debugbreak();
+        }
+        else if (GetEnvironmentVariableA("CI", isCI, sizeof(isCI)) == 0)
+        {
+            MessageBoxA(nullptr, text.c_str(), "EV Engine", MB_OK | MB_ICONERROR);
+        }
+        ExitProcess(EXIT_FAILURE);
+    }
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
