@@ -238,8 +238,10 @@ void ResourceStateTracker::Lock()
 
 void ResourceStateTracker::Unlock()
 {
-    m_globalMutex.unlock();
+    // Clear the flag while still holding the mutex: clearing it afterwards could overwrite the flag
+    // of another thread that has just taken the lock.
     m_isLocked = false;
+    m_globalMutex.unlock();
 }
 
 void ResourceStateTracker::AddGlobalResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES state)
