@@ -1,6 +1,7 @@
 #include "core/camera.h"
 
 
+#include <cmath>
 #include <limits>
 
 #include "DX12/command_list.h"
@@ -88,9 +89,8 @@ DirectX::XMMATRIX Camera::GetInverseProjectionMatrix() const
 
 void Camera::SetFov(float fov)
 {
-	// TODO: Should be if the fov passed is not the same as what is set
-	// checking != is bad for floats.. this should be a better alternative
-	if (m_fov - fov > std::numeric_limits<float>::epsilon())
+	// Compare the absolute difference: a signed one only accepted a smaller fov (zooming in).
+	if (std::abs(m_fov - fov) > std::numeric_limits<float>::epsilon())
 	{
 		m_fov = fov;
 		m_projectionDirty = true;
