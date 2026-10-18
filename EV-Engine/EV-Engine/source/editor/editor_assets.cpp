@@ -318,38 +318,63 @@ void Editor::DrawAssetBrowser()
     }
     ImGui::Separator();
 
-    // Folders first, then files, both sorted by name.
-    std::vector<fs::directory_entry> entries;
-    for (const auto& entry : fs::directory_iterator(m_assetDirectory, error))
+    // Folders first, then files, both sorted by name. Listing a large folder every frame is slow, so the
+    // listing is kept until the folder or filter changes, and refreshed every second to pick up new files.
+    const double now = ImGui::GetTime();
+    if (m_assetListing.directory != m_assetDirectory || m_assetListing.filter != m_assetFilter || now - m_assetListing.time > 1.0)
     {
-        const std::string name = entry.path().filename().string();
-        // Preprocessed assimp caches are not useful to show.
-        if (GetExtension(entry.path()) == ".assbin" || !ContainsCaseInsensitive(name, m_assetFilter))
+        m_assetListing.directory = m_assetDirectory;
+        m_assetListing.filter = m_assetFilter;
+        m_assetListing.time = now;
+        m_assetListing.entries.clear();
+        for (const auto& entry : fs::directory_iterator(m_assetDirectory, error))
         {
-            continue;
+            std::string name = entry.path().filename().string();
+            // Preprocessed assimp caches are not useful to show.
+            if (GetExtension(entry.path()) == ".assbin" || !ContainsCaseInsensitive(name, m_assetFilter))
+            {
+                continue;
+            }
+            m_assetListing.entries.push_back({ entry.path(), std::move(name), entry.is_directory(error) });
         }
-        entries.push_back(entry);
+        std::sort(m_assetListing.entries.begin(), m_assetListing.entries.end(), [](const AssetEntry& a, const AssetEntry& b)
+        {
+            if (a.isDirectory != b.isDirectory)
+            {
+                return a.isDirectory;
+            }
+            return a.name < b.name;
+        });
     }
-    std::sort(entries.begin(), entries.end(), [](const fs::directory_entry& a, const fs::directory_entry& b)
-    {
-        if (a.is_directory() != b.is_directory())
-        {
-            return a.is_directory();
-        }
-        return a.path().filename() < b.path().filename();
-    });
+    const auto& entries = m_assetListing.entries;
 
     ImGui::BeginChild("##assetgrid");
     const float cellWidth = m_assetIconSize + ImGui::GetStyle().ItemSpacing.x * 2.0f;
     const int columns = std::max(1, static_cast<int>(ImGui::GetContentRegionAvail().x / cellWidth));
+    const ImVec2 cellSize(m_assetIconSize, m_assetIconSize + ImGui::GetStyle().ItemSpacing.y + ImGui::GetTextLineHeight());
 
     fs::path openDirectory;
     int column = 0;
     for (const auto& entry : entries)
     {
-        const fs::path& path = entry.path();
-        const bool isDirectory = entry.is_directory();
-        const std::string name = path.filename().string();
+        // Cells scrolled out of view only take up their space.
+        if (!ImGui::IsRectVisible(cellSize))
+        {
+            ImGui::Dummy(cellSize);
+            if (++column < columns)
+            {
+                ImGui::SameLine();
+            }
+            else
+            {
+                column = 0;
+            }
+            continue;
+        }
+
+        const fs::path& path = entry.path;
+        const bool isDirectory = entry.isDirectory;
+        const std::string& name = entry.name;
 
         ImGui::PushID(name.c_str());
         ImGui::BeginGroup();

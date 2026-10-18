@@ -183,6 +183,22 @@ namespace EV
             bool                                  failed = false;
         };
 
+        struct AssetEntry
+        {
+            std::filesystem::path path;
+            std::string           name;
+            bool                  isDirectory = false;
+        };
+
+        // Contents of the folder shown in the Assets panel.
+        struct AssetListing
+        {
+            std::filesystem::path   directory;
+            std::string             filter;
+            double                  time = 0.0;
+            std::vector<AssetEntry> entries;
+        };
+
         void ApplyTheme();
         void DrawMenuBar();
         void DrawStatusBar();
@@ -286,6 +302,7 @@ namespace EV
         bool  m_showAssetBrowser = true;
         float m_assetIconSize = 72.0f;
         char  m_assetFilter[128] = {};
+        AssetListing m_assetListing;
         std::unordered_map<std::wstring, AssetThumbnail> m_assetThumbnails;
         std::unique_ptr<ModelDrag>   m_modelDrag;
         std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
