@@ -66,7 +66,7 @@ namespace EV
         struct alignas(16) CameraData
         {
             DirectX::XMFLOAT3 position;
-            float pad;
+            float iblIntensity; // Scales the image based (environment) lighting.
         };
 
         // An enum for root signature parameters.
@@ -172,6 +172,16 @@ namespace EV
         }
 
         // Apply this effect to the rendering pipeline.
+        // Strength of the image based lighting (1 = physically based amount).
+        float GetIBLIntensity() const
+        {
+            return m_iblIntensity;
+        }
+        void SetIBLIntensity(float intensity)
+        {
+            m_iblIntensity = intensity;
+        }
+
         void Apply(CommandList& commandList) override;
         void SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, std::shared_ptr<ShaderResourceView> specular,
                             std::shared_ptr<ShaderResourceView> lut);
@@ -189,6 +199,8 @@ namespace EV
         std::vector<DirectionalLight> m_directionalLights;
 
         // An SRV used pad unused texture slots.
+        float m_iblIntensity = 1.0f;
+
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
         std::shared_ptr<ShaderResourceView> m_defaultCubeSRV;
 

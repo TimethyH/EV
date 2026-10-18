@@ -877,6 +877,16 @@ void Ocean::DrawOceanParameters()
         Slider("Height Modifier", &m_displacementPSO->m_oceanRenderParams.heightMod, 0.0f, 5.0f, "Vertical scale of SSS wave height proxy");
         Slider("Peak Scatter", &m_displacementPSO->m_oceanRenderParams.peakScatterIntensity, 0.0f, 1.0f, "Subsurface scatter intensity at wave crests");
         Slider("IBL Intensity", &m_displacementPSO->m_oceanRenderParams.IBLIntensity, 0.0f, 1.0f, "Image-based lighting contribution");
+
+        float objectIBL = m_unlitPSO->GetIBLIntensity();
+        if (ImGui::SliderFloat("Object IBL", &objectIBL, 0.0f, 2.0f))
+        {
+            m_unlitPSO->SetIBLIntensity(objectIBL);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Image-based lighting strength of the objects (models), 1 = physically based");
+        }
         ImGui::Unindent();
     }
 

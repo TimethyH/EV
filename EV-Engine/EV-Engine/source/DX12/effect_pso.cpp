@@ -218,7 +218,7 @@ void EffectPSO::Apply(CommandList& commandList)
         auto position = m_camera.GetTranslation();
         CameraData cameraData;
         cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
-        cameraData.pad = 0.0f;
+        cameraData.iblIntensity = m_iblIntensity;
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData);
     }
     if (m_dirtyFlags & DF_PointLights)
