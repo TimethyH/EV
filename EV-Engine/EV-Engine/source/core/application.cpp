@@ -950,7 +950,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             int x = ((int)(short)LOWORD(lParam));
             int y = ((int)(short)HIWORD(lParam));
 
-            MouseMotionEventArgs mouseMotionEventArgs(lButton, mButton, rButton, control, shift, x, y);
+            MouseMotionEventArgs mouseMotionEventArgs(lButton, rButton, mButton, control, shift, x, y);
             pWindow->OnMouseMove(mouseMotionEventArgs);
         }
         break;
@@ -967,7 +967,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             int x = ((int)(short)LOWORD(lParam));
             int y = ((int)(short)HIWORD(lParam));
 
-            MouseButtonEventArgs mouseButtonEventArgs(DecodeMouseButton(message), MouseButtonEventArgs::ButtonState::PRESSED, lButton, mButton, rButton, control, shift, x, y);
+            MouseButtonEventArgs mouseButtonEventArgs(DecodeMouseButton(message), MouseButtonEventArgs::ButtonState::PRESSED, lButton, rButton, mButton, control, shift, x, y);
             pWindow->OnMouseButtonPress(mouseButtonEventArgs);
         }
         break;
@@ -984,7 +984,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             int x = ((int)(short)LOWORD(lParam));
             int y = ((int)(short)HIWORD(lParam));
 
-            MouseButtonEventArgs mouseButtonEventArgs(DecodeMouseButton(message), MouseButtonEventArgs::ButtonState::RELEASED, lButton, mButton, rButton, control, shift, x, y);
+            MouseButtonEventArgs mouseButtonEventArgs(DecodeMouseButton(message), MouseButtonEventArgs::ButtonState::RELEASED, lButton, rButton, mButton, control, shift, x, y);
             pWindow->OnMouseButtonRelease(mouseButtonEventArgs);
         }
         break;
@@ -1011,7 +1011,7 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             clientToScreenPoint.y = y;
             ScreenToClient(hwnd, &clientToScreenPoint);
 
-            MouseWheelEventArgs mouseWheelEventArgs(zDelta, lButton, mButton, rButton, control, shift, (int)clientToScreenPoint.x, (int)clientToScreenPoint.y);
+            MouseWheelEventArgs mouseWheelEventArgs(zDelta, lButton, rButton, mButton, control, shift, (int)clientToScreenPoint.x, (int)clientToScreenPoint.y);
             pWindow->OnMouseWheel(mouseWheelEventArgs);
         }
         break;

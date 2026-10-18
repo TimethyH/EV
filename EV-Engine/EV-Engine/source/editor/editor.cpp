@@ -623,8 +623,13 @@ void Editor::DrawSceneViewport()
         return;
     }
 
+    // ImGuizmo only starts a drag when no ImGui item is hovered or active, so while the gizmo is hovered
+    // (previous frame) or in use the viewport's input button steps aside, and the window must not move.
+    const bool gizmoOwnsMouse = !m_selectedNode.expired() && ImGuizmo::IsOver();
+
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-    const bool visible = ImGui::Begin(g_sceneWindow, &m_showScene, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+    const bool visible = ImGui::Begin(g_sceneWindow, &m_showScene, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
+        (gizmoOwnsMouse ? ImGuiWindowFlags_NoMove : 0));
     ImGui::PopStyleVar();
 
     if (visible)
@@ -644,9 +649,16 @@ void Editor::DrawSceneViewport()
 
         // The invisible button owns the viewport's mouse input, the image is drawn behind it.
         // Overlap is allowed so the toolbar drawn on top of it can still be clicked.
-        ImGui::SetNextItemAllowOverlap();
-        ImGui::InvisibleButton("##SceneViewport", imageSize,
-            ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+        if (gizmoOwnsMouse)
+        {
+            ImGui::Dummy(imageSize);
+        }
+        else
+        {
+            ImGui::SetNextItemAllowOverlap();
+            ImGui::InvisibleButton("##SceneViewport", imageSize,
+                ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
+        }
         // While dragging something the mouse belongs to drag & drop, not to the camera.
         const bool itemHovered = ImGui::IsItemHovered() && ImGui::GetDragDropPayload() == nullptr;
         const ImGuiIO& io = ImGui::GetIO();
