@@ -22,6 +22,8 @@
 #pragma comment(lib, "dbghelp.lib")
 
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
+// Icon resource compiled into the executables (EV-Engine/resources/app_icon.rc).
+constexpr int APP_ICON_RESOURCE_ID = 101;
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
@@ -278,11 +280,18 @@ Application::Application(HINSTANCE hInst)
     wndClass.lpfnWndProc = &SafeWndProc;
     wndClass.hInstance = m_hInstance;
     wndClass.hCursor = LoadCursor(nullptr, IDC_ARROW);
-    wndClass.hIcon = LoadIcon(m_hInstance, NULL);
+    // The application icon (taskbar and title bar) at the sizes Windows uses, or the default icon when the
+    // executable does not include app_icon.rc.
+    auto loadIcon = [this](int size)
+    {
+        HICON icon = static_cast<HICON>(LoadImageW(m_hInstance, MAKEINTRESOURCEW(APP_ICON_RESOURCE_ID), IMAGE_ICON, size, size, LR_DEFAULTCOLOR));
+        return icon ? icon : LoadIcon(nullptr, IDI_APPLICATION);
+    };
+    wndClass.hIcon = loadIcon(GetSystemMetrics(SM_CXICON));
     wndClass.hbrBackground = (HBRUSH)(COLOR_WINDOW + 1);
     wndClass.lpszMenuName = nullptr;
     wndClass.lpszClassName = WINDOW_CLASS_NAME;
-    wndClass.hIconSm = LoadIcon(m_hInstance, NULL);
+    wndClass.hIconSm = loadIcon(GetSystemMetrics(SM_CXSMICON));
 
     if (!RegisterClassExW(&wndClass))
     {

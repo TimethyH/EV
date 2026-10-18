@@ -165,6 +165,9 @@
     <ClInclude Include="include\ocean_scene.h" />
   </ItemGroup>
   <ItemGroup>
+    <ResourceCompile Include="..\EV-Engine\resources\app_icon.rc" />
+  </ItemGroup>
+  <ItemGroup>
     <ClCompile Include="source\compute_pso.cpp" />
     <ClCompile Include="source\convolution_pso.cpp" />
     <ClCompile Include="source\main.cpp" />
