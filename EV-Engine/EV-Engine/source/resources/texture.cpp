@@ -99,8 +99,24 @@ namespace
 //     CreateViews();
 // }
 
+// Depth buffers that may be sampled are created with a typeless format, so the
+// editor (or any shader) can read them through an SRV.
+static D3D12_RESOURCE_DESC MakeDepthShaderReadable(D3D12_RESOURCE_DESC desc)
+{
+    if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
+        (desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) == 0)
+    {
+        DXGI_FORMAT typeless = Texture::GetDepthTypelessFormat(desc.Format);
+        if (typeless != DXGI_FORMAT_UNKNOWN)
+        {
+            desc.Format = typeless;
+        }
+    }
+    return desc;
+}
+
 Texture::Texture(const D3D12_RESOURCE_DESC& resourceDesc, const D3D12_CLEAR_VALUE* clearValue)
-    : Resource(resourceDesc, clearValue)
+    : Resource(MakeDepthShaderReadable(resourceDesc), clearValue)
 {
     CreateViews();
 }
@@ -243,15 +259,68 @@ void Texture::CreateViews()
             device->CreateRenderTargetView(m_resource.Get(), nullptr,
                 m_renderTargetView.GetDescriptorHandle());
         }
+        const DXGI_FORMAT typelessDepthFormat = GetDepthFormatFromTypeless(desc.Format);
+        const bool isTypelessDepth = (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 &&
+            typelessDepthFormat != DXGI_FORMAT_UNKNOWN;
+
         // Create DSV
-        if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 && CheckDSVSupport())
+        if (isTypelessDepth)
+        {
+            D3D12_DEPTH_STENCIL_VIEW_DESC dsvDesc = {};
+            dsvDesc.Format = typelessDepthFormat;
+            if (desc.SampleDesc.Count > 1)
+            {
+                dsvDesc.ViewDimension = desc.DepthOrArraySize > 1 ? D3D12_DSV_DIMENSION_TEXTURE2DMSARRAY : D3D12_DSV_DIMENSION_TEXTURE2DMS;
+                dsvDesc.Texture2DMSArray.ArraySize = desc.DepthOrArraySize;
+            }
+            else if (desc.DepthOrArraySize > 1)
+            {
+                dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2DARRAY;
+                dsvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
+            }
+            else
+            {
+                dsvDesc.ViewDimension = D3D12_DSV_DIMENSION_TEXTURE2D;
+            }
+
+            m_depthStencilView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
+            device->CreateDepthStencilView(m_resource.Get(), &dsvDesc,
+                m_depthStencilView.GetDescriptorHandle());
+        }
+        else if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0 && CheckDSVSupport())
         {
             m_depthStencilView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_DSV);
             device->CreateDepthStencilView(m_resource.Get(), nullptr,
                 m_depthStencilView.GetDescriptorHandle());
         }
         // Create SRV
-        if ((desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) == 0 && CheckSRVSupport())
+        if (isTypelessDepth && (desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) == 0)
+        {
+            D3D12_SHADER_RESOURCE_VIEW_DESC srvDesc = {};
+            srvDesc.Format = GetDepthSRVFormat(desc.Format);
+            srvDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+            if (desc.SampleDesc.Count > 1)
+            {
+                srvDesc.ViewDimension = desc.DepthOrArraySize > 1 ? D3D12_SRV_DIMENSION_TEXTURE2DMSARRAY : D3D12_SRV_DIMENSION_TEXTURE2DMS;
+                srvDesc.Texture2DMSArray.ArraySize = desc.DepthOrArraySize;
+            }
+            else if (desc.DepthOrArraySize > 1)
+            {
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2DARRAY;
+                srvDesc.Texture2DArray.MipLevels = desc.MipLevels;
+                srvDesc.Texture2DArray.ArraySize = desc.DepthOrArraySize;
+            }
+            else
+            {
+                srvDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+                srvDesc.Texture2D.MipLevels = desc.MipLevels;
+            }
+
+            m_shaderResourceView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
+            device->CreateShaderResourceView(m_resource.Get(), &srvDesc,
+                m_shaderResourceView.GetDescriptorHandle());
+        }
+        else if ((desc.Flags & D3D12_RESOURCE_FLAG_DENY_SHADER_RESOURCE) == 0 && CheckSRVSupport())
         {
             m_shaderResourceView = app.AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV);
             device->CreateShaderResourceView(m_resource.Get(), nullptr,
@@ -405,6 +474,99 @@ bool Texture::IsDepthFormat(DXGI_FORMAT format)
     default:
         return false;
     }
+}
+
+DXGI_FORMAT Texture::GetDepthTypelessFormat(DXGI_FORMAT depthFormat)
+{
+    switch (depthFormat)
+    {
+    case DXGI_FORMAT_D32_FLOAT:
+        return DXGI_FORMAT_R32_TYPELESS;
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+        return DXGI_FORMAT_R24G8_TYPELESS;
+    case DXGI_FORMAT_D16_UNORM:
+        return DXGI_FORMAT_R16_TYPELESS;
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+        return DXGI_FORMAT_R32G8X24_TYPELESS;
+    default:
+        return DXGI_FORMAT_UNKNOWN;
+    }
+}
+
+DXGI_FORMAT Texture::GetDepthFormatFromTypeless(DXGI_FORMAT typelessFormat)
+{
+    switch (typelessFormat)
+    {
+    case DXGI_FORMAT_R32_TYPELESS:
+        return DXGI_FORMAT_D32_FLOAT;
+    case DXGI_FORMAT_R24G8_TYPELESS:
+        return DXGI_FORMAT_D24_UNORM_S8_UINT;
+    case DXGI_FORMAT_R16_TYPELESS:
+        return DXGI_FORMAT_D16_UNORM;
+    case DXGI_FORMAT_R32G8X24_TYPELESS:
+        return DXGI_FORMAT_D32_FLOAT_S8X24_UINT;
+    default:
+        return DXGI_FORMAT_UNKNOWN;
+    }
+}
+
+DXGI_FORMAT Texture::GetDepthSRVFormat(DXGI_FORMAT typelessFormat)
+{
+    switch (typelessFormat)
+    {
+    case DXGI_FORMAT_R32_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT:
+        return DXGI_FORMAT_R32_FLOAT;
+    case DXGI_FORMAT_R24G8_TYPELESS:
+    case DXGI_FORMAT_D24_UNORM_S8_UINT:
+        return DXGI_FORMAT_R24_UNORM_X8_TYPELESS;
+    case DXGI_FORMAT_R16_TYPELESS:
+    case DXGI_FORMAT_D16_UNORM:
+        return DXGI_FORMAT_R16_UNORM;
+    case DXGI_FORMAT_R32G8X24_TYPELESS:
+    case DXGI_FORMAT_D32_FLOAT_S8X24_UINT:
+        return DXGI_FORMAT_R32_FLOAT_X8X24_TYPELESS;
+    default:
+        return DXGI_FORMAT_UNKNOWN;
+    }
+}
+
+DXGI_FORMAT Texture::GetDepthStencilFormat() const
+{
+    if (!m_resource)
+    {
+        return DXGI_FORMAT_UNKNOWN;
+    }
+
+    const auto desc = m_resource->GetDesc();
+    if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) == 0)
+    {
+        return DXGI_FORMAT_UNKNOWN;
+    }
+    if (IsDepthFormat(desc.Format))
+    {
+        return desc.Format;
+    }
+    return GetDepthFormatFromTypeless(desc.Format);
+}
+
+DXGI_FORMAT Texture::GetShaderResourceFormat() const
+{
+    if (!m_resource)
+    {
+        return DXGI_FORMAT_UNKNOWN;
+    }
+
+    const auto desc = m_resource->GetDesc();
+    if ((desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0)
+    {
+        DXGI_FORMAT depthSRVFormat = GetDepthSRVFormat(desc.Format);
+        if (depthSRVFormat != DXGI_FORMAT_UNKNOWN)
+        {
+            return depthSRVFormat;
+        }
+    }
+    return desc.Format;
 }
 
 DXGI_FORMAT Texture::GetTypelessFormat(DXGI_FORMAT format)

@@ -50,9 +50,28 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
 
     ImGuiIO& io = ImGui::GetIO();
 
-    io.FontGlobalScale = ::GetDpiForWindow(m_hWnd) / 96.0f;
+    // Docked editor layout. Multi-viewports are not supported by this renderer.
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigWindowsMoveFromTitleBarOnly = true;
+    io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     // Allow user UI scaling using CTRL+Mouse Wheel scrolling
     io.FontAllowUserScaling = true;
+
+    // Rasterize the font at the window's DPI so text stays sharp. Prefer Segoe UI, fall back to the built-in font.
+    m_fontDPIScale = ::GetDpiForWindow(m_hWnd) / 96.0f;
+    ImFontConfig fontConfig;
+    fontConfig.OversampleH = 2;
+    ImFont* font = nullptr;
+    if (GetFileAttributesW(L"C:\\Windows\\Fonts\\segoeui.ttf") != INVALID_FILE_ATTRIBUTES)
+    {
+        font = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeui.ttf", 16.0f * m_fontDPIScale, &fontConfig);
+    }
+    if (!font)
+    {
+        fontConfig.SizePixels = 13.0f * m_fontDPIScale;
+        io.Fonts->AddFontDefault(&fontConfig);
+    }
+    ImGui::GetStyle().ScaleAllSizes(m_fontDPIScale);
 
     // Build texture atlas
     unsigned char* pixelData = nullptr;
@@ -81,6 +100,9 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
      commandList->GenerateMips(m_fontTexture);
     
      commandQueue.ExecuteCommandList(commandList);
+
+    // This renderer uses the legacy (pre 1.92) font atlas path: upload once, refer to it by ID.
+    io.Fonts->SetTexID(FontTextureID);
 
     auto d3d12Device = app.GetDevice();
 
@@ -182,8 +204,29 @@ GUI::~GUI()
 void GUI::NewFrame()
 {
     ImGui::SetCurrentContext(m_pImGuiCtx);
+    m_frameTextures.clear();
     ImGui_ImplWin32_NewFrame();
     ImGui::NewFrame();
+}
+
+ImTextureID GUI::GetTextureID(const std::shared_ptr<Texture>& texture)
+{
+    if (!texture)
+    {
+        return FontTextureID;
+    }
+    m_frameTextures.push_back({ texture, nullptr });
+    return FirstFrameTextureID + static_cast<ImTextureID>(m_frameTextures.size() - 1);
+}
+
+ImTextureID GUI::GetTextureID(const std::shared_ptr<ShaderResourceView>& srv)
+{
+    if (!srv)
+    {
+        return FontTextureID;
+    }
+    m_frameTextures.push_back({ nullptr, srv });
+    return FirstFrameTextureID + static_cast<ImTextureID>(m_frameTextures.size() - 1);
 }
 
 void GUI::Render(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget)
@@ -221,8 +264,39 @@ void GUI::Render(const std::shared_ptr<CommandList>& commandList, const RenderTa
     };
 
     commandList->SetGraphics32BitConstants(RootParameters::MatrixCB, mvp);
-    commandList->SetShaderResourceView(RootParameters::FontTexture, 0, m_fontSRV,
-        D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+
+    // Bind the texture referenced by a draw command (font atlas or an ImGui::Image() texture).
+    ImTextureID boundTexture = ImTextureID_Invalid;
+    auto bindTexture = [&](ImTextureID textureID)
+    {
+        if (textureID == boundTexture)
+        {
+            return;
+        }
+        boundTexture = textureID;
+
+        const size_t index = static_cast<size_t>(textureID - FirstFrameTextureID);
+        if (textureID >= FirstFrameTextureID && index < m_frameTextures.size())
+        {
+            const auto& frameTexture = m_frameTextures[index];
+            if (frameTexture.srv)
+            {
+                commandList->SetShaderResourceView(RootParameters::FontTexture, 0, frameTexture.srv,
+                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            }
+            else
+            {
+                commandList->SetShaderResourceView(RootParameters::FontTexture, 0, frameTexture.texture,
+                    D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+            }
+        }
+        else
+        {
+            commandList->SetShaderResourceView(RootParameters::FontTexture, 0, m_fontSRV,
+                D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+        }
+    };
+    bindTexture(FontTextureID);
 
     D3D12_VIEWPORT viewport = {};
     viewport.Width = drawData->DisplaySize.x;
@@ -250,7 +324,6 @@ void GUI::Render(const std::shared_ptr<CommandList>& commandList, const RenderTa
             drawList->VtxBuffer.Data);
         commandList->SetDynamicIndexBuffer(drawList->IdxBuffer.size(), indexFormat, drawList->IdxBuffer.Data);
 
-        int indexOffset = 0;
         for (int j = 0; j < drawList->CmdBuffer.size(); ++j)
         {
             const ImDrawCmd& drawCmd = drawList->CmdBuffer[j];
@@ -269,11 +342,11 @@ void GUI::Render(const std::shared_ptr<CommandList>& commandList, const RenderTa
 
                 if (scissorRect.right - scissorRect.left > 0.0f && scissorRect.bottom - scissorRect.top > 0.0)
                 {
+                    bindTexture(drawCmd.GetTexID());
                     commandList->SetScissorRect(scissorRect);
-                    commandList->DrawIndexed(drawCmd.ElemCount, 1, indexOffset);
+                    commandList->DrawIndexed(drawCmd.ElemCount, 1, drawCmd.IdxOffset, drawCmd.VtxOffset);
                 }
             }
-            indexOffset += drawCmd.ElemCount;
         }
     }
 }
@@ -288,8 +361,8 @@ void GUI::Destroy()
 
 void GUI::SetScaling(float scale)
 {
-    ImGuiIO& io = ImGui::GetIO();
-    io.FontGlobalScale = scale;
+    // The atlas is rasterized at m_fontDPIScale; scale relative to that.
+    ImGui::GetStyle().FontScaleMain = scale / m_fontDPIScale;
 }
 
 LRESULT GUI::WndProcHandler(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)

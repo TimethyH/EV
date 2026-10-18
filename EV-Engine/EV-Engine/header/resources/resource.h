@@ -97,6 +97,10 @@ namespace EV
          * replaced with SetD3D12Resource.
          */
         void SetName(const std::wstring& name);
+        const std::wstring& GetName() const
+        {
+            return m_resourceName;
+        }
 
         bool CheckFormatSupport(D3D12_FORMAT_SUPPORT1 formatSupport) const;
 

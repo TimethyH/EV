@@ -5,6 +5,8 @@
 
 #include <memory>
 #include <string>
+#include <mutex>
+#include <vector>
 
 #include "DX12/descriptor_allocation.h"
 #include "events.h"
@@ -109,6 +111,9 @@ class PipelineStateObject;
 			const D3D12_CLEAR_VALUE* clearValue = nullptr);
 		std::shared_ptr<Texture> CreateTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
 			const D3D12_CLEAR_VALUE* clearValue = nullptr);
+		// Every texture created through CreateTexture that is still alive. Used by the editor's texture browser.
+		std::vector<std::shared_ptr<Texture>> GetLiveTextures();
+
 		std::shared_ptr<GUI> CreateGUI(HWND hWnd, const RenderTarget& renderTarget);
 
 		std::shared_ptr<IndexBuffer> CreateIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat);
@@ -168,6 +173,8 @@ class PipelineStateObject;
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> CreateAdapter(bool bUseWarp);
 		Microsoft::WRL::ComPtr<ID3D12Device13> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
 		bool CheckTearingSupport();
+		void TrackLiveTexture(const std::shared_ptr<Texture>& texture);
+
 		std::shared_ptr<PipelineStateObject>
 			DoCreatePipelineStateObject(const D3D12_PIPELINE_STATE_STREAM_DESC& pipelineStateStreamDesc);
 	private:
@@ -192,6 +199,9 @@ class PipelineStateObject;
 		D3D_ROOT_SIGNATURE_VERSION m_highestRootSignatureVersion;
 
 		std::atomic_bool m_requestQuit = false;
+
+		std::mutex m_liveTexturesMutex;
+		std::vector<std::weak_ptr<Texture>> m_liveTextures;
 
 	};
 }

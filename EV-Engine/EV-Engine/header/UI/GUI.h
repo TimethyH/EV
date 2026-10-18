@@ -36,6 +36,9 @@
 #include <Windows.h>  // For HWND
 
 #include <memory>  // For std::shared_ptr
+#include <vector>  // For std::vector
+
+#include <d3d12.h> // For D3D12_RESOURCE_STATES
 
 namespace EV
 {
@@ -76,6 +79,16 @@ namespace EV
          */
         void SetScaling(float scale);
 
+        /**
+         * Get an ImTextureID that can be passed to ImGui::Image() during the current frame.
+         * The texture is kept alive until the GUI is rendered and is transitioned to a
+         * pixel shader readable state before it is drawn.
+         * Only plain 2D textures with a sampleable format display correctly; use the
+         * editor's texture viewer for depth, array, cube and integer textures.
+         */
+        ImTextureID GetTextureID(const std::shared_ptr<Texture>& texture);
+        ImTextureID GetTextureID(const std::shared_ptr<ShaderResourceView>& srv);
+
     protected:
         GUI(HWND hWnd, const RenderTarget& renderTarget);
         virtual ~GUI();
@@ -88,5 +101,19 @@ namespace EV
         std::shared_ptr<ShaderResourceView>  m_fontSRV;
         std::shared_ptr<RootSignature>       m_rootSignature;
         std::shared_ptr<PipelineStateObject> m_pipelineState;
+
+        // Textures referenced by ImGui::Image() this frame. ImTextureID = index + FirstFrameTextureID.
+        struct FrameTexture
+        {
+            std::shared_ptr<Texture>            texture;
+            std::shared_ptr<ShaderResourceView> srv;
+        };
+        std::vector<FrameTexture> m_frameTextures;
+
+        static constexpr ImTextureID FontTextureID = 1;
+        static constexpr ImTextureID FirstFrameTextureID = 2;
+
+        // DPI scale the font atlas was rasterized at.
+        float m_fontDPIScale = 1.0f;
     };
 }  // namespace EV

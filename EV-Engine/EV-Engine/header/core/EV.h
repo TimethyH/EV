@@ -29,6 +29,10 @@
 #include "resources/vertex_buffer.h"
 #include "resources/index_buffer.h"
 
+// Editor
+#include "editor/editor.h"
+#include "UI/GUI.h"
+
 // Utility includes
 #include "utility/helpers.h"
 #include "DX12/dx12_includes.h"

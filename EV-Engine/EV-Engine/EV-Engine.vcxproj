@@ -37,6 +37,12 @@
     <ClCompile Include="source\core\game..cpp" />
     <ClCompile Include="source\DX12\generate_mips_pso.cpp" />
     <ClCompile Include="source\UI\GUI.cpp" />
+    <ClCompile Include="thirdparty\imgui\imgui_tables.cpp" />
+    <ClCompile Include="thirdparty\imguizmo\ImGuizmo.cpp" />
+    <ClCompile Include="source\UI\format_utils.cpp" />
+    <ClCompile Include="source\UI\texture_preview.cpp" />
+    <ClCompile Include="source\UI\texture_readback.cpp" />
+    <ClCompile Include="source\editor\editor.cpp" />
     <ClCompile Include="source\resources\index_buffer.cpp" />
     <ClCompile Include="source\resources\material.cpp" />
     <ClCompile Include="source\DX12\pipeline_state_object.cpp" />
@@ -85,6 +91,11 @@
     <ClInclude Include="header\utility\game_framework_includes.h" />
     <ClInclude Include="header\DX12\generate_mips_pso.h" />
     <ClInclude Include="header\UI\GUI.h" />
+    <ClInclude Include="thirdparty\imguizmo\ImGuizmo.h" />
+    <ClInclude Include="header\UI\format_utils.h" />
+    <ClInclude Include="header\UI\texture_preview.h" />
+    <ClInclude Include="header\UI\texture_readback.h" />
+    <ClInclude Include="header\editor\editor.h" />
     <ClInclude Include="header\utility\helpers.h" />
     <ClInclude Include="header\resources\index_buffer.h" />
     <ClInclude Include="header\utility\key_codes.h" />
@@ -180,23 +191,23 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\imguizmo;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
     <OutDir>$(SolutionDir)EV-Engine\lib\debug</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\imguizmo;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
     <OutDir>$(SolutionDir)EV-Engine\lib\release</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\imguizmo;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
     <OutDir>$(SolutionDir)EV-Engine\lib\debug</OutDir>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\imguizmo;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
     <LibraryPath>$(LibraryPath)</LibraryPath>
     <ExternalIncludePath>$(ExternalIncludePath)</ExternalIncludePath>
     <OutDir>$(SolutionDir)EV-Engine\lib\release</OutDir>
