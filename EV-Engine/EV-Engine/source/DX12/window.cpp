@@ -86,10 +86,14 @@ void Window::SetFullScreen(bool bFullScreen)
 		m_fullScreen = bFullScreen;
 		if (m_fullScreen)
 		{
-			::GetWindowRect(m_hWnd, &m_windowRect);
-			UINT windowStyle = WS_OVERLAPPEDWINDOW & ~(WS_CAPTION | WS_SYSMENU | WS_THICKFRAME | WS_MINIMIZEBOX | WS_MAXIMIZEBOX);
+			// Remember the position (and maximized state) to restore when leaving full screen.
+			m_windowPlacement.length = sizeof(WINDOWPLACEMENT);
+			::GetWindowPlacement(m_hWnd, &m_windowPlacement);
 
-			::SetWindowLongW(m_hWnd, GWL_STYLE, windowStyle);
+			// A borderless popup covering the monitor. Not WS_OVERLAPPED and not maximized: Windows treats an
+			// overlapped window as one with a title bar and could draw its caption ("EV Engine") again.
+			const LONG style = ::GetWindowLongW(m_hWnd, GWL_STYLE);
+			::SetWindowLongW(m_hWnd, GWL_STYLE, (style & ~(WS_OVERLAPPEDWINDOW | WS_MAXIMIZE)) | WS_POPUP);
 
 			HMONITOR hMonitor = ::MonitorFromWindow(m_hWnd, MONITOR_DEFAULTTONEAREST);
 			MONITORINFOEX monitorInfo = {};
@@ -101,24 +105,16 @@ void Window::SetFullScreen(bool bFullScreen)
 				monitorInfo.rcMonitor.top,
 				monitorInfo.rcMonitor.right - monitorInfo.rcMonitor.left,
 				monitorInfo.rcMonitor.bottom - monitorInfo.rcMonitor.top,
-				SWP_FRAMECHANGED | SWP_NOACTIVATE);
-
-			::ShowWindow(m_hWnd, SW_MAXIMIZE);
+				SWP_FRAMECHANGED | SWP_NOOWNERZORDER | SWP_SHOWWINDOW);
 		}
 		else
 		{
-			// Restore all the window decorators.
-			::SetWindowLong(m_hWnd, GWL_STYLE, WS_OVERLAPPEDWINDOW);
-
-			::SetWindowPos(m_hWnd, HWND_NOTOPMOST,
-				m_windowRect.left,
-				m_windowRect.top,
-				m_windowRect.right - m_windowRect.left,
-				m_windowRect.bottom - m_windowRect.top,
-				SWP_FRAMECHANGED | SWP_NOACTIVATE);
-
-			::ShowWindow(m_hWnd, SW_NORMAL);
-		
+			// Restore the window decorations, then the position (also when it was maximized before).
+			const LONG style = ::GetWindowLongW(m_hWnd, GWL_STYLE);
+			::SetWindowLongW(m_hWnd, GWL_STYLE, (style & ~WS_POPUP) | WS_OVERLAPPEDWINDOW);
+			::SetWindowPlacement(m_hWnd, &m_windowPlacement);
+			::SetWindowPos(m_hWnd, nullptr, 0, 0, 0, 0,
+				SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_NOOWNERZORDER | SWP_FRAMECHANGED);
 		}
 	}
 }

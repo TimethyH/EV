@@ -199,7 +199,7 @@ namespace EV
 		UINT m_RTVDescriptorSize;
 		UINT m_currentBackBufferIndex;
 
-		RECT m_windowRect;
+		WINDOWPLACEMENT m_windowPlacement = {}; // Windowed position, restored when leaving full screen.
 		bool m_isTearingSupported;
 
 		int m_previousMouseX;
