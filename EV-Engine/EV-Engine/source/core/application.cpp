@@ -21,6 +21,7 @@ constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+static void CALLBACK OnDeviceRemoved(PVOID, BOOLEAN);
 
 
 using namespace EV;
@@ -308,12 +309,24 @@ void Application::Destroy()
 
 Application::~Application()
 {
+    if (m_deviceRemovedWait)
+    {
+        UnregisterWaitEx(m_deviceRemovedWait, INVALID_HANDLE_VALUE);
+    }
+    if (m_deviceRemovedEvent)
+    {
+        CloseHandle(m_deviceRemovedEvent);
+    }
+
     gs_Windows.clear();
     gs_WindowByName.clear();
 }
 
 void Application::Initialize()
 {
+    // Crash reports are appended during a run; start each run with a fresh log.
+    DeleteFileW(L"ev_crash.log");
+
 #if defined(_DEBUG)
     // Always enable the debug layer before doing anything DX12 related
     // so all possible errors generated while creating DX12 objects
@@ -350,6 +363,14 @@ void Application::Initialize()
     if (m_dxgiAdapter)
     {
         m_device = CreateDevice(m_dxgiAdapter);
+
+        // A fence that is signaled with UINT64_MAX when the device is removed.
+        if (SUCCEEDED(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_deviceRemovedFence))))
+        {
+            m_deviceRemovedEvent = CreateEvent(nullptr, FALSE, FALSE, nullptr);
+            m_deviceRemovedFence->SetEventOnCompletion(UINT64_MAX, m_deviceRemovedEvent);
+            RegisterWaitForSingleObject(&m_deviceRemovedWait, m_deviceRemovedEvent, OnDeviceRemoved, nullptr, INFINITE, WT_EXECUTEONLYONCE);
+        }
     }
     else
     {
@@ -455,6 +476,12 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
         pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_CORRUPTION, TRUE);
         pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_ERROR, TRUE);
         pInfoQueue->SetBreakOnSeverity(D3D12_MESSAGE_SEVERITY_WARNING, TRUE);
+
+        // Don't break on device removal itself: the crash handler then reports what the GPU was
+        // executing (DRED) before breaking into the debugger.
+        pInfoQueue->SetBreakOnID(D3D12_MESSAGE_ID_DEVICE_REMOVAL_PROCESS_AT_FAULT, FALSE);
+        pInfoQueue->SetBreakOnID(D3D12_MESSAGE_ID_DEVICE_REMOVAL_PROCESS_POSSIBLY_AT_FAULT, FALSE);
+        pInfoQueue->SetBreakOnID(D3D12_MESSAGE_ID_DEVICE_REMOVAL_PROCESS_NOT_AT_FAULT, FALSE);
 
         // Suppress whole categories of messages
         //D3D12_MESSAGE_CATEGORY Categories[] = {};
@@ -743,6 +770,36 @@ static WindowState DecodeWindowState(WPARAM wParam)
     return windowState;
 }
 
+// Writes a crash report to the debug output, stderr and ev_crash.log (appending).
+static void WriteCrashReport(const std::string& text)
+{
+    OutputDebugStringA(text.c_str());
+    fprintf(stderr, "%s", text.c_str());
+    FILE* log = nullptr;
+    if (fopen_s(&log, "ev_crash.log", "a") == 0 && log)
+    {
+        fputs(text.c_str(), log);
+        fclose(log);
+    }
+}
+
+[[noreturn]] static void ReportFatalError(const std::string& error)
+{
+    const std::string text = "Unhandled exception: " + error + "\n" + Application::Get().GetDeviceRemovedReport();
+    WriteCrashReport(text);
+
+    char isCI[8] = {};
+    if (IsDebuggerPresent())
+    {
+        __debugbreak();
+    }
+    else if (GetEnvironmentVariableA("CI", isCI, sizeof(isCI)) == 0)
+    {
+        MessageBoxA(nullptr, text.c_str(), "EV Engine", MB_OK | MB_ICONERROR);
+    }
+    ExitProcess(EXIT_FAILURE);
+}
+
 // Exceptions cannot cross the window procedure (Windows reports 0xC000041D without any detail),
 // so report them here before exiting.
 static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
@@ -753,27 +810,19 @@ static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
     }
     catch (const std::exception& e)
     {
-        std::string text = std::string("Unhandled exception: ") + e.what() + "\n" + Application::Get().GetDeviceRemovedReport();
-        OutputDebugStringA(text.c_str());
-        fprintf(stderr, "%s", text.c_str());
-        FILE* log = nullptr;
-        if (fopen_s(&log, "ev_crash.log", "w") == 0 && log)
-        {
-            fputs(text.c_str(), log);
-            fclose(log);
-        }
-
-        char isCI[8] = {};
-        if (IsDebuggerPresent())
-        {
-            __debugbreak();
-        }
-        else if (GetEnvironmentVariableA("CI", isCI, sizeof(isCI)) == 0)
-        {
-            MessageBoxA(nullptr, text.c_str(), "EV Engine", MB_OK | MB_ICONERROR);
-        }
-        ExitProcess(EXIT_FAILURE);
+        ReportFatalError(e.what());
     }
+    catch (...)
+    {
+        ReportFatalError("unknown exception (not derived from std::exception)");
+    }
+}
+
+// Called on a thread pool thread as soon as the device is removed, so the report is written
+// even if the main thread is stopped by the debugger or never reaches the exception handler.
+static void CALLBACK OnDeviceRemoved(PVOID, BOOLEAN)
+{
+    WriteCrashReport("Device removed (detected by fence)\n" + Application::Get().GetDeviceRemovedReport());
 }
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)

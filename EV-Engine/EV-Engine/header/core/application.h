@@ -205,6 +205,11 @@ class PipelineStateObject;
 
 		std::atomic_bool m_requestQuit = false;
 
+		// Device removal detection (see OnDeviceRemoved).
+		Microsoft::WRL::ComPtr<ID3D12Fence> m_deviceRemovedFence;
+		HANDLE m_deviceRemovedEvent = nullptr;
+		HANDLE m_deviceRemovedWait = nullptr;
+
 		std::mutex m_liveTexturesMutex;
 		std::vector<std::weak_ptr<Texture>> m_liveTextures;
 
