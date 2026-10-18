@@ -106,8 +106,11 @@ void TextureReadback::Record(CommandList& commandList)
         readback.request.mip = mip;
         readback.request.slice = slice;
 
+        // Depth-stencil resources can only be copied as whole subresources.
+        const bool isDepth = (desc.Flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL) != 0;
+
         D3D12_BOX box = {};
-        if (request.kind == Kind::Texel)
+        if (request.kind == Kind::Texel && !isDepth)
         {
             if (request.x >= mipWidth || request.y >= mipHeight)
             {
@@ -116,6 +119,16 @@ void TextureReadback::Record(CommandList& commandList)
             box = { request.x, request.y, is3D ? slice : 0, request.x + 1, request.y + 1, (is3D ? slice : 0) + 1 };
             readback.width = 1;
             readback.height = 1;
+        }
+        else if (request.kind == Kind::Texel)
+        {
+            if (request.x >= mipWidth || request.y >= mipHeight)
+            {
+                continue;
+            }
+            box = { 0, 0, 0, mipWidth, mipHeight, 1 };
+            readback.width = mipWidth;
+            readback.height = mipHeight;
         }
         else
         {
@@ -149,7 +162,7 @@ void TextureReadback::Record(CommandList& commandList)
 
         CD3DX12_TEXTURE_COPY_LOCATION dst(readback.buffer.Get(), readback.footprint);
         CD3DX12_TEXTURE_COPY_LOCATION src(request.texture->GetD3D12Resource().Get(), subresource);
-        commandList.GetCommandList()->CopyTextureRegion(&dst, 0, 0, 0, &src, &box);
+        commandList.GetCommandList()->CopyTextureRegion(&dst, 0, 0, 0, &src, isDepth ? nullptr : &box);
 
         commandList.TrackResource(readback.buffer);
         commandList.TrackResource(request.texture->GetD3D12Resource());
@@ -208,8 +221,14 @@ void TextureReadback::Resolve(const InFlight& readback)
 
     if (readback.request.kind == Kind::Texel)
     {
+        // Single texel copies start at the texel; whole subresource copies (depth) are indexed.
+        const bool wholeSubresource = readback.width > 1 || readback.height > 1;
+        const uint64_t offset = wholeSubresource
+            ? static_cast<uint64_t>(readback.request.y) * readback.footprint.Footprint.RowPitch + static_cast<uint64_t>(readback.request.x) * texelSize
+            : 0;
+
         TexelResult result;
-        result.valid = FormatUtils::DecodeTexel(format, bytes, result.value);
+        result.valid = FormatUtils::DecodeTexel(format, bytes + offset, result.value);
         result.x = readback.request.x;
         result.y = readback.request.y;
         result.mip = readback.request.mip;

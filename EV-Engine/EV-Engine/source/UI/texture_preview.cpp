@@ -448,8 +448,9 @@ void TexturePreview::ReleaseUnused()
     const uint64_t frame = m_frame++;
 
     std::erase_if(m_targets, [frame](const auto& entry) { return frame - entry.second.lastUsedFrame > g_releaseAfterFrames; });
+    // Views keep their texture alive, so drop them as soon as a frame does not use them.
     std::erase_if(m_sourceViews, [frame](const auto& entry)
     {
-        return entry.second.texture.expired() || frame - entry.second.lastUsedFrame > g_releaseAfterFrames;
+        return entry.second.texture.expired() || entry.second.lastUsedFrame != frame;
     });
 }
