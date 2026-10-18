@@ -709,6 +709,44 @@ void Editor::UpdateTextureDrops()
 }
 
 // ------------------------------------------------------------------------------------------------
+// Background loads
+
+bool Editor::IsLoadingInBackground() const
+{
+    if ((m_modelDrag && !m_modelDrag->scene && m_modelDrag->loading.valid()) || !m_textureDrops.empty() || !m_discardedLoads.empty())
+    {
+        return true;
+    }
+    for (const auto& [path, thumbnail] : m_assetThumbnails)
+    {
+        if (thumbnail.loading.valid())
+        {
+            return true;
+        }
+    }
+    return false;
+}
+
+void Editor::UpdateSettledTextures()
+{
+    // Only refresh while nothing is loading: everything alive then has finished uploading.
+    if (IsLoadingInBackground())
+    {
+        return;
+    }
+    m_settledTextures.clear();
+    for (const auto& texture : Application::Get().GetLiveTextures())
+    {
+        m_settledTextures.insert(texture);
+    }
+}
+
+bool Editor::IsTextureSettled(const std::shared_ptr<Texture>& texture) const
+{
+    return m_settledTextures.count(texture) > 0;
+}
+
+// ------------------------------------------------------------------------------------------------
 // Editing
 
 void Editor::SpawnModelInFrontOfCamera(const fs::path& path)
