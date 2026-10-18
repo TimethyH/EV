@@ -17,11 +17,17 @@
 #include "resources/vertex_buffer.h"
 #include "utility/helpers.h"
 
+#include <csignal>
+#include <DbgHelp.h>
+#pragma comment(lib, "dbghelp.lib")
+
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
 
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 static void CALLBACK OnDeviceRemoved(PVOID, BOOLEAN);
+static void OnAbort(int);
+static LONG WINAPI OnUnhandledException(EXCEPTION_POINTERS* info);
 
 
 using namespace EV;
@@ -324,8 +330,14 @@ Application::~Application()
 
 void Application::Initialize()
 {
-    // Crash reports are appended during a run; start each run with a fresh log.
-    DeleteFileW(L"ev_crash.log");
+    // Crash reports are appended during a run; start each run with a fresh log, keeping the previous one
+    // (restarting right after a crash would otherwise lose the report).
+    MoveFileExW(L"ev_crash.log", L"ev_crash.prev.log", MOVEFILE_REPLACE_EXISTING);
+
+    // Failed asserts and std::terminate (an exception escaping a thread, destructor or noexcept function) end in abort().
+    // Terminate handlers are per thread, the SIGABRT handler is not.
+    signal(SIGABRT, OnAbort);
+    SetUnhandledExceptionFilter(OnUnhandledException);
 
 #if defined(_DEBUG)
     // Always enable the debug layer before doing anything DX12 related
@@ -840,6 +852,72 @@ static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
     {
         ReportFatalError("unknown exception (not derived from std::exception)");
     }
+}
+
+// Function names (and lines, when the PDB is found) of the calling thread's stack.
+static std::string GetStackTrace()
+{
+    HANDLE process = GetCurrentProcess();
+    SymSetOptions(SYMOPT_DEFERRED_LOADS | SYMOPT_LOAD_LINES | SYMOPT_UNDNAME);
+    SymInitialize(process, nullptr, TRUE);
+
+    void* frames[48];
+    const USHORT frameCount = CaptureStackBackTrace(2, _countof(frames), frames, nullptr);
+
+    alignas(SYMBOL_INFO) char symbolBuffer[sizeof(SYMBOL_INFO) + 256] = {};
+    SYMBOL_INFO* symbol = reinterpret_cast<SYMBOL_INFO*>(symbolBuffer);
+    symbol->SizeOfStruct = sizeof(SYMBOL_INFO);
+    symbol->MaxNameLen = 255;
+
+    std::string trace;
+    char line[640];
+    for (USHORT i = 0; i < frameCount; ++i)
+    {
+        const DWORD64 address = reinterpret_cast<DWORD64>(frames[i]);
+        DWORD64 displacement = 0;
+        const char* name = SymFromAddr(process, address, &displacement, symbol) ? symbol->Name : "?";
+
+        IMAGEHLP_LINE64 source = {};
+        source.SizeOfStruct = sizeof(source);
+        DWORD lineDisplacement = 0;
+        if (SymGetLineFromAddr64(process, address, &lineDisplacement, &source))
+        {
+            snprintf(line, sizeof(line), "  %s  %s(%lu)\n", name, source.FileName, source.LineNumber);
+        }
+        else
+        {
+            snprintf(line, sizeof(line), "  %s\n", name);
+        }
+        trace += line;
+    }
+    return trace;
+}
+
+// Access violations and other structured exceptions that nothing handles (on any thread).
+static LONG WINAPI OnUnhandledException(EXCEPTION_POINTERS* info)
+{
+    char header[256];
+    const EXCEPTION_RECORD* record = info->ExceptionRecord;
+    if (record->ExceptionCode == EXCEPTION_ACCESS_VIOLATION && record->NumberParameters >= 2)
+    {
+        snprintf(header, sizeof(header), "Unhandled exception 0x%08lX (access violation %s address 0x%llX), thread %lu:\n",
+            record->ExceptionCode, record->ExceptionInformation[0] == 0 ? "reading" : record->ExceptionInformation[0] == 1 ? "writing" : "executing",
+            static_cast<unsigned long long>(record->ExceptionInformation[1]), GetCurrentThreadId());
+    }
+    else
+    {
+        snprintf(header, sizeof(header), "Unhandled exception 0x%08lX at 0x%p, thread %lu:\n", record->ExceptionCode,
+            record->ExceptionAddress, GetCurrentThreadId());
+    }
+    // The filter runs on the faulting thread's stack, so the trace includes the faulting frames.
+    WriteCrashReport(header + GetStackTrace());
+    return EXCEPTION_CONTINUE_SEARCH;
+}
+
+static void OnAbort(int)
+{
+    WriteCrashReport("abort() called (failed assert, or std::terminate: an exception escaped a thread, destructor or noexcept function), thread " +
+        std::to_string(GetCurrentThreadId()) + ":\n" + GetStackTrace());
 }
 
 // Called on a thread pool thread as soon as the device is removed, so the report is written
