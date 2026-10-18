@@ -225,30 +225,12 @@ void Window::OnDPIScaleChanged(DPIScaleEventArgs& e)
 
 void Window::OnResize(ResizeEventArgs& e)
 {
-	// if (m_screenWidth != e.windowWidth || m_screenHeight!= e.windowHeight)
-	// {
-	// 	m_screenWidth = std::max(1, e.windowWidth);
-	// 	m_screenHeight = std::max(1, e.windowHeight);
-	//
-	// 	Application::Get().Flush();
-	//
-	// 	for (int i = 0; i < BufferCount; ++i)
-	// 	{
-	// 		m_backBufferTextures[i]->Reset();
-	// 	}
-	//
-	// 	DXGI_SWAP_CHAIN_DESC desc = {};
-	// 	ThrowIfFailed(m_dxgiSwapChain->GetDesc(&desc));
-	// 	ThrowIfFailed(m_dxgiSwapChain->ResizeBuffers(BufferCount, m_screenWidth, m_screenHeight, desc.BufferDesc.Format, desc.Flags));
-	//
-	// 	m_currentBackBufferIndex= m_dxgiSwapChain->GetCurrentBackBufferIndex();
-	// 	UpdateRenderTargetViews();
-	// }
-	//
-	// if (auto pGame = m_pGame.lock())
-	// {
-	// 	pGame->OnResize(e);
-	// }
+	// The game owns the swap chain (SwapChain) and resizes it in its Resize handler.
+	// A minimized window reports a size of 0x0: keep the current size until it is restored.
+	if (e.width > 0 && e.height > 0)
+	{
+		Resize(e);
+	}
 }
 
 void Window::OnClose(WindowCloseEventArgs& e)
