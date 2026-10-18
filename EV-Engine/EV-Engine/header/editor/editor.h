@@ -310,6 +310,7 @@ namespace EV
 
         // Selection
         std::weak_ptr<SceneNode> m_selectedNode;
+        const SceneNode*         m_inspectedNode = nullptr; // Selection shown last frame, to notice changes (never dereferenced).
 
         // Reparenting requested by a hierarchy drop; applied after the tree is drawn.
         struct Reparent
