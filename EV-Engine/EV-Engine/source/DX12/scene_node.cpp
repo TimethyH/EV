@@ -97,14 +97,23 @@ void SceneNode::RemoveChild(std::shared_ptr<SceneNode> childNode)
         NodeList::const_iterator iter = std::find(m_children.begin(), m_children.end(), childNode);
         if (iter != m_children.cend())
         {
-            childNode->SetParent(nullptr);
+            // Detach here instead of calling childNode->SetParent(nullptr): that calls RemoveChild again
+            // while the child is still in the list, which recursed until the stack overflowed.
+            // The child keeps its world space position.
+            const XMMATRIX worldTransform = childNode->GetWorldTransform();
             m_children.erase(iter);
+            childNode->m_parentNode.reset();
+            childNode->SetLocalTransform(worldTransform);
 
-            // Also remove it from the name map.
-            NodeNameMap::iterator iter2 = m_childrenByName.find(childNode->GetName());
-            if (iter2 != m_childrenByName.end())
+            // Also remove it from the name map (names are not unique, so match the node itself).
+            auto range = m_childrenByName.equal_range(childNode->GetName());
+            for (auto iter2 = range.first; iter2 != range.second; ++iter2)
             {
-                m_childrenByName.erase(iter2);
+                if (iter2->second == childNode)
+                {
+                    m_childrenByName.erase(iter2);
+                    break;
+                }
             }
         }
         else
@@ -133,11 +142,8 @@ void SceneNode::SetParent(std::shared_ptr<SceneNode> parentNode)
     }
     else if (auto parent = m_parentNode.lock())
     {
-        // Setting parent to NULL.. remove from current parent and reset parent node.
-        auto worldTransform = GetWorldTransform();
+        // Setting parent to NULL: the parent detaches this node and keeps its world transform.
         parent->RemoveChild(me);
-        m_parentNode.reset();
-        SetLocalTransform(worldTransform);
     }
 }
 
