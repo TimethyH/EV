@@ -125,6 +125,14 @@ namespace EV
         void Reset();
 
         /**
+         * The state a resource is in at this point of the command list: its last transition in this
+         * command list, otherwise its global state. Returns false if the state of the resource is unknown.
+         * Per-subresource states (if any) are returned in subresourceStates.
+         */
+        bool GetResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES& state,
+            std::map<UINT, D3D12_RESOURCE_STATES>& subresourceStates) const;
+
+        /**
          * The global state must be locked before flushing pending resource barriers
          * and committing the final resource state to the global resource state.
          * This ensures consistency of the global resource state between command list

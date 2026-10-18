@@ -136,6 +136,18 @@ namespace EV
          */
         void FlushResourceBarriers();
 
+        // The state of a resource at this point of the command list, so it can be restored after
+        // temporary use (e.g. by editor tools) without changing what the rest of the frame expects.
+        struct ResourceStateSnapshot
+        {
+            std::shared_ptr<Resource>             resource;
+            bool                                  known = false;
+            D3D12_RESOURCE_STATES                 state = D3D12_RESOURCE_STATE_COMMON;
+            std::map<UINT, D3D12_RESOURCE_STATES> subresourceStates;
+        };
+        ResourceStateSnapshot GetResourceState(const std::shared_ptr<Resource>& resource) const;
+        void                  RestoreResourceState(const ResourceStateSnapshot& snapshot);
+
         /**
          * Copy resources.
          */

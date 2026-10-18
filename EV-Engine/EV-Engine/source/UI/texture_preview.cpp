@@ -383,6 +383,19 @@ std::shared_ptr<Texture> TexturePreview::Request(uint64_t key, const std::shared
 
 void TexturePreview::Render(CommandList& commandList)
 {
+    // Remember the state of every source so it can be restored afterwards: the application (and other
+    // queues, e.g. the ocean's compute queue) expect their textures in the state they left them in.
+    std::vector<CommandList::ResourceStateSnapshot> sourceStates;
+    for (const auto& pending : m_pending)
+    {
+        const bool seen = std::any_of(sourceStates.begin(), sourceStates.end(),
+            [&pending](const auto& snapshot) { return snapshot.resource == pending.source; });
+        if (!seen)
+        {
+            sourceStates.push_back(commandList.GetResourceState(pending.source));
+        }
+    }
+
     for (const auto& pending : m_pending)
     {
         const auto sourceDesc = pending.source->GetD3D12ResourceDesc();
@@ -432,11 +445,9 @@ void TexturePreview::Render(CommandList& commandList)
         commandList.Draw(3);
     }
 
-    // Leave the inspected textures in the common state so any queue can use them next
-    // (the ocean's textures are written by the compute queue, which cannot leave pixel shader states).
-    for (const auto& pending : m_pending)
+    for (const auto& snapshot : sourceStates)
     {
-        commandList.TransitionBarrier(pending.source, D3D12_RESOURCE_STATE_COMMON);
+        commandList.RestoreResourceState(snapshot);
     }
     m_pending.clear();
 

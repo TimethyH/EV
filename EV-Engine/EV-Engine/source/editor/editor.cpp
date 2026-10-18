@@ -594,8 +594,8 @@ void Editor::TextureThumbnail(const std::shared_ptr<Texture>& texture, float siz
         const int mip = static_cast<int>(std::floor(std::log2(std::max(1.0f, largest / size))));
         settings.mip = std::clamp(mip, 0, desc.MipLevels - 1);
 
-        // Thumbnails are keyed per texture so each keeps its own image.
-        const uint64_t key = (reinterpret_cast<uint64_t>(texture.get()) << 1) | 1;
+        // Thumbnails are keyed per texture and size so each keeps its own image (no reallocation every frame).
+        const uint64_t key = (reinterpret_cast<uint64_t>(texture.get()) * 31 + static_cast<uint64_t>(size)) | (1ull << 63);
         image = m_texturePreview->Request(key, texture, settings, static_cast<uint32_t>(size), static_cast<uint32_t>(size));
     }
 

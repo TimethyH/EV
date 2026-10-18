@@ -208,6 +208,28 @@ void ResourceStateTracker::Reset()
     m_finalResourceState.clear();
 }
 
+bool ResourceStateTracker::GetResourceState(ID3D12Resource* resource, D3D12_RESOURCE_STATES& state,
+    std::map<UINT, D3D12_RESOURCE_STATES>& subresourceStates) const
+{
+    const auto finalIter = m_finalResourceState.find(resource);
+    if (finalIter != m_finalResourceState.end())
+    {
+        state = finalIter->second.state;
+        subresourceStates = finalIter->second.subresourceState;
+        return true;
+    }
+
+    std::lock_guard<std::mutex> lock(m_globalMutex);
+    const auto globalIter = m_globalResourceState.find(resource);
+    if (globalIter != m_globalResourceState.end())
+    {
+        state = globalIter->second.state;
+        subresourceStates = globalIter->second.subresourceState;
+        return true;
+    }
+    return false;
+}
+
 void ResourceStateTracker::Lock()
 {
     m_globalMutex.lock();
