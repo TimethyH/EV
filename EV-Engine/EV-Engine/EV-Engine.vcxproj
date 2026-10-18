@@ -43,6 +43,7 @@
     <ClCompile Include="source\UI\texture_preview.cpp" />
     <ClCompile Include="source\UI\texture_readback.cpp" />
     <ClCompile Include="source\editor\editor.cpp" />
+    <ClCompile Include="source\editor\editor_assets.cpp" />
     <ClCompile Include="source\resources\index_buffer.cpp" />
     <ClCompile Include="source\resources\material.cpp" />
     <ClCompile Include="source\DX12\pipeline_state_object.cpp" />
@@ -96,6 +97,7 @@
     <ClInclude Include="header\UI\texture_preview.h" />
     <ClInclude Include="header\UI\texture_readback.h" />
     <ClInclude Include="header\editor\editor.h" />
+    <ClInclude Include="source\editor\editor_internal.h" />
     <ClInclude Include="header\utility\helpers.h" />
     <ClInclude Include="header\resources\index_buffer.h" />
     <ClInclude Include="header\utility\key_codes.h" />

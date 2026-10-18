@@ -17,10 +17,15 @@
  */
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
+#include <future>
 #include <memory>
 #include <string>
+#include <unordered_map>
 #include <vector>
+
+#include <DirectXMath.h>
 
 #include "imgui.h"
 
@@ -106,9 +111,15 @@ namespace EV
         // ----------------------------------------------------------------------------------------
         // Scenes, panels and menus
 
-        // Scenes shown in the Hierarchy panel.
+        // Scenes shown in the Hierarchy panel (and used for picking and drop placement).
         void AddScene(const std::string& name, const std::shared_ptr<Scene>& scene);
         void RemoveScene(const std::shared_ptr<Scene>& scene);
+
+        // Models dropped into the scene from the Assets panel. The application renders these.
+        std::vector<std::shared_ptr<Scene>> GetSpawnedScenes() const;
+
+        // Folder shown in the Assets panel (relative to the working directory). Default: "assets".
+        void SetAssetRoot(const std::filesystem::path& root);
 
         // A dockable window drawn by the application. The callback is called between ImGui::Begin and ImGui::End.
         void AddPanel(const std::string& name, std::function<void()> draw, DockSlot slot = DockSlot::Right, bool open = true);
@@ -140,6 +151,35 @@ namespace EV
         {
             std::string            name;
             std::shared_ptr<Scene> scene;
+            bool                   spawned = false; // Created by dropping an asset, rendered by the application.
+        };
+
+        // A model being dragged from the Assets panel into the viewport.
+        struct ModelDrag
+        {
+            std::filesystem::path               path;
+            std::future<std::shared_ptr<Scene>> loading;
+            std::shared_ptr<Scene>              scene;          // Set once loaded.
+            DirectX::XMFLOAT4X4                 rootTransform;  // Root transform as loaded.
+            DirectX::XMFLOAT3                   bottomOffset;   // Bottom center of the model relative to its root position.
+            DirectX::XMFLOAT3                   position = {};  // Where the model's bottom center goes.
+            bool                                hasPosition = false;
+            bool                                delivered = false; // Mouse released over the viewport.
+        };
+
+        // An image dropped onto a material slot or object, loading in the background.
+        struct TextureDrop
+        {
+            std::future<std::shared_ptr<Texture>> loading;
+            std::weak_ptr<Material>               material;
+            int                                   slot;
+        };
+
+        struct AssetThumbnail
+        {
+            std::future<std::shared_ptr<Texture>> loading;
+            std::shared_ptr<Texture>              texture;
+            bool                                  failed = false;
         };
 
         void ApplyTheme();
@@ -153,11 +193,26 @@ namespace EV
         void PickNode(const ImVec2& mousePosition);
         void DrawHierarchy();
         void DrawHierarchyNode(const std::shared_ptr<SceneNode>& node, const char* label);
+        void ApplyPendingReparent();
         void DrawInspector();
-        void DrawMaterial(Material& material, int index);
+        void DrawMaterial(const std::shared_ptr<Material>& material, int index);
         void DrawTextureBrowser();
         void DrawTextureViewer();
         void DrawStats();
+
+        // Assets and drag & drop (editor_assets.cpp)
+        void DrawAssetBrowser();
+        void DrawAssetIcon(const std::filesystem::path& path, bool isDirectory, float size);
+        void AcceptViewportDrop();
+        void UpdateModelDrag();
+        void PlaceDraggedModel();
+        void UpdateTextureDrops();
+        void DropTextureOnMaterial(const std::filesystem::path& path, const std::shared_ptr<Material>& material, int slot);
+        bool RayCastScenes(DirectX::FXMVECTOR origin, DirectX::FXMVECTOR direction, const Scene* ignore, float& distance) const;
+        bool GetMouseRay(DirectX::XMVECTOR& origin, DirectX::XMVECTOR& direction) const;
+        void DeleteSelectedNode();
+        void SpawnModelInFrontOfCamera(const std::filesystem::path& path);
+        std::shared_ptr<SceneNode> FindNodeUnderMouse() const;
 
         std::shared_ptr<Texture> FindLiveTexture(const std::wstring& name) const;
 
@@ -188,6 +243,7 @@ namespace EV
         bool     m_viewportHovered = false;
         bool     m_viewportFocused = false;
         bool     m_viewportDragging = false;
+        bool     m_hierarchyFocused = false;
         ImVec2   m_viewportMousePosition = {};
         const Camera* m_camera = nullptr;
         int      m_gizmoOperation = 0; // ImGuizmo::OPERATION
@@ -197,6 +253,13 @@ namespace EV
 
         // Selection
         std::weak_ptr<SceneNode> m_selectedNode;
+
+        // Reparenting requested by a hierarchy drop; applied after the tree is drawn.
+        struct Reparent
+        {
+            SceneNode*                 node = nullptr;
+            std::shared_ptr<SceneNode> newParent;
+        } m_pendingReparent;
 
         // Texture browser / viewer
         std::weak_ptr<Texture>                  m_viewedTexture;
@@ -209,6 +272,20 @@ namespace EV
         bool   m_viewerAutoRangePending = false;
         char   m_textureFilter[128] = {};
         bool   m_showEditorTextures = false;
+
+        // Assets
+        std::filesystem::path m_assetRoot = "assets";
+        std::filesystem::path m_assetDirectory = "assets";
+        bool  m_showAssetBrowser = true;
+        float m_assetIconSize = 72.0f;
+        char  m_assetFilter[128] = {};
+        std::unordered_map<std::wstring, AssetThumbnail> m_assetThumbnails;
+        std::unique_ptr<ModelDrag>   m_modelDrag;
+        std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
+        std::vector<TextureDrop>     m_textureDrops;
+        float                        m_dropDistance = 10.0f;
+        std::string                  m_statusMessage;
+        float                        m_statusMessageTime = 0.0f;
 
         // Stats
         float  m_frameTimes[120] = {};

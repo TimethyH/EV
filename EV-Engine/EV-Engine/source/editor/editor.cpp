@@ -24,8 +24,11 @@
 #include "UI/texture_preview.h"
 #include "UI/texture_readback.h"
 
+#include "editor_internal.h"
+
 using namespace EV;
 using namespace DirectX;
+using namespace EV::EditorInternal;
 
 namespace
 {
@@ -41,28 +44,6 @@ namespace
 
     // Preview slots: thumbnails are keyed per texture, the viewer has its own slot.
     constexpr uint64_t g_viewerPreviewKey = 1;
-
-    // Editor palette (dark, similar to the Kudzu editor).
-    const ImVec4 g_colorBackground0 = ImVec4(0.078f, 0.078f, 0.078f, 1.0f);
-    const ImVec4 g_colorBackground1 = ImVec4(0.110f, 0.110f, 0.110f, 1.0f);
-    const ImVec4 g_colorBackground2 = ImVec4(0.141f, 0.141f, 0.141f, 1.0f);
-    const ImVec4 g_colorBackground3 = ImVec4(0.173f, 0.173f, 0.173f, 1.0f);
-    const ImVec4 g_colorBackground4 = ImVec4(0.204f, 0.204f, 0.204f, 1.0f);
-    const ImVec4 g_colorText = ImVec4(0.878f, 0.878f, 0.878f, 1.0f);
-    const ImVec4 g_colorTextDim = ImVec4(0.578f, 0.578f, 0.578f, 1.0f);
-    const ImVec4 g_colorAccent = ImVec4(0.298f, 0.588f, 0.831f, 1.0f);
-
-    std::string ToUTF8(const std::wstring& wide)
-    {
-        if (wide.empty())
-        {
-            return {};
-        }
-        int size = WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()), nullptr, 0, nullptr, nullptr);
-        std::string result(size, '\0');
-        WideCharToMultiByte(CP_UTF8, 0, wide.c_str(), static_cast<int>(wide.size()), result.data(), size, nullptr, nullptr);
-        return result;
-    }
 
     std::string GetTextureLabel(const Texture& texture)
     {
@@ -82,17 +63,6 @@ namespace
         std::string label = GetTextureLabel(texture);
         size_t slash = label.find_last_of("/\\");
         return slash == std::string::npos ? label : label.substr(slash + 1);
-    }
-
-    bool ContainsCaseInsensitive(const std::string& text, const char* filter)
-    {
-        if (!filter || !*filter)
-        {
-            return true;
-        }
-        auto it = std::search(text.begin(), text.end(), filter, filter + strlen(filter),
-            [](char a, char b) { return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b)); });
-        return it != text.end();
     }
 
     std::string FormatBytes(uint64_t bytes)
@@ -221,20 +191,6 @@ namespace
         }
     }
 
-    // Visit every node of a scene graph.
-    template<typename Func>
-    void ForEachNode(const std::shared_ptr<SceneNode>& node, Func&& func)
-    {
-        if (!node)
-        {
-            return;
-        }
-        func(node);
-        for (const auto& child : node->GetChildren())
-        {
-            ForEachNode(child, func);
-        }
-    }
 }
 
 Editor::Editor(std::shared_ptr<GUI> gui)
@@ -325,6 +281,10 @@ void Editor::BeginFrame()
     ImGuizmo::BeginFrame();
     m_textureReadback->Update();
 
+    UpdateModelDrag();
+    UpdateTextureDrops();
+    m_statusMessageTime = std::max(0.0f, m_statusMessageTime - ImGui::GetIO().DeltaTime);
+
     m_frameTimes[m_frameTimeIndex] = ImGui::GetIO().DeltaTime * 1000.0f;
     m_frameTimeIndex = (m_frameTimeIndex + 1) % IM_ARRAYSIZE(m_frameTimes);
 
@@ -345,9 +305,17 @@ void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const Ren
     DrawSceneViewport();
     DrawHierarchy();
     DrawInspector();
+    DrawAssetBrowser();
     DrawTextureBrowser();
     DrawTextureViewer();
     DrawStats();
+
+    // Delete removes the selected object while the scene or hierarchy has focus.
+    if (ImGui::IsKeyPressed(ImGuiKey_Delete, false) && !ImGui::GetIO().WantTextInput &&
+        (m_viewportFocused || m_hierarchyFocused))
+    {
+        DeleteSelectedNode();
+    }
 
     for (auto& panel : m_panels)
     {
@@ -393,6 +361,7 @@ void Editor::BuildDefaultLayout(ImGuiID dockspaceID)
     ImGui::DockBuilderDockWindow(g_hierarchyWindow, left);
     ImGui::DockBuilderDockWindow(g_statsWindow, leftBottom);
     ImGui::DockBuilderDockWindow(g_inspectorWindow, right);
+    ImGui::DockBuilderDockWindow("Assets", bottom);
     ImGui::DockBuilderDockWindow(g_textureBrowserWindow, bottom);
     ImGui::DockBuilderDockWindow(g_textureViewerWindow, bottomRight);
 
@@ -429,6 +398,7 @@ void Editor::DrawMenuBar()
         ImGui::MenuItem(g_sceneWindow, nullptr, &m_showScene);
         ImGui::MenuItem(g_hierarchyWindow, nullptr, &m_showHierarchy);
         ImGui::MenuItem(g_inspectorWindow, nullptr, &m_showInspector);
+        ImGui::MenuItem("Assets", nullptr, &m_showAssetBrowser);
         ImGui::MenuItem(g_textureBrowserWindow, nullptr, &m_showTextureBrowser);
         ImGui::MenuItem(g_textureViewerWindow, nullptr, &m_showTextureViewer);
         ImGui::MenuItem(g_statsWindow, nullptr, &m_showStats);
@@ -483,7 +453,18 @@ void Editor::DrawStatusBar()
             ImGui::SameLine(0.0f, 30.0f);
             ImGui::TextColored(g_colorTextDim, "Viewport %ux%u", m_viewportWidth, m_viewportHeight);
             ImGui::SameLine(0.0f, 30.0f);
-            ImGui::TextColored(g_colorTextDim, "Right mouse + WASD/QE: fly   Left click: select");
+            if (m_statusMessageTime > 0.0f)
+            {
+                ImGui::TextColored(g_colorAccent, "%s", m_statusMessage.c_str());
+            }
+            else if (m_modelDrag)
+            {
+                ImGui::TextColored(g_colorAccent, "Loading %s...", m_modelDrag->path.filename().string().c_str());
+            }
+            else
+            {
+                ImGui::TextColored(g_colorTextDim, "Right mouse + WASD/QE: fly   Left click: select   Del: delete   Drag assets into the scene");
+            }
             ImGui::EndMenuBar();
         }
     }
@@ -665,7 +646,11 @@ void Editor::DrawSceneViewport()
         ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton("##SceneViewport", imageSize,
             ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
-        const bool itemHovered = ImGui::IsItemHovered();
+        // While dragging something the mouse belongs to drag & drop, not to the camera.
+        const bool itemHovered = ImGui::IsItemHovered() && ImGui::GetDragDropPayload() == nullptr;
+        const ImGuiIO& io = ImGui::GetIO();
+        m_viewportMousePosition = ImVec2(io.MousePos.x - imagePosition.x, io.MousePos.y - imagePosition.y);
+        AcceptViewportDrop();
 
         ImDrawList* drawList = ImGui::GetWindowDrawList();
         if (m_sceneTexture)
@@ -679,8 +664,17 @@ void Editor::DrawSceneViewport()
                 "No scene texture. Call Editor::SetSceneTexture().");
         }
 
-        const ImGuiIO& io = ImGui::GetIO();
-        m_viewportMousePosition = ImVec2(io.MousePos.x - imagePosition.x, io.MousePos.y - imagePosition.y);
+        // While a dragged model is still loading, mark where it will land.
+        if (m_modelDrag && !m_modelDrag->scene && m_modelDrag->hasPosition && m_camera)
+        {
+            const XMVECTOR clip = XMVector3TransformCoord(XMLoadFloat3(&m_modelDrag->position),
+                m_camera->GetViewMatrix() * m_camera->GetProjectionMatrix());
+            const ImVec2 marker(imagePosition.x + (XMVectorGetX(clip) * 0.5f + 0.5f) * imageSize.x,
+                imagePosition.y + (0.5f - XMVectorGetY(clip) * 0.5f) * imageSize.y);
+            drawList->AddCircle(marker, 10.0f, ImGui::GetColorU32(g_colorAccent), 0, 2.0f);
+            drawList->AddLine(ImVec2(marker.x - 16.0f, marker.y), ImVec2(marker.x + 16.0f, marker.y), ImGui::GetColorU32(g_colorAccent), 2.0f);
+            drawList->AddLine(ImVec2(marker.x, marker.y - 16.0f), ImVec2(marker.x, marker.y + 16.0f), ImGui::GetColorU32(g_colorAccent), 2.0f);
+        }
 
         const bool gizmoActive = DrawGizmo(imagePosition, imageSize);
         DrawViewportToolbar(imagePosition);
@@ -824,8 +818,11 @@ void Editor::DrawHierarchy()
     {
         return;
     }
+    m_hierarchyFocused = false;
     if (ImGui::Begin(g_hierarchyWindow, &m_showHierarchy))
     {
+        m_hierarchyFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
+
         if (m_scenes.empty())
         {
             ImGui::TextColored(g_colorTextDim, "No scenes. Use Editor::AddScene().");
@@ -835,13 +832,66 @@ void Editor::DrawHierarchy()
             DrawHierarchyNode(entry.scene->GetRootNode(), entry.name.c_str());
         }
 
+        if (m_pendingReparent.node)
+        {
+            ApplyPendingReparent();
+        }
+
         // Clicking empty space clears the selection.
         if (ImGui::IsWindowHovered() && ImGui::IsMouseClicked(ImGuiMouseButton_Left) && !ImGui::IsAnyItemHovered())
         {
             m_selectedNode.reset();
         }
+
+        // Models dropped on the empty part of the hierarchy are placed in front of the camera.
+        const ImVec2 remaining = ImGui::GetContentRegionAvail();
+        ImGui::Dummy(ImVec2(std::max(1.0f, remaining.x), std::max(40.0f, remaining.y)));
+        if (ImGui::BeginDragDropTarget())
+        {
+            if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(g_assetPayload))
+            {
+                SpawnModelInFrontOfCamera(PathFromUTF8(static_cast<const char*>(payload->Data)));
+            }
+            ImGui::EndDragDropTarget();
+        }
     }
     ImGui::End();
+}
+
+void Editor::ApplyPendingReparent()
+{
+    Reparent request = m_pendingReparent;
+    m_pendingReparent = {};
+
+    // Find the shared pointer of the dragged node.
+    std::shared_ptr<SceneNode> node;
+    for (const auto& entry : m_scenes)
+    {
+        ForEachNode(entry.scene->GetRootNode(), [&](const std::shared_ptr<SceneNode>& candidate)
+        {
+            if (candidate.get() == request.node) node = candidate;
+        });
+    }
+    auto oldParent = node ? node->GetParent() : nullptr;
+    if (!node || !oldParent || !request.newParent || oldParent == request.newParent)
+    {
+        return;
+    }
+
+    // A node cannot become a child of itself or of one of its children.
+    for (auto ancestor = request.newParent; ancestor; ancestor = ancestor->GetParent())
+    {
+        if (ancestor == node)
+        {
+            return;
+        }
+    }
+
+    // Keep the node where it is in the world.
+    const XMMATRIX world = node->GetWorldTransform();
+    oldParent->RemoveChild(node);
+    request.newParent->AddChild(node);
+    node->SetLocalTransform(world * XMMatrixInverse(nullptr, request.newParent->GetWorldTransform()));
 }
 
 void Editor::DrawHierarchyNode(const std::shared_ptr<SceneNode>& node, const char* label)
@@ -871,6 +921,23 @@ void Editor::DrawHierarchyNode(const std::shared_ptr<SceneNode>& node, const cha
     if (ImGui::IsItemClicked() && !ImGui::IsItemToggledOpen())
     {
         m_selectedNode = node;
+    }
+
+    // Drag a node onto another to make it a child (scene roots stay where they are).
+    if (node->GetParent() && ImGui::BeginDragDropSource())
+    {
+        SceneNode* dragged = node.get();
+        ImGui::SetDragDropPayload(g_nodePayload, &dragged, sizeof(dragged));
+        ImGui::Text("Move %s", text);
+        ImGui::EndDragDropSource();
+    }
+    if (ImGui::BeginDragDropTarget())
+    {
+        if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(g_nodePayload))
+        {
+            m_pendingReparent = { *static_cast<SceneNode* const*>(payload->Data), node };
+        }
+        ImGui::EndDragDropTarget();
     }
     if (!node->GetMeshes().empty())
     {
@@ -971,7 +1038,7 @@ void Editor::DrawInspector()
 
                 if (auto material = mesh->GetMaterial())
                 {
-                    DrawMaterial(*material, static_cast<int>(i));
+                    DrawMaterial(material, static_cast<int>(i));
                 }
                 ImGui::TreePop();
             }
@@ -982,8 +1049,9 @@ void Editor::DrawInspector()
     ImGui::End();
 }
 
-void Editor::DrawMaterial(Material& material, int index)
+void Editor::DrawMaterial(const std::shared_ptr<Material>& materialPtr, int index)
 {
+    Material& material = *materialPtr;
     ImGui::PushID(index);
     if (ImGui::TreeNodeEx("##material", ImGuiTreeNodeFlags_DefaultOpen, "Material"))
     {
@@ -1003,34 +1071,63 @@ void Editor::DrawMaterial(Material& material, int index)
         }
 
         ImGui::Spacing();
-        ImGui::TextColored(g_colorTextDim, "Textures");
+        ImGui::TextColored(g_colorTextDim, "Textures (drop images from Assets onto a slot)");
 
-        bool anyTexture = false;
         const float thumbnailSize = 56.0f;
         for (int type = 0; type < static_cast<int>(Material::TextureType::NumTypes); ++type)
         {
-            auto texture = material.GetTexture(static_cast<Material::TextureType>(type));
-            if (!texture)
+            const auto slot = static_cast<Material::TextureType>(type);
+            auto texture = material.GetTexture(slot);
+
+            // Show the common slots even when empty so textures can be dropped onto them.
+            const bool commonSlot = slot == Material::TextureType::Diffuse || slot == Material::TextureType::Normal ||
+                slot == Material::TextureType::MetallicRoughness || slot == Material::TextureType::Emissive;
+            if (!texture && !commonSlot)
             {
                 continue;
             }
-            anyTexture = true;
 
             ImGui::PushID(type);
-            TextureThumbnail(texture, thumbnailSize);
+            if (texture)
+            {
+                TextureThumbnail(texture, thumbnailSize);
+            }
+            else
+            {
+                const ImVec2 position = ImGui::GetCursorScreenPos();
+                ImGui::Dummy(ImVec2(thumbnailSize, thumbnailSize));
+                ImGui::GetWindowDrawList()->AddRect(position, ImVec2(position.x + thumbnailSize, position.y + thumbnailSize),
+                    ImGui::GetColorU32(g_colorBackground4), 3.0f);
+            }
+            if (ImGui::BeginDragDropTarget())
+            {
+                if (const ImGuiPayload* payload = ImGui::AcceptDragDropPayload(g_assetPayload))
+                {
+                    DropTextureOnMaterial(PathFromUTF8(static_cast<const char*>(payload->Data)), materialPtr, type);
+                }
+                ImGui::EndDragDropTarget();
+            }
+
             ImGui::SameLine();
             ImGui::BeginGroup();
-            ImGui::TextUnformatted(GetTextureSlotName(static_cast<Material::TextureType>(type)));
-            const auto desc = texture->GetD3D12ResourceDesc();
-            ImGui::TextColored(g_colorTextDim, "%s", GetShortTextureLabel(*texture).c_str());
-            ImGui::TextColored(g_colorTextDim, "%s  %s  %u mips", DescribeDimensions(desc).c_str(),
-                FormatUtils::GetName(desc.Format), desc.MipLevels);
+            ImGui::TextUnformatted(GetTextureSlotName(slot));
+            if (texture)
+            {
+                const auto desc = texture->GetD3D12ResourceDesc();
+                ImGui::TextColored(g_colorTextDim, "%s", GetShortTextureLabel(*texture).c_str());
+                ImGui::TextColored(g_colorTextDim, "%s  %s  %u mips", DescribeDimensions(desc).c_str(),
+                    FormatUtils::GetName(desc.Format), desc.MipLevels);
+                if (ImGui::SmallButton("Clear"))
+                {
+                    material.SetTexture(slot, nullptr);
+                }
+            }
+            else
+            {
+                ImGui::TextColored(g_colorTextDim, "Empty");
+            }
             ImGui::EndGroup();
             ImGui::PopID();
-        }
-        if (!anyTexture)
-        {
-            ImGui::TextColored(g_colorTextDim, "None");
         }
         ImGui::TreePop();
     }

@@ -715,6 +715,12 @@ void Ocean::OnRender()
             m_helmet->Accept(visitor);
         }
 
+        // Models dropped into the scene from the editor's Assets panel.
+        for (const auto& scene : m_editor->GetSpawnedScenes())
+        {
+            scene->Accept(visitor);
+        }
+
         // m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
         //
         // m_chessboard->Accept(visitor);

@@ -117,6 +117,9 @@
     <ClCompile Include="source\editor\editor.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\editor\editor_assets.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="thirdparty\imgui\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -276,6 +279,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\editor\editor.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="source\editor\editor_internal.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="shaders\imGUI_VS.h">
