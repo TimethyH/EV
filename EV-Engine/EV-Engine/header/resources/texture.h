@@ -122,6 +122,17 @@ namespace EV
 		static bool IsBGRFormat(DXGI_FORMAT format);
 		static bool IsDepthFormat(DXGI_FORMAT format);
 
+		// Depth textures are stored typeless so they can be bound both as depth-stencil and as shader resource.
+		static DXGI_FORMAT GetDepthTypelessFormat(DXGI_FORMAT depthFormat);
+		static DXGI_FORMAT GetDepthFormatFromTypeless(DXGI_FORMAT typelessFormat);
+		static DXGI_FORMAT GetDepthSRVFormat(DXGI_FORMAT typelessFormat);
+
+		// Format used for the depth-stencil view (DXGI_FORMAT_UNKNOWN for non-depth textures).
+		DXGI_FORMAT GetDepthStencilFormat() const;
+		// Format of the default shader resource view (resolves typeless depth formats).
+		DXGI_FORMAT GetShaderResourceFormat() const;
+		bool IsDepthTexture() const { return GetDepthStencilFormat() != DXGI_FORMAT_UNKNOWN; }
+
 		// Return a typeless format from the given format.
 		static DXGI_FORMAT GetTypelessFormat(DXGI_FORMAT format);
 		static DXGI_FORMAT GetUAVCompatableFormat(DXGI_FORMAT format);

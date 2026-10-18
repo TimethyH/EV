@@ -37,6 +37,8 @@ namespace EV
 	class Game;
 	class CommandList;
 	class RootSignature;
+	class Editor;
+	class Texture;
 }
 
 // struct DirectionalLight;
@@ -77,6 +79,10 @@ protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender() override;
 	void OnGUI(const std::shared_ptr<EV::CommandList>& commandList, const EV::RenderTarget& renderTarget);
+	void DrawMenu();
+	void DrawOceanParameters();
+	void DrawLightParameters();
+	void ResizeViewport(uint32_t width, uint32_t height);
 	void OnKeyPress(KeyEventArgs& e) override;
 	void OnKeyRelease(KeyEventArgs& e) override;
 	void OnMouseMove(MouseMotionEventArgs& e) override;
@@ -189,6 +195,13 @@ private:
 	std::shared_ptr<EV::Window> m_pWindow = nullptr;
 	std::shared_ptr<EV::SwapChain> m_swapChain = nullptr;
 	std::shared_ptr<EV::GUI> m_GUI = nullptr;
+	std::unique_ptr<EV::Editor> m_editor;
+
+	// The tonemapped scene shown in the editor's Scene panel, sized to that panel.
+	std::shared_ptr<EV::Texture> m_viewportTexture;
+	EV::RenderTarget m_viewportRenderTarget = {};
+	uint32_t m_viewportWidth = 1;
+	uint32_t m_viewportHeight = 1;
 
 	std::shared_ptr<EV::EffectPSO> m_unlitPSO;
 	std::shared_ptr<OceanPSO> m_displacementPSO;

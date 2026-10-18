@@ -117,14 +117,22 @@ void Ocean::OnResize(ResizeEventArgs& e)
     m_width = std::max(1, e.width);
     m_height = std::max(1, e.height);
 
+    // The scene itself is rendered at the size of the editor's Scene panel, see ResizeViewport.
     m_swapChain->Resize(m_width, m_height);
+}
 
-    float aspectRatio = m_width / (float)m_height;
+void Ocean::ResizeViewport(uint32_t width, uint32_t height)
+{
+    m_viewportWidth = std::max(1u, width);
+    m_viewportHeight = std::max(1u, height);
+
+    float aspectRatio = m_viewportWidth / (float)m_viewportHeight;
     m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 
-    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_width), static_cast<float>(m_height));
+    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_viewportWidth), static_cast<float>(m_viewportHeight));
 
-    m_renderTarget.Resize(m_width, m_height);
+    m_renderTarget.Resize(m_viewportWidth, m_viewportHeight);
+    m_viewportRenderTarget.Resize(m_viewportWidth, m_viewportHeight);
 }
 
 std::wstring Ocean::GetModulePath()
@@ -209,6 +217,14 @@ bool Ocean::LoadContent()
     // This magic here allows ImGui to process window messages.(TODO: not sure how this works yet)
     app.wndProcHandler += WndProcEvent::slot(&GUI::WndProcHandler, m_GUI);
 
+    // Editor UI: the scene is shown in a dockable viewport, the parameter windows become docked panels.
+    m_editor = std::make_unique<Editor>(m_GUI);
+    m_editor->SetCamera(&m_camera);
+    m_editor->SetCameraClipPlanes(0.1f, 1000.0f);
+    m_editor->AddMenuCallback([this]() { DrawMenu(); });
+    m_editor->AddPanel("Ocean Parameters", [this]() { DrawOceanParameters(); }, Editor::DockSlot::Right, m_showOceanParams);
+    m_editor->AddPanel("Light Parameters", [this]() { DrawLightParameters(); }, Editor::DockSlot::Right, m_showLightParams);
+
     // Start the loading task to perform async loading of the scene file.
     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
     //     L"assets/sponza/sponza_nobanner.obj"));    
@@ -247,6 +263,15 @@ bool Ocean::LoadContent()
     m_boat = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
 
     m_sphere = commandList->CreateSphere(0.1f);
+
+    // Place the helmet once so it can be moved in the editor.
+    m_helmet->GetRootNode()->SetLocalTransform(
+        XMMatrixRotationRollPitchYaw(XMConvertToRadians(-90.0f), 0.0f, 0.0f) * XMMatrixTranslation(0.0f, 2.0f, 0.0f));
+    m_helmet->GetRootNode()->SetName("Damaged Helmet");
+    m_oceanPlane->GetRootNode()->SetName("Ocean Plane");
+
+    m_editor->AddScene("Damaged Helmet", m_helmet);
+    m_editor->AddScene("Ocean", m_oceanPlane);
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
     // Set the patch sizes for the cascades.
@@ -443,6 +468,14 @@ bool Ocean::LoadContent()
     m_renderTarget.AttachTexture(AttachmentPoint::Color0, m_HDRTexture);
     m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
 
+    // Tonemapped output shown in the editor's Scene panel (same format as the swapchain for the SDR pass).
+    auto viewportDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_width, m_height, 1, 1, 1, 0,
+        D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
+    m_viewportTexture = Application::Get().CreateTexture(viewportDesc);
+    m_viewportTexture->SetName(L"Scene Viewport (LDR)");
+    m_viewportRenderTarget.AttachTexture(AttachmentPoint::Color0, m_viewportTexture);
+    ResizeViewport(m_editor->GetViewportWidth(), m_editor->GetViewportHeight());
+
     // Set the skybox SRV before rendering
     m_unlitPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
     m_displacementPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
@@ -607,6 +640,12 @@ void Ocean::OnRender()
 
     m_pWindow->SetFullScreen(m_fullscreen);
 
+    // Follow the size of the editor's Scene panel (known from the previous frame).
+    if (m_editor->ConsumeViewportResize())
+    {
+        ResizeViewport(m_editor->GetViewportWidth(), m_editor->GetViewportHeight());
+    }
+
     auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue.GetCommandList();
 
@@ -669,8 +708,6 @@ void Ocean::OnRender()
 
         m_oceanPlane->Accept(oceanVisitor);
 
-        XMMATRIX helmetTranslation = XMMatrixTranslation(0.0f, 2.0f, 0.0f);
-        m_helmet->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * rotation * helmetTranslation);
         m_helmet->Accept(visitor);
 
         // m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
@@ -698,7 +735,7 @@ void Ocean::OnRender()
 
         // barrier
 
-	    commandList->SetRenderTarget(m_swapChain->GetRenderTarget());
+	    commandList->SetRenderTarget(m_viewportRenderTarget);
         m_sdrPSO->SetHDRTexture(m_HDRTexture);
         m_sdrPSO->Apply(*commandList);
 
@@ -710,6 +747,12 @@ void Ocean::OnRender()
         commandList->TransitionBarrier(m_oceanCascades[i].displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
         commandList->TransitionBarrier(m_oceanCascades[i].foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
     }
+    // The scene is shown inside the editor, so the back buffer only holds the GUI.
+    {
+        FLOAT clearColor[] = { 0.078f, 0.078f, 0.078f, 1.0f };
+        commandList->ClearTexture(m_swapChain->GetRenderTarget().GetTexture(AttachmentPoint::Color0), clearColor);
+    }
+
 	    // Render the GUI on the render target
 	    OnGUI(commandList, m_swapChain->GetRenderTarget());
 	    commandQueue.ExecuteCommandList(commandList);
@@ -719,7 +762,8 @@ void Ocean::OnRender()
 
 void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget)
 {
-    m_GUI->NewFrame();
+    m_editor->BeginFrame();
+    m_editor->SetSceneTexture(m_isLoading ? nullptr : m_viewportTexture);
 
     if (m_isLoading)
     {
@@ -735,171 +779,141 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
         ImGui::End();
     }
 
-    // ── Main Menu Bar ────────────────────────────────────────────────────────
-    if (ImGui::BeginMainMenuBar())
-    {
-        if (ImGui::BeginMenu("File"))
-        {
-            if (ImGui::MenuItem("Open file...", "Ctrl+O", nullptr, !m_isLoading))
-                m_showFileOpenDialog = true;
-            ImGui::Separator();
-            if (ImGui::MenuItem("Exit", "Esc"))
-                Application::Get().Stop();
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("View"))
-        {
-            ImGui::MenuItem("Ocean Parameters", "F1", &m_showOceanParams);
-            ImGui::MenuItem("Light Parameters", "F2", &m_showLightParams);
-            ImGui::EndMenu();
-        }
-        if (ImGui::BeginMenu("Options"))
-        {
-            bool vSync = m_swapChain->GetVSync();
-            if (ImGui::MenuItem("V-Sync", "V", &vSync))
-                m_swapChain->SetVSync(vSync);
-            bool fullscreen = m_pWindow->IsFullScreen();
-            if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen))
-                m_fullscreen = fullscreen;
-            ImGui::EndMenu();
-        }
-
-        // FPS counter right-aligned
-        char buffer[256];
-        sprintf_s(buffer, _countof(buffer), "%.1f FPS  (%.2f ms)  ", m_FPS, 1.0 / m_FPS * 1000.0);
-        auto fpsTextSize = ImGui::CalcTextSize(buffer);
-        ImGui::SameLine(ImGui::GetWindowWidth() - fpsTextSize.x);
-        // Color FPS: green > 60, yellow > 30, red < 30
-        ImVec4 fpsColor = m_FPS >= 60.f ? ImVec4(0.2f, 1.f, 0.4f, 1.f)
-            : m_FPS >= 30.f ? ImVec4(1.f, 0.8f, 0.f, 1.f)
-            : ImVec4(1.f, 0.3f, 0.3f, 1.f);
-        ImGui::TextColored(fpsColor, buffer);
-        ImGui::EndMainMenuBar();
-    }
-
-    // ── Ocean Parameters ─────────────────────────────────────────────────────
-    if (m_showOceanParams)
-    {
-        ImGui::SetNextWindowSize(ImVec2(380, 0), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowBgAlpha(0.92f);
-        if (ImGui::Begin("Ocean Parameters", &m_showOceanParams))
-        {
-            bool paramsChanged = false;
-
-            auto Slider = [&](const char* label, float* v, float vmin, float vmax, const char* tooltip = nullptr) -> bool
-                {
-                    bool changed = ImGui::SliderFloat(label, v, vmin, vmax);
-                    if (tooltip && ImGui::IsItemHovered())
-                        ImGui::SetTooltip("%s", tooltip);
-                    return ImGui::IsItemDeactivatedAfterEdit();
-                };
-
-            auto SectionHeader = [](const char* label, ImVec4 color)
-                {
-                    ImGui::Spacing();
-                    ImGui::TextColored(color, label);
-                    ImGui::Separator();
-                };
-
-            // ── Wind ──
-            if (ImGui::CollapsingHeader("  Wind", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Indent();
-                paramsChanged |= Slider("Speed (m/s)", &m_jonswapParams.windSpeed, 0.0f, 100.0f, "Wind speed in metres per second");
-                paramsChanged |= Slider("Direction (deg)", &m_jonswapParams.windDirection, 0.0f, 360.0f, "Wind direction in degrees");
-                paramsChanged |= Slider("Fetch (m)", &m_jonswapParams.fetch, 1000.0f, 1000000.0f, "Distance over which wind acts on the surface");
-                ImGui::Unindent();
-            }
-
-            // ── Spectrum ──
-            if (ImGui::CollapsingHeader("  Spectrum", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Indent();
-                paramsChanged |= Slider("Scale", &m_jonswapParams.scale, 0.0f, 5.0f, "Overall wave amplitude scale");
-                paramsChanged |= Slider("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f, "Peak sharpness of the JONSWAP spectrum");
-                paramsChanged |= Slider("Swell", &m_jonswapParams.swell, 0.0f, 1.0f, "Swell influence on wave choppiness");
-                paramsChanged |= Slider("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f, "Blend between directional and isotropic spreading");
-                paramsChanged |= Slider("Short Wave Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f, "Fade out short high-frequency waves");
-
-                ImGui::Spacing();
-                ImGui::TextDisabled("Alpha:      %.6f", m_jonswapParams.alpha);
-                ImGui::TextDisabled("Peak Omega: %.4f", m_jonswapParams.peakOmega);
-                ImGui::Unindent();
-            }
-
-            // ── Lighting ──
-            if (ImGui::CollapsingHeader("  Lighting", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Indent();
-                ImGui::Text("Ocean Color");
-                ImGui::ColorEdit4("##oceanColor", &m_displacementPSO->m_oceanRenderParams.oceanrColor.x,
-                    ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
-                ImGui::SameLine(); ImGui::Text("Scatter Color");
-                ImGui::ColorEdit4("##scatterColor", &m_displacementPSO->m_oceanRenderParams.scatterColor.x,
-                    ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
-
-                ImGui::Spacing();
-                Slider("Height Modifier", &m_displacementPSO->m_oceanRenderParams.heightMod, 0.0f, 5.0f, "Vertical scale of SSS wave height proxy");
-                Slider("Peak Scatter", &m_displacementPSO->m_oceanRenderParams.peakScatterIntensity, 0.0f, 1.0f, "Subsurface scatter intensity at wave crests");
-                Slider("IBL Intensity", &m_displacementPSO->m_oceanRenderParams.IBLIntensity, 0.0f, 1.0f, "Image-based lighting contribution");
-                ImGui::Unindent();
-            }
-
-            // ── Foam ──
-            if (ImGui::CollapsingHeader("  Foam", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Indent();
-                ImGui::SliderFloat("Decay", &m_foamParameters[0], 0.0f, 0.1f);
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("How quickly foam fades per frame (lower = longer lasting)");
-                ImGui::SliderFloat("Bias", &m_foamParameters[1], -1.0f, 1.0f);
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Jacobian threshold for foam generation (lower = more foam)");
-                ImGui::SliderFloat("Intensity", &m_foamParameters[2], 0.0f, 2.0f);
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Amount of foam added when a wave breaks");
-                ImGui::SliderFloat("Threshold", &m_foamParameters[3], 0.0f, 1.0f);
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimum biased Jacobian value to trigger foam");
-                ImGui::Unindent();
-            }
-
-            if (paramsChanged)
-            {
-                m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
-                m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
-                m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
-                auto& cq = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-                auto cl = cq.GetCommandList();
-                for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
-                    GenerateH0(cl, i);
-                cq.ExecuteCommandList(cl);
-            }
-        }
-        ImGui::End();
-    }
-
-    // ── Light Parameters ─────────────────────────────────────────────────────
-    if (m_showLightParams)
-    {
-        ImGui::SetNextWindowSize(ImVec2(340, 0), ImGuiCond_FirstUseEver);
-        ImGui::SetNextWindowBgAlpha(0.92f);
-        if (ImGui::Begin("Light Parameters", &m_showLightParams))
-        {
-            bool paramsChanged = false;
-
-            if (ImGui::CollapsingHeader("  Directional Light", ImGuiTreeNodeFlags_DefaultOpen))
-            {
-                ImGui::Indent();
-                paramsChanged |= ImGui::DragFloat3("Position", &m_directionalLights[0].position.x, 0.1f);
-                if (ImGui::IsItemHovered()) ImGui::SetTooltip("World-space position (used to derive light direction)");
-                ImGui::Text("Color");
-                paramsChanged |= ImGui::ColorEdit4("##dirColor", &m_directionalLights[0].color.x,
-                    ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
-                ImGui::Unindent();
-            }
-        }
-        ImGui::End();
-    }
-
-    m_GUI->Render(commandList, renderTarget);
+    m_editor->EndFrame(commandList, renderTarget);
 }
+
+void Ocean::DrawMenu()
+{
+    if (ImGui::BeginMenu("File"))
+    {
+        if (ImGui::MenuItem("Open file...", "Ctrl+O", nullptr, !m_isLoading))
+            m_showFileOpenDialog = true;
+        ImGui::Separator();
+        if (ImGui::MenuItem("Exit", "Esc"))
+            Application::Get().Stop();
+        ImGui::EndMenu();
+    }
+    if (ImGui::BeginMenu("Options"))
+    {
+        bool vSync = m_swapChain->GetVSync();
+        if (ImGui::MenuItem("V-Sync", "V", &vSync))
+            m_swapChain->SetVSync(vSync);
+        bool fullscreen = m_pWindow->IsFullScreen();
+        if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen))
+            m_fullscreen = fullscreen;
+        ImGui::EndMenu();
+    }
+}
+
+// ── Ocean Parameters ─────────────────────────────────────────────────────
+void Ocean::DrawOceanParameters()
+{
+    bool paramsChanged = false;
+
+    auto Slider = [&](const char* label, float* v, float vmin, float vmax, const char* tooltip = nullptr) -> bool
+        {
+            bool changed = ImGui::SliderFloat(label, v, vmin, vmax);
+            if (tooltip && ImGui::IsItemHovered())
+                ImGui::SetTooltip("%s", tooltip);
+            return ImGui::IsItemDeactivatedAfterEdit();
+        };
+
+    auto SectionHeader = [](const char* label, ImVec4 color)
+        {
+            ImGui::Spacing();
+            ImGui::TextColored(color, label);
+            ImGui::Separator();
+        };
+
+    // ── Wind ──
+    if (ImGui::CollapsingHeader("  Wind", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Indent();
+        paramsChanged |= Slider("Speed (m/s)", &m_jonswapParams.windSpeed, 0.0f, 100.0f, "Wind speed in metres per second");
+        paramsChanged |= Slider("Direction (deg)", &m_jonswapParams.windDirection, 0.0f, 360.0f, "Wind direction in degrees");
+        paramsChanged |= Slider("Fetch (m)", &m_jonswapParams.fetch, 1000.0f, 1000000.0f, "Distance over which wind acts on the surface");
+        ImGui::Unindent();
+    }
+
+    // ── Spectrum ──
+    if (ImGui::CollapsingHeader("  Spectrum", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Indent();
+        paramsChanged |= Slider("Scale", &m_jonswapParams.scale, 0.0f, 5.0f, "Overall wave amplitude scale");
+        paramsChanged |= Slider("Gamma", &m_jonswapParams.gamma, 0.0f, 7.0f, "Peak sharpness of the JONSWAP spectrum");
+        paramsChanged |= Slider("Swell", &m_jonswapParams.swell, 0.0f, 1.0f, "Swell influence on wave choppiness");
+        paramsChanged |= Slider("Spread Blend", &m_jonswapParams.spreadBlend, 0.0f, 1.0f, "Blend between directional and isotropic spreading");
+        paramsChanged |= Slider("Short Wave Fade", &m_jonswapParams.shortWavesFade, 0.0f, 1.0f, "Fade out short high-frequency waves");
+
+        ImGui::Spacing();
+        ImGui::TextDisabled("Alpha:      %.6f", m_jonswapParams.alpha);
+        ImGui::TextDisabled("Peak Omega: %.4f", m_jonswapParams.peakOmega);
+        ImGui::Unindent();
+    }
+
+    // ── Lighting ──
+    if (ImGui::CollapsingHeader("  Lighting", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Indent();
+        ImGui::Text("Ocean Color");
+        ImGui::ColorEdit4("##oceanColor", &m_displacementPSO->m_oceanRenderParams.oceanrColor.x,
+            ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
+        ImGui::SameLine(); ImGui::Text("Scatter Color");
+        ImGui::ColorEdit4("##scatterColor", &m_displacementPSO->m_oceanRenderParams.scatterColor.x,
+            ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
+
+        ImGui::Spacing();
+        Slider("Height Modifier", &m_displacementPSO->m_oceanRenderParams.heightMod, 0.0f, 5.0f, "Vertical scale of SSS wave height proxy");
+        Slider("Peak Scatter", &m_displacementPSO->m_oceanRenderParams.peakScatterIntensity, 0.0f, 1.0f, "Subsurface scatter intensity at wave crests");
+        Slider("IBL Intensity", &m_displacementPSO->m_oceanRenderParams.IBLIntensity, 0.0f, 1.0f, "Image-based lighting contribution");
+        ImGui::Unindent();
+    }
+
+    // ── Foam ──
+    if (ImGui::CollapsingHeader("  Foam", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Indent();
+        ImGui::SliderFloat("Decay", &m_foamParameters[0], 0.0f, 0.1f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How quickly foam fades per frame (lower = longer lasting)");
+        ImGui::SliderFloat("Bias", &m_foamParameters[1], -1.0f, 1.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Jacobian threshold for foam generation (lower = more foam)");
+        ImGui::SliderFloat("Intensity", &m_foamParameters[2], 0.0f, 2.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Amount of foam added when a wave breaks");
+        ImGui::SliderFloat("Threshold", &m_foamParameters[3], 0.0f, 1.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimum biased Jacobian value to trigger foam");
+        ImGui::Unindent();
+    }
+
+    if (paramsChanged)
+    {
+        m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
+        m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+        m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+        auto& cq = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+        auto cl = cq.GetCommandList();
+        for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+            GenerateH0(cl, i);
+        cq.ExecuteCommandList(cl);
+    }
+}
+
+// ── Light Parameters ─────────────────────────────────────────────────────
+void Ocean::DrawLightParameters()
+{
+    bool paramsChanged = false;
+
+    if (ImGui::CollapsingHeader("  Directional Light", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Indent();
+        paramsChanged |= ImGui::DragFloat3("Position", &m_directionalLights[0].position.x, 0.1f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("World-space position (used to derive light direction)");
+        ImGui::Text("Color");
+        paramsChanged |= ImGui::ColorEdit4("##dirColor", &m_directionalLights[0].color.x,
+            ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
+        ImGui::Unindent();
+    }
+}
+
 void Ocean::UnloadContent()
 {
     m_cubeMesh.reset();
@@ -937,6 +951,9 @@ void Ocean::UnloadContent()
     m_SDRRootSignature.reset();
     m_HDRPSO.reset();
 	m_SDRPipelineState.reset();
+
+    m_editor.reset();
+    m_viewportTexture.reset();
 
     // m_GUI.reset();
     // m_swapChain.reset();
@@ -1187,6 +1204,12 @@ void Ocean::OnKeyPress(KeyEventArgs& e)
 {
     super::OnKeyPress(e);
 
+    // Only react to keys when the scene viewport has focus (not while typing in a panel).
+    if (m_editor && !m_editor->IsViewportKeyboardActive())
+    {
+        return;
+    }
+
     switch (e.key)
     {
     case KeyCode::Escape:
@@ -1281,9 +1304,9 @@ void Ocean::OnMouseMove(MouseMotionEventArgs& e)
 
     const float mouseSpeed = 0.1f;
 
-    if (!ImGui::GetIO().WantCaptureMouse)
+    if (m_editor && m_editor->IsViewportMouseActive())
     {
-        if (e.leftButton)
+        if (e.rightButton)
         {
             m_pitch += e.deltaY * mouseSpeed;
 
@@ -1296,7 +1319,7 @@ void Ocean::OnMouseMove(MouseMotionEventArgs& e)
 
 void Ocean::OnMouseWheel(MouseWheelEventArgs& e)
 {
-    if (!ImGui::GetIO().WantCaptureMouse)
+    if (m_editor && m_editor->IsViewportMouseActive())
     {
         auto fov = m_camera.GetFov();
 

@@ -102,6 +102,19 @@ namespace EV
          * Get a mesh in the list of meshes for this node.
          */
         std::shared_ptr<Mesh> GetMesh(size_t index = 0);
+        const std::vector<std::shared_ptr<Mesh>>& GetMeshes() const
+        {
+            return m_meshes;
+        }
+
+        const std::vector<std::shared_ptr<SceneNode>>& GetChildren() const
+        {
+            return m_children;
+        }
+        std::shared_ptr<SceneNode> GetParent() const
+        {
+            return m_parentNode.lock();
+        }
 
         /**
          * Get the AABB for this scene node.

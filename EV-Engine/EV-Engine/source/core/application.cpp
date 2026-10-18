@@ -974,6 +974,8 @@ std::shared_ptr<Texture> Application::CreateTexture(const D3D12_RESOURCE_DESC& r
 {
     std::shared_ptr<Texture> texture = std::make_shared<MakeTexture>(resourceDesc, clearValue);
 
+    TrackLiveTexture(texture);
+
     return texture;
 }
 
@@ -981,7 +983,46 @@ std::shared_ptr<Texture> Application::CreateTexture(Microsoft::WRL::ComPtr<ID3D1
 {
     std::shared_ptr<Texture> texture = std::make_shared<MakeTexture>(resource, clearValue);
 
+    TrackLiveTexture(texture);
+
     return texture;
+}
+
+void Application::TrackLiveTexture(const std::shared_ptr<Texture>& texture)
+{
+    std::lock_guard<std::mutex> lock(m_liveTexturesMutex);
+
+    // Expired entries keep their control block alive, so prune them now and then.
+    if (m_liveTextures.size() >= 64 && (m_liveTextures.size() & 63) == 0)
+    {
+        std::erase_if(m_liveTextures, [](const std::weak_ptr<Texture>& t) { return t.expired(); });
+    }
+    m_liveTextures.push_back(texture);
+}
+
+std::vector<std::shared_ptr<Texture>> Application::GetLiveTextures()
+{
+    std::lock_guard<std::mutex> lock(m_liveTexturesMutex);
+
+    std::vector<std::shared_ptr<Texture>> textures;
+    textures.reserve(m_liveTextures.size());
+
+    // Drop textures that have been destroyed since the last query.
+    auto it = m_liveTextures.begin();
+    while (it != m_liveTextures.end())
+    {
+        if (auto texture = it->lock())
+        {
+            textures.push_back(std::move(texture));
+            ++it;
+        }
+        else
+        {
+            it = m_liveTextures.erase(it);
+        }
+    }
+
+    return textures;
 }
 
 std::shared_ptr<GUI> Application::CreateGUI(HWND hWnd, const RenderTarget& renderTarget)

@@ -293,6 +293,7 @@ std::shared_ptr<Texture> CommandList::LoadTextureFromFile(const std::wstring& fi
 	if (iter != m_textureCache.end())
 	{
 		texture = Application::Get().CreateTexture(iter->second);
+		texture->SetName(fileName);
 	}
 	else
 	{
