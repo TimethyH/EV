@@ -1563,6 +1563,32 @@ void CommandList::Reset()
 	m_computeCommandList = nullptr;
 }
 
+CommandList::ResourceStateSnapshot CommandList::GetResourceState(const std::shared_ptr<Resource>& resource) const
+{
+	ResourceStateSnapshot snapshot;
+	snapshot.resource = resource;
+	if (resource && resource->GetD3D12Resource())
+	{
+		snapshot.known = m_resourceStateTracker->GetResourceState(resource->GetD3D12Resource().Get(), snapshot.state,
+			snapshot.subresourceStates);
+	}
+	return snapshot;
+}
+
+void CommandList::RestoreResourceState(const ResourceStateSnapshot& snapshot)
+{
+	if (!snapshot.known || !snapshot.resource)
+	{
+		return;
+	}
+
+	TransitionBarrier(snapshot.resource, snapshot.state);
+	for (const auto& [subresource, state] : snapshot.subresourceStates)
+	{
+		TransitionBarrier(snapshot.resource, state, subresource);
+	}
+}
+
 void CommandList::TrackResource(Microsoft::WRL::ComPtr<ID3D12Object> object)
 {
 	m_trackedObjects.push_back(object);

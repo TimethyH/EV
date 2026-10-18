@@ -158,6 +158,8 @@ void TextureReadback::Record(CommandList& commandList)
         ThrowIfFailed(device->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &bufferDesc,
             D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback.buffer)));
 
+        // Restore the texture's state afterwards so the rest of the frame (and other queues) see no change.
+        const auto previousState = commandList.GetResourceState(request.texture);
         commandList.TransitionBarrier(request.texture, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, true);
 
         CD3DX12_TEXTURE_COPY_LOCATION dst(readback.buffer.Get(), readback.footprint);
@@ -167,8 +169,7 @@ void TextureReadback::Record(CommandList& commandList)
         commandList.TrackResource(readback.buffer);
         commandList.TrackResource(request.texture->GetD3D12Resource());
 
-        // Leave the texture in the common state so any queue can use it next.
-        commandList.TransitionBarrier(request.texture, D3D12_RESOURCE_STATE_COMMON);
+        commandList.RestoreResourceState(previousState);
 
         m_inFlight.push_back(std::move(readback));
     }
