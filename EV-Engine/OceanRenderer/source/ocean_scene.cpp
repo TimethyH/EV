@@ -1230,7 +1230,8 @@ void Ocean::OnKeyPress(KeyEventArgs& e)
         if (e.alt)
         {
     case KeyCode::F11:
-        m_pWindow->ToggleFullScreen();
+        // OnRender applies m_fullscreen to the window every frame.
+        m_fullscreen = !m_fullscreen;
         break;
         }
     case KeyCode::V:
