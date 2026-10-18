@@ -330,6 +330,14 @@ void Application::Initialize()
     }
 #endif
 
+    // Device Removed Extended Data: records what the GPU was executing when it hangs or faults.
+    ComPtr<ID3D12DeviceRemovedExtendedDataSettings> dredSettings;
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&dredSettings))))
+    {
+        dredSettings->SetAutoBreadcrumbsEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+        dredSettings->SetPageFaultEnablement(D3D12_DRED_ENABLEMENT_FORCED_ON);
+    }
+
     // Set EV_USE_WARP=1 to force the software rasterizer. WARP is also used when no hardware adapter is found.
     char useWarp[8] = {};
     const bool forceWarp = GetEnvironmentVariableA("EV_USE_WARP", useWarp, sizeof(useWarp)) > 0 && useWarp[0] == '1';
@@ -745,7 +753,7 @@ static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
     }
     catch (const std::exception& e)
     {
-        std::string text = std::string("Unhandled exception: ") + e.what() + "\n";
+        std::string text = std::string("Unhandled exception: ") + e.what() + "\n" + Application::Get().GetDeviceRemovedReport();
         OutputDebugStringA(text.c_str());
         fprintf(stderr, "%s", text.c_str());
         FILE* log = nullptr;
@@ -1051,6 +1059,97 @@ void Application::TrackLiveTexture(const std::shared_ptr<Texture>& texture)
         std::erase_if(m_liveTextures, [](const std::weak_ptr<Texture>& t) { return t.expired(); });
     }
     m_liveTextures.push_back(texture);
+}
+
+static const char* GetBreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP op)
+{
+    switch (op)
+    {
+    case D3D12_AUTO_BREADCRUMB_OP_SETMARKER: return "SetMarker";
+    case D3D12_AUTO_BREADCRUMB_OP_BEGINEVENT: return "BeginEvent";
+    case D3D12_AUTO_BREADCRUMB_OP_ENDEVENT: return "EndEvent";
+    case D3D12_AUTO_BREADCRUMB_OP_DRAWINSTANCED: return "DrawInstanced";
+    case D3D12_AUTO_BREADCRUMB_OP_DRAWINDEXEDINSTANCED: return "DrawIndexedInstanced";
+    case D3D12_AUTO_BREADCRUMB_OP_EXECUTEINDIRECT: return "ExecuteIndirect";
+    case D3D12_AUTO_BREADCRUMB_OP_DISPATCH: return "Dispatch";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYBUFFERREGION: return "CopyBufferRegion";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYTEXTUREREGION: return "CopyTextureRegion";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYRESOURCE: return "CopyResource";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYTILES: return "CopyTiles";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOLVESUBRESOURCE: return "ResolveSubresource";
+    case D3D12_AUTO_BREADCRUMB_OP_CLEARRENDERTARGETVIEW: return "ClearRenderTargetView";
+    case D3D12_AUTO_BREADCRUMB_OP_CLEARUNORDEREDACCESSVIEW: return "ClearUnorderedAccessView";
+    case D3D12_AUTO_BREADCRUMB_OP_CLEARDEPTHSTENCILVIEW: return "ClearDepthStencilView";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOURCEBARRIER: return "ResourceBarrier";
+    case D3D12_AUTO_BREADCRUMB_OP_EXECUTEBUNDLE: return "ExecuteBundle";
+    case D3D12_AUTO_BREADCRUMB_OP_PRESENT: return "Present";
+    case D3D12_AUTO_BREADCRUMB_OP_RESOLVEQUERYDATA: return "ResolveQueryData";
+    default: return "Other";
+    }
+}
+
+std::string Application::GetDeviceRemovedReport() const
+{
+    if (!m_device || SUCCEEDED(m_device->GetDeviceRemovedReason()))
+    {
+        return {};
+    }
+
+    char line[512];
+    snprintf(line, sizeof(line), "Device removed: HRESULT 0x%08X\n", static_cast<unsigned int>(m_device->GetDeviceRemovedReason()));
+    std::string report = line;
+
+    ComPtr<ID3D12DeviceRemovedExtendedData> dred;
+    if (FAILED(m_device.As(&dred)))
+    {
+        return report + "DRED is not available.\n";
+    }
+
+    // Command lists that did not finish, with the operations around the last completed one.
+    D3D12_DRED_AUTO_BREADCRUMBS_OUTPUT breadcrumbs = {};
+    if (SUCCEEDED(dred->GetAutoBreadcrumbsOutput(&breadcrumbs)))
+    {
+        for (const D3D12_AUTO_BREADCRUMB_NODE* node = breadcrumbs.pHeadAutoBreadcrumbNode; node; node = node->pNext)
+        {
+            const UINT completed = node->pLastBreadcrumbValue ? *node->pLastBreadcrumbValue : 0;
+            if (completed >= node->BreadcrumbCount)
+            {
+                continue;
+            }
+
+            snprintf(line, sizeof(line), "Unfinished: %s on %s (%u of %u operations completed)\n",
+                node->pCommandListDebugNameA ? node->pCommandListDebugNameA : "<unnamed list>",
+                node->pCommandQueueDebugNameA ? node->pCommandQueueDebugNameA : "<unnamed queue>", completed, node->BreadcrumbCount);
+            report += line;
+
+            const UINT first = completed > 5 ? completed - 5 : 0;
+            const UINT last = std::min(node->BreadcrumbCount, completed + 3);
+            for (UINT i = first; i < last; ++i)
+            {
+                snprintf(line, sizeof(line), "  %s [%u] %s\n", i == completed ? "->" : "  ", i, GetBreadcrumbOpName(node->pCommandHistory[i]));
+                report += line;
+            }
+        }
+    }
+
+    D3D12_DRED_PAGE_FAULT_OUTPUT pageFault = {};
+    if (SUCCEEDED(dred->GetPageFaultAllocationOutput(&pageFault)) && pageFault.PageFaultVA != 0)
+    {
+        snprintf(line, sizeof(line), "Page fault at GPU VA 0x%llX\n", static_cast<unsigned long long>(pageFault.PageFaultVA));
+        report += line;
+        for (auto* node = pageFault.pHeadExistingAllocationNode; node; node = node->pNext)
+        {
+            snprintf(line, sizeof(line), "  existing allocation: %s\n", node->ObjectNameA ? node->ObjectNameA : "<unnamed>");
+            report += line;
+        }
+        for (auto* node = pageFault.pHeadRecentFreedAllocationNode; node; node = node->pNext)
+        {
+            snprintf(line, sizeof(line), "  recently freed: %s\n", node->ObjectNameA ? node->ObjectNameA : "<unnamed>");
+            report += line;
+        }
+    }
+
+    return report;
 }
 
 std::vector<std::shared_ptr<Texture>> Application::GetLiveTextures()

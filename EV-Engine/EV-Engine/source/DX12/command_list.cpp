@@ -47,6 +47,12 @@ CommandList::CommandList(D3D12_COMMAND_LIST_TYPE type)
 	ThrowIfFailed(device->CreateCommandList(0, m_commandListType, m_commandAllocator.Get(),
 		nullptr, IID_PPV_ARGS(&m_commandList)));
 
+	// Named so device removal reports (DRED) show which kind of list was executing.
+	static std::atomic_uint32_t s_commandListCount = 0;
+	const wchar_t* typeName = type == D3D12_COMMAND_LIST_TYPE_DIRECT ? L"Direct" :
+		type == D3D12_COMMAND_LIST_TYPE_COMPUTE ? L"Compute" : L"Copy";
+	m_commandList->SetName((std::wstring(typeName) + L" Command List " + std::to_wstring(s_commandListCount++)).c_str());
+
 	m_uploadBuffer = std::make_unique<UploadBuffer>();
 
 	m_resourceStateTracker = std::make_unique<ResourceStateTracker>();
