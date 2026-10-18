@@ -748,7 +748,8 @@ static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
         std::string text = std::string("Unhandled exception: ") + e.what() + "\n";
         OutputDebugStringA(text.c_str());
         fprintf(stderr, "%s", text.c_str());
-        if (FILE* log = fopen("ev_crash.log", "w"))
+        FILE* log = nullptr;
+        if (fopen_s(&log, "ev_crash.log", "w") == 0 && log)
         {
             fputs(text.c_str(), log);
             fclose(log);
