@@ -109,8 +109,10 @@ class PipelineStateObject;
 		*/
 		std::shared_ptr<Texture> CreateTexture(const D3D12_RESOURCE_DESC& resourceDesc,
 			const D3D12_CLEAR_VALUE* clearValue = nullptr);
+		// trackLiveTexture = false hides the texture from the editor (swap chain buffers must not be referenced
+		// by anything else, or resizing the swap chain fails).
 		std::shared_ptr<Texture> CreateTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource,
-			const D3D12_CLEAR_VALUE* clearValue = nullptr);
+			const D3D12_CLEAR_VALUE* clearValue = nullptr, bool trackLiveTexture = true);
 		// Every texture created through CreateTexture that is still alive. Used by the editor's texture browser.
 		std::vector<std::shared_ptr<Texture>> GetLiveTextures();
 

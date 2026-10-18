@@ -318,7 +318,7 @@ void Window::UpdateRenderTargetViews()
 
 		// m_backBufferTextures[i].SetD3D12Resource(backBuffer);
 		// m_backBufferTextures[i].CreateViews();
-		m_backBufferTextures[i] = Application::Get().CreateTexture(backBuffer);
+		m_backBufferTextures[i] = Application::Get().CreateTexture(backBuffer, nullptr, false);
 		m_backBufferTextures[i]->SetName(L"Backbuffer[" + std::to_wstring(i) + L"]");
 	}
 }

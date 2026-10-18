@@ -994,11 +994,15 @@ std::shared_ptr<Texture> Application::CreateTexture(const D3D12_RESOURCE_DESC& r
     return texture;
 }
 
-std::shared_ptr<Texture> Application::CreateTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource, const D3D12_CLEAR_VALUE* clearValue)
+std::shared_ptr<Texture> Application::CreateTexture(Microsoft::WRL::ComPtr<ID3D12Resource> resource, const D3D12_CLEAR_VALUE* clearValue,
+    bool trackLiveTexture)
 {
     std::shared_ptr<Texture> texture = std::make_shared<MakeTexture>(resource, clearValue);
 
-    TrackLiveTexture(texture);
+    if (trackLiveTexture)
+    {
+        TrackLiveTexture(texture);
+    }
 
     return texture;
 }
