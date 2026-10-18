@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <mutex>
 
 #include "imgui_internal.h"
 
@@ -11,6 +12,7 @@
 #include "core/camera.h"
 #include "DX12/command_list.h"
 #include "DX12/command_queue.h"
+#include "DX12/resource_state_tracker.h"
 #include "DX12/scene.h"
 #include "DX12/scene_node.h"
 #include "resources/material.h"
@@ -66,15 +68,36 @@ namespace
         return AssetType::Unknown;
     }
 
+    // Background loads run one at a time and only return once the GPU has finished uploading. Loads share
+    // textures through the texture cache, so this way a texture handed out by the cache is always completely
+    // uploaded; with concurrent loads, a model could be drawn while another load was still uploading (and
+    // transitioning) one of its textures.
+    std::mutex g_loadMutex;
+
+    // Execute a loading command list and wait until the upload, including the mipmaps that ExecuteCommandList
+    // queues on the compute queue afterwards, has finished.
+    void ExecuteAndWait(CommandQueue& commandQueue, const std::shared_ptr<CommandList>& commandList)
+    {
+        commandQueue.WaitForFenceValue(commandQueue.ExecuteCommandList(commandList));
+
+        // The lock keeps fence values in order with the signals that ExecuteCommandList issues from other threads.
+        auto& computeQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        ResourceStateTracker::Lock();
+        const uint64_t mipsFence = computeQueue.Signal();
+        ResourceStateTracker::Unlock();
+        computeQueue.WaitForFenceValue(mipsFence);
+    }
+
     // Loading runs on a worker thread using the copy queue, like the applications' own scene loading.
     std::shared_ptr<Scene> LoadModel(const fs::path& path)
     {
         try
         {
+            std::lock_guard<std::mutex> lock(g_loadMutex);
             auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
             auto commandList = commandQueue.GetCommandList();
             auto scene = commandList->LoadSceneFromFile(path.wstring());
-            commandQueue.WaitForFenceValue(commandQueue.ExecuteCommandList(commandList));
+            ExecuteAndWait(commandQueue, commandList);
             return scene;
         }
         catch (const std::exception& e)
@@ -88,10 +111,11 @@ namespace
     {
         try
         {
+            std::lock_guard<std::mutex> lock(g_loadMutex);
             auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
             auto commandList = commandQueue.GetCommandList();
             auto texture = commandList->LoadTextureFromFile(path.wstring(), sRGB);
-            commandQueue.WaitForFenceValue(commandQueue.ExecuteCommandList(commandList));
+            ExecuteAndWait(commandQueue, commandList);
             return texture;
         }
         catch (const std::exception& e)
