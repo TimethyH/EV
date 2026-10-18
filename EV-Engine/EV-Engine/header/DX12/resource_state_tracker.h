@@ -164,6 +164,9 @@ namespace EV
         // An array (vector) of resource barriers.
         using ResourceBarriers = std::vector<D3D12_RESOURCE_BARRIER>;
 
+        // Queue a resolved transition barrier, merged with a queued one for the same subresource.
+        void AddTransitionBarrier(const D3D12_RESOURCE_BARRIER& barrier);
+
         // Pending resource transitions are committed before a command list
         // is executed on the command queue. This guarantees that resources will
         // be in the expected state at the beginning of a command list.
