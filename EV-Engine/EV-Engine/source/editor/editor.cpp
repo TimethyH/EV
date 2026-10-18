@@ -638,7 +638,10 @@ void Editor::DrawSceneViewport()
 
     // ImGuizmo only starts a drag when no ImGui item is hovered or active, so while the gizmo is hovered
     // (previous frame) or in use the viewport's input button steps aside, and the window must not move.
-    const bool gizmoOwnsMouse = !m_selectedNode.expired() && ImGuizmo::IsOver();
+    // Not while dragging an asset: the button is also the drop target (and a dragged model, which is
+    // selected once loaded, has its gizmo right under the mouse).
+    const bool assetDragging = ImGui::GetDragDropPayload() != nullptr;
+    const bool gizmoOwnsMouse = !assetDragging && !m_selectedNode.expired() && ImGuizmo::IsOver();
 
     ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
     const bool visible = ImGui::Begin(g_sceneWindow, &m_showScene, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse |
@@ -759,7 +762,7 @@ void Editor::DrawViewportToolbar(const ImVec2& imagePosition)
 bool Editor::DrawGizmo(const ImVec2& imagePosition, const ImVec2& imageSize)
 {
     auto node = m_selectedNode.lock();
-    if (!node || !m_camera)
+    if (!node || !m_camera || ImGui::GetDragDropPayload() != nullptr)
     {
         return false;
     }
@@ -988,6 +991,18 @@ void Editor::DrawInspector()
     {
         return;
     }
+
+    // Selecting an object (in the Scene or Hierarchy) brings the Inspector to the front of its dock.
+    const SceneNode* selected = m_selectedNode.lock().get();
+    if (selected != m_inspectedNode)
+    {
+        m_inspectedNode = selected;
+        if (selected)
+        {
+            ShowDockedTab(g_inspectorWindow);
+        }
+    }
+
     if (!ImGui::Begin(g_inspectorWindow, &m_showInspector))
     {
         ImGui::End();

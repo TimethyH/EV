@@ -444,6 +444,15 @@ void Editor::DrawAssetBrowser()
         {
             const std::string utf8 = ToUTF8(path.wstring());
             ImGui::SetDragDropPayload(g_assetPayload, utf8.c_str(), utf8.size() + 1);
+            // Show what is being dragged until the model itself appears in the Scene.
+            if (isModel)
+            {
+                auto thumbnail = m_modelThumbnails.find(path.wstring());
+                if (thumbnail != m_modelThumbnails.end() && thumbnail->second.image)
+                {
+                    ImGui::Image(m_gui->GetTextureID(thumbnail->second.image), ImVec2(96.0f, 96.0f));
+                }
+            }
             ImGui::Text("%s", name.c_str());
             ImGui::EndDragDropSource();
         }
