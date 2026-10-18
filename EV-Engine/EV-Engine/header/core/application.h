@@ -77,6 +77,9 @@ class PipelineStateObject;
 
 		void ReleaseStaleDescriptors();
 
+		// Describes why the device was removed (DRED breadcrumbs and page fault), empty if it was not.
+		std::string GetDeviceRemovedReport() const;
+
 
 		/**
 	 * Create a ConstantBuffer from a given ID3D12Resoure.
