@@ -237,11 +237,12 @@ SamplerState linearClampSampler : register(s1); // for IBL
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
-    float3 albedo = DiffuseTexture.Sample(anisotropicSampler, IN.TexCoord).rgb;
-    float4 ao = AmbientTexture.Sample(anisotropicSampler, IN.TexCoord);
-    float3 normalTex = NormalTexture.Sample(anisotropicSampler, IN.TexCoord).xyz * 2.0f - 1.0f;
+    // Textures a material does not have are bound as an empty view (reading 0), so fall back to the
+    // material's values for those: otherwise models without a full PBR texture set render black.
+    float3 albedo = material.hasDiffuseTexture ? DiffuseTexture.Sample(anisotropicSampler, IN.TexCoord).rgb : material.Diffuse.rgb;
+    float ao = material.hasAmbientTexture ? AmbientTexture.Sample(anisotropicSampler, IN.TexCoord).r : 1.0f;
     float4 metallicRough = MetallicRoughness.Sample(anisotropicSampler, IN.TexCoord);
-    float4 emissive = EmissiveTexture.Sample(anisotropicSampler, IN.TexCoord);
+    float3 emissive = material.hasEmissiveTexture ? EmissiveTexture.Sample(anisotropicSampler, IN.TexCoord).rgb : material.Emissive.rgb;
     float PI = 3.14159265358979323846264338327950288f;
 
     float3 ambientColor = float3(0.03f, 0.03f, 0.03f);
@@ -271,8 +272,10 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 pointLightBRDF = 0;
     float3 directionalLightBRDF = 0;
     float3 BRDF = 0;
-    float roughness = metallicRough.g;
-    float metallic = metallicRough.b;
+    float roughness = material.hasMetallicRoughnessTexture ? metallicRough.g : material.Roughness;
+    float metallic = material.hasMetallicRoughnessTexture ? metallicRough.b : material.Metallic;
+    // A roughness of 0 divides by zero in the normal distribution (NaN, black pixels).
+    roughness = clamp(roughness, 0.04f, 1.0f);
 
     // return float4(roughness, roughness, roughness, 1.0);
 		
@@ -324,7 +327,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 fresnelIBL = PBRCalculateFresnelIBL(NdotV, F0, roughness);
     float3 kd_ibl = (float3(1.0f, 1.0f, 1.0f) - fresnelIBL) * (1.0f - metallic);
     float3 specular = specularColor * (fresnelIBL * envBRDF.x + envBRDF.y);
-    float3 ambient = (kd_ibl * diffuse + specular) * ao.r;
+    float3 ambient = (kd_ibl * diffuse + specular) * ao;
 
      // Combine ambient, point light, and directional light contributions
     BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
