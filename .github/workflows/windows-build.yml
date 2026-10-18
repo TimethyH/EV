@@ -61,12 +61,54 @@ jobs:
       - name: Build ShaderArt (Debug x64)
         run: msbuild EV-Engine/ShaderArt/ShaderArt.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
 
-      - name: Upload binaries
+      # Run the editor on the WARP software rasterizer and take screenshots, so UI changes can be checked without a GPU.
+      - name: Smoke test (WARP)
+        timeout-minutes: 20
+        working-directory: EV-Engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EV_USE_WARP: "1"
+          EV_EDITOR_TEXTURE: "Depth Render Target"
+        run: |
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
+          New-Item -ItemType Directory -Force assets/damaged_helmet, ../screenshots | Out-Null
+          gh release download Assets -p sky4k.hdr -D assets -R ${{ github.repository }} --clobber
+          $base = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF"
+          foreach ($f in "DamagedHelmet.gltf","DamagedHelmet.bin","Default_albedo.jpg","Default_AO.jpg","Default_emissive.jpg","Default_metalRoughness.jpg","Default_normal.jpg") {
+            curl.exe -sSL -o "assets/damaged_helmet/$f" "$base/$f"
+          }
+
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Save-Screenshot($path) {
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bitmap.Save($path, [System.Drawing.Imaging.ImageFormat]::Png)
+            $graphics.Dispose(); $bitmap.Dispose()
+            Write-Host "Saved $path ($($bounds.Width)x$($bounds.Height))"
+          }
+
+          $exe = Get-ChildItem -Recurse -Filter OceanRenderer.exe | Select-Object -First 1
+          Write-Host "Running $($exe.FullName)"
+          $process = Start-Process -FilePath $exe.FullName -WorkingDirectory (Get-Location) -PassThru
+          $start = Get-Date
+          $windowTime = $null
+          while (((Get-Date) - $start).TotalSeconds -lt 900) {
+            Start-Sleep -Seconds 5
+            $process.Refresh()
+            if ($process.HasExited) { Write-Host "Process exited with code $($process.ExitCode)"; break }
+            if (-not $windowTime -and $process.MainWindowHandle -ne 0) { $windowTime = Get-Date; Write-Host "Window shown after $([int]((Get-Date) - $start).TotalSeconds)s" }
+            if ($windowTime -and ((Get-Date) - $windowTime).TotalSeconds -ge 60) { break }
+          }
+          Save-Screenshot "../screenshots/editor.png"
+          if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          if (-not $windowTime) { Write-Host "::warning::The editor window never appeared" }
+
+      - name: Upload screenshots
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: ev-debug-x64
-          path: |
-            EV-Engine/x64/Debug/*.exe
-            EV-Engine/**/x64/Debug/*.exe
+          name: screenshots
+          path: screenshots/
           if-no-files-found: ignore

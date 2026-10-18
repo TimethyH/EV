@@ -245,6 +245,13 @@ Editor::Editor(std::shared_ptr<GUI> gui)
 {
     m_gizmoOperation = ImGuizmo::TRANSLATE;
     ApplyTheme();
+
+    // EV_EDITOR_TEXTURE=<texture name> opens a texture in the viewer at startup (used by the CI screenshots).
+    wchar_t textureName[256] = {};
+    if (GetEnvironmentVariableW(L"EV_EDITOR_TEXTURE", textureName, _countof(textureName)) > 0)
+    {
+        m_startupTextureName = textureName;
+    }
 }
 
 Editor::~Editor() = default;
@@ -1152,6 +1159,15 @@ void Editor::DrawTextureViewer()
     {
         ImGui::End();
         return;
+    }
+
+    if (!m_startupTextureName.empty())
+    {
+        if (auto startupTexture = FindLiveTexture(m_startupTextureName))
+        {
+            InspectTexture(startupTexture);
+            m_startupTextureName.clear();
+        }
     }
 
     // Textures that are recreated (e.g. on resize or when parameters change) are found again by name.
