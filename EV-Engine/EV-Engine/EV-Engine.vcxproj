@@ -40,6 +40,7 @@
     <ClCompile Include="thirdparty\imgui\imgui_tables.cpp" />
     <ClCompile Include="thirdparty\imguizmo\ImGuizmo.cpp" />
     <ClCompile Include="source\UI\format_utils.cpp" />
+    <ClCompile Include="source\UI\model_preview.cpp" />
     <ClCompile Include="source\UI\texture_preview.cpp" />
     <ClCompile Include="source\UI\texture_readback.cpp" />
     <ClCompile Include="source\editor\editor.cpp" />
@@ -94,6 +95,7 @@
     <ClInclude Include="header\UI\GUI.h" />
     <ClInclude Include="thirdparty\imguizmo\ImGuizmo.h" />
     <ClInclude Include="header\UI\format_utils.h" />
+    <ClInclude Include="header\UI\model_preview.h" />
     <ClInclude Include="header\UI\texture_preview.h" />
     <ClInclude Include="header\UI\texture_readback.h" />
     <ClInclude Include="header\editor\editor.h" />
