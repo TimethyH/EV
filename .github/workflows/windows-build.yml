@@ -6,6 +6,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: windows-2025-vs2026
@@ -106,18 +109,18 @@ jobs:
           if (-not $windowTime) { Write-Host "::warning::The editor window never appeared" }
           if (Test-Path ev_crash.log) { Write-Host "::error::$(Get-Content ev_crash.log -Raw)" }
 
-          # Also print a small JPEG of the screenshot as base64, for reading it without downloading artifacts.
-          $image = [System.Drawing.Image]::FromFile((Resolve-Path "../screenshots/editor.png"))
-          $codec = [System.Drawing.Imaging.ImageCodecInfo]::GetImageEncoders() | Where-Object { $_.MimeType -eq "image/jpeg" }
-          $parameters = New-Object System.Drawing.Imaging.EncoderParameters 1
-          $parameters.Param[0] = New-Object System.Drawing.Imaging.EncoderParameter ([System.Drawing.Imaging.Encoder]::Quality, [long]70)
-          $stream = New-Object System.IO.MemoryStream
-          $image.Save($stream, $codec, $parameters)
-          $image.Dispose()
-          $base64 = [Convert]::ToBase64String($stream.ToArray())
-          Write-Host "SCREENSHOT-BEGIN"
-          for ($i = 0; $i -lt $base64.Length; $i += 4000) { Write-Host $base64.Substring($i, [Math]::Min(4000, $base64.Length - $i)) }
-          Write-Host "SCREENSHOT-END"
+          # Publish the screenshot on the ci-screenshots branch so it can be fetched with git.
+          if ("${{ github.event_name }}" -eq "push") {
+            $branch = "ci-screenshots"
+            $exists = gh api "repos/${{ github.repository }}/branches/$branch" 2>$null
+            if (-not $exists) { gh api -X POST "repos/${{ github.repository }}/git/refs" -f "ref=refs/heads/$branch" -f "sha=${{ github.sha }}" | Out-Null }
+            $existing = gh api "repos/${{ github.repository }}/contents/editor.png?ref=$branch" --jq .sha 2>$null
+            $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path "../screenshots/editor.png")))
+            $body = @{ message = "Screenshot for ${{ github.sha }}"; content = $content; branch = $branch }
+            if ($existing) { $body.sha = $existing }
+            $body | ConvertTo-Json | gh api -X PUT "repos/${{ github.repository }}/contents/editor.png" --input - | Out-Null
+            Write-Host "Screenshot published to $branch"
+          }
 
       - name: Upload screenshots
         if: always()
