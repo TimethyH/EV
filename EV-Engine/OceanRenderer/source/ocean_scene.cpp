@@ -12,10 +12,10 @@
 #include "compute_pso.h"
 #include "convolution_pso.h"
 #include "ocean_pso.h"
-#include "DX12/skybox_pso.h"
+#include "graphics/skybox_pso.h"
+#include "graphics/atmosphere_pso.h"
 #include "DX12/root_signature.h"
 #include "DX12/sdr_pso.h"
-#include "DX12/skybox_pso.h"
 
 #define PI 3.14159265359f
 
@@ -302,6 +302,14 @@ bool Ocean::LoadContent()
     CD3DX12_ROOT_PARAMETER1 brdfLutRootParameters[1];
     brdfLutRootParameters[0].InitAsDescriptorTable(1, &brdfUAVRange);
 
+    // Atmosphere. TODO: should be moved to core engine
+
+    CD3DX12_ROOT_PARAMETER1 atmosphereRootParams[2];
+    atmosphereRootParams[0].InitAsConstants(sizeof(AtmospherePSO::AtmosphereConstants) / 4, 0, 0);
+    CD3DX12_DESCRIPTOR_RANGE1 atmosphereUavRange;
+    atmosphereUavRange.Init(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);
+    atmosphereRootParams[1].InitAsDescriptorTable(1, &atmosphereUavRange);
+
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
     m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", m_oceanCascadesNumber, m_oceanPatchSizes);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
@@ -312,6 +320,7 @@ bool Ocean::LoadContent()
     m_brdfLutPSO = std::make_shared<ConvolutionCompute>(L"/brdf_lut.cso", brdfLutRootParameters, _countof(brdfLutRootParameters));
     m_skyboxPSO = std::make_shared<SkyboxPSO>(L"/skybox_VS.cso", L"/skybox_PS.cso");
     m_sdrPSO = std::make_shared<SDRPSO>(L"/HDR_to_SDR_VS.cso", L"/HDR_to_SDR_PS.cso");
+    m_atmospherePSO = std::make_shared<AtmospherePSO>(m_camera, L"/atmosphere_scatter.cso", atmosphereRootParams, 2, m_width, m_height);
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
@@ -350,6 +359,12 @@ bool Ocean::LoadContent()
     m_brdfLUT = Application::Get().CreateTexture(BRDFDesc);
     m_brdfLUT->SetName(L"BRDF LUT ");
 
+    // Atmosphere Texture
+    auto atmosphereDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_width, m_height);
+    atmosphereDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    m_atmosphereTexture = Application::Get().CreateTexture(atmosphereDesc);
+    m_atmosphereTexture->SetName(L"Atmosphere Texture");
+
     // Create cubemap SRVs for IBL
     D3D12_SHADER_RESOURCE_VIEW_DESC cubeSRVDesc = {};
     cubeSRVDesc.Format = irradianceFormat;
@@ -379,6 +394,9 @@ bool Ocean::LoadContent()
     m_specularConvolutionPSO->DispatchSpecular(computeCommandList, m_skyboxCubemapSRV, m_specularIrradianceMap, brdfTextureSize, 4096, specularMipLevels);
     // LUT
     m_brdfLutPSO->DispatchBRDFLUT(computeCommandList, m_brdfLUT, brdfTextureSize);
+
+    // Atmosphere
+    m_atmospherePSO->Dispatch(computeCommandList, m_atmosphereTexture);
 
     // Update Render params for the ocean.
     m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(0.0f, 0.5f, 0.4f, 1.0f);

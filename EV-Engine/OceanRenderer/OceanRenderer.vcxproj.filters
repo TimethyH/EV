@@ -61,5 +61,6 @@
     <FxCompile Include="shaders\ibl_convolution.hlsl" />
     <FxCompile Include="shaders\ibl_specular.hlsl" />
     <FxCompile Include="shaders\brdf_lut.hlsl" />
+    <FxCompile Include="shaders\atmosphere_scatter.hlsl" />
   </ItemGroup>
 </Project>

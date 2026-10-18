@@ -14,6 +14,7 @@
 #define OCEAN_DEPTH 20.0f
 
 class ConvolutionCompute;
+class AtmospherePSO;
 class OceanCompute;
 class UpdateEventArgs;
 class KeyEventArgs;
@@ -200,6 +201,8 @@ private:
 	std::shared_ptr<ConvolutionCompute> m_convolutionPSO;
 	std::shared_ptr<ConvolutionCompute> m_specularConvolutionPSO;
 	std::shared_ptr<ConvolutionCompute> m_brdfLutPSO;
+	std::shared_ptr<AtmospherePSO> m_atmospherePSO;
+
 
 	std::future<bool> m_loadingTask;
 
@@ -232,6 +235,8 @@ private:
 	std::shared_ptr<Texture> m_diffuseIrradianceMap; 
 	std::shared_ptr<Texture> m_specularIrradianceMap; 
 	std::shared_ptr<Texture> m_brdfLUT; 
+	std::shared_ptr<Texture> m_atmosphereTexture;
+
 
 	std::shared_ptr<EV::ShaderResourceView> m_skyboxCubemapSRV; 
 	std::shared_ptr<EV::ShaderResourceView> m_diffuseCubemapSRV; 

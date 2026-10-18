@@ -1,4 +1,4 @@
-#include "DX12/skybox_pso.h"
+#include "graphics/skybox_pso.h"
 
 #include <d3d12.h>
 #include <d3dcommon.h>
