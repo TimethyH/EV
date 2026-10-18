@@ -460,6 +460,10 @@ std::shared_ptr<SwapChain> Application::CreateSwapchain(HWND hWnd, DXGI_FORMAT b
     return swapChain;
 }
 
+#if defined(_DEBUG)
+static void CALLBACK OnDebugLayerMessage(D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY, D3D12_MESSAGE_ID, LPCSTR, void*);
+#endif
+
 Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter)
 {
     ComPtr<ID3D12Device13> d3d12Device13;
@@ -508,6 +512,15 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
         NewFilter.DenyList.pIDList = DenyIds;
 
         ThrowIfFailed(pInfoQueue->PushStorageFilter(&NewFilter));
+
+        // Breaking on a message without a debugger attached ends the process without any detail,
+        // so log warnings and errors before the break happens.
+        ComPtr<ID3D12InfoQueue1> pInfoQueue1;
+        if (SUCCEEDED(pInfoQueue.As(&pInfoQueue1)))
+        {
+            DWORD cookie = 0;
+            pInfoQueue1->RegisterMessageCallback(OnDebugLayerMessage, D3D12_MESSAGE_CALLBACK_FLAG_NONE, nullptr, &cookie);
+        }
     }
 #endif
 
@@ -782,6 +795,17 @@ static void WriteCrashReport(const std::string& text)
         fclose(log);
     }
 }
+
+#if defined(_DEBUG)
+static void CALLBACK OnDebugLayerMessage(D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY severity, D3D12_MESSAGE_ID id, LPCSTR description, void*)
+{
+    if (severity <= D3D12_MESSAGE_SEVERITY_WARNING)
+    {
+        static const char* severityNames[] = { "CORRUPTION", "ERROR", "WARNING" };
+        WriteCrashReport(std::string("D3D12 ") + severityNames[severity] + " #" + std::to_string(id) + ": " + description + "\n");
+    }
+}
+#endif
 
 [[noreturn]] static void ReportFatalError(const std::string& error)
 {
@@ -1137,6 +1161,22 @@ static const char* GetBreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP op)
     }
 }
 
+// DRED usually only fills in the wide debug name (set with ID3D12Object::SetName).
+static std::string GetDredName(const char* nameA, const wchar_t* nameW, const char* fallback)
+{
+    if (nameA && *nameA)
+    {
+        return nameA;
+    }
+    if (nameW && *nameW)
+    {
+        char name[256] = {};
+        WideCharToMultiByte(CP_UTF8, 0, nameW, -1, name, sizeof(name) - 1, nullptr, nullptr);
+        return name;
+    }
+    return fallback;
+}
+
 std::string Application::GetDeviceRemovedReport() const
 {
     if (!m_device || SUCCEEDED(m_device->GetDeviceRemovedReason()))
@@ -1167,8 +1207,8 @@ std::string Application::GetDeviceRemovedReport() const
             }
 
             snprintf(line, sizeof(line), "Unfinished: %s on %s (%u of %u operations completed)\n",
-                node->pCommandListDebugNameA ? node->pCommandListDebugNameA : "<unnamed list>",
-                node->pCommandQueueDebugNameA ? node->pCommandQueueDebugNameA : "<unnamed queue>", completed, node->BreadcrumbCount);
+                GetDredName(node->pCommandListDebugNameA, node->pCommandListDebugNameW, "<unnamed list>").c_str(),
+                GetDredName(node->pCommandQueueDebugNameA, node->pCommandQueueDebugNameW, "<unnamed queue>").c_str(), completed, node->BreadcrumbCount);
             report += line;
 
             const UINT first = completed > 5 ? completed - 5 : 0;
@@ -1188,12 +1228,12 @@ std::string Application::GetDeviceRemovedReport() const
         report += line;
         for (auto* node = pageFault.pHeadExistingAllocationNode; node; node = node->pNext)
         {
-            snprintf(line, sizeof(line), "  existing allocation: %s\n", node->ObjectNameA ? node->ObjectNameA : "<unnamed>");
+            snprintf(line, sizeof(line), "  existing allocation: %s (type %d)\n", GetDredName(node->ObjectNameA, node->ObjectNameW, "<unnamed>").c_str(), node->AllocationType);
             report += line;
         }
         for (auto* node = pageFault.pHeadRecentFreedAllocationNode; node; node = node->pNext)
         {
-            snprintf(line, sizeof(line), "  recently freed: %s\n", node->ObjectNameA ? node->ObjectNameA : "<unnamed>");
+            snprintf(line, sizeof(line), "  recently freed: %s (type %d)\n", GetDredName(node->ObjectNameA, node->ObjectNameW, "<unnamed>").c_str(), node->AllocationType);
             report += line;
         }
     }

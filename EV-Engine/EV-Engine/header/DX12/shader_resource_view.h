@@ -33,6 +33,7 @@
 #include <DX12/descriptor_allocation.h>
 
 #include <d3d12.h>  // For D3D12_SHADER_RESOURCE_VIEW_DESC and D3D12_CPU_DESCRIPTOR_HANDLE
+#include <wrl/client.h>  // For Microsoft::WRL::ComPtr
 #include <memory>   // For std::shared_ptr
 
 namespace EV
@@ -49,6 +50,13 @@ namespace EV
             return m_resource;
         }
 
+        // The resource the descriptor was created for. This differs from GetResource()->GetD3D12Resource()
+        // once the resource is resized or recreated; the view keeps it alive so the descriptor stays valid.
+        Microsoft::WRL::ComPtr<ID3D12Resource> GetD3D12Resource() const
+        {
+            return m_d3d12Resource;
+        }
+
         D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle() const
         {
             return m_descriptor.GetDescriptorHandle();
@@ -61,8 +69,9 @@ namespace EV
 
     private:
         // Device& m_device;
-        std::shared_ptr<Resource> m_resource;
-        DescriptorAllocation      m_descriptor;
+        std::shared_ptr<Resource>              m_resource;
+        Microsoft::WRL::ComPtr<ID3D12Resource> m_d3d12Resource;
+        DescriptorAllocation                   m_descriptor;
     };
 
 }

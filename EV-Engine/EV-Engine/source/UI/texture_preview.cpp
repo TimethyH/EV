@@ -288,10 +288,11 @@ uint32_t TexturePreview::GetSliceCount(const Texture& texture)
 
 TexturePreview::SourceView* TexturePreview::GetSourceView(const std::shared_ptr<Texture>& source)
 {
-    auto resource = source->GetD3D12Resource().Get();
+    // Compare against the resource kept alive by the view: a raw pointer could match a new resource
+    // allocated at the address of a freed one, leaving a descriptor that points at freed memory.
     auto& view = m_sourceViews[source.get()];
 
-    if (view.srv && view.resource == resource && view.texture.lock() == source)
+    if (view.srv && view.srv->GetD3D12Resource() == source->GetD3D12Resource() && view.texture.lock() == source)
     {
         view.lastUsedFrame = m_frame;
         return &view;
@@ -332,7 +333,6 @@ TexturePreview::SourceView* TexturePreview::GetSourceView(const std::shared_ptr<
     }
 
     view.texture = source;
-    view.resource = resource;
     view.srv = Application::Get().CreateShaderResourceView(source, &srvDesc);
     view.variant = variant;
     view.lastUsedFrame = m_frame;
