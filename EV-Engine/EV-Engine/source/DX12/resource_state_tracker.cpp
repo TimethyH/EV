@@ -21,6 +21,31 @@ ResourceStateTracker::~ResourceStateTracker()
 {
 }
 
+void ResourceStateTracker::AddTransitionBarrier(const D3D12_RESOURCE_BARRIER& barrier)
+{
+    // Two transitions of the same subresource in one batch (nothing executes between them) are merged into
+    // one; the debug layer warns about separate barrier descs for the same subresource. The search stops at
+    // UAV/aliasing barriers so a transition is never moved across one.
+    for (auto iter = m_resourceBarriers.rbegin(); iter != m_resourceBarriers.rend(); ++iter)
+    {
+        if (iter->Type != D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
+        {
+            break;
+        }
+        if (iter->Transition.pResource == barrier.Transition.pResource &&
+            iter->Transition.Subresource == barrier.Transition.Subresource)
+        {
+            iter->Transition.StateAfter = barrier.Transition.StateAfter;
+            if (iter->Transition.StateBefore == iter->Transition.StateAfter)
+            {
+                m_resourceBarriers.erase(std::next(iter).base());
+            }
+            return;
+        }
+    }
+    m_resourceBarriers.push_back(barrier);
+}
+
 void ResourceStateTracker::ResourceBarrier(const D3D12_RESOURCE_BARRIER& barrier)
 {
     if (barrier.Type == D3D12_RESOURCE_BARRIER_TYPE_TRANSITION)
@@ -46,7 +71,7 @@ void ResourceStateTracker::ResourceBarrier(const D3D12_RESOURCE_BARRIER& barrier
                         D3D12_RESOURCE_BARRIER newBarrier = barrier;
                         newBarrier.Transition.Subresource = subresourceState.first;
                         newBarrier.Transition.StateBefore = subresourceState.second;
-                        m_resourceBarriers.push_back(newBarrier);
+                        AddTransitionBarrier(newBarrier);
                     }
                 }
             }
@@ -58,7 +83,7 @@ void ResourceStateTracker::ResourceBarrier(const D3D12_RESOURCE_BARRIER& barrier
                     // Push a new transition barrier with the correct before state.
                     D3D12_RESOURCE_BARRIER newBarrier = barrier;
                     newBarrier.Transition.StateBefore = finalState;
-                    m_resourceBarriers.push_back(newBarrier);
+                    AddTransitionBarrier(newBarrier);
                 }
             }
         }
