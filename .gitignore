@@ -419,6 +419,7 @@ FodyWeavers.xsd
 
 # Libs that are too big
 EV-Engine/EV-Engine/lib/assimp-vc145-mtd.lib
+EV-Engine/EV-Engine/lib/assimp-vc145-mt.lib
 
 
 # Model Assets

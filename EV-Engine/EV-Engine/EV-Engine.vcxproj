@@ -249,7 +249,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mtd.lib;DirectXTexd.lib</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mt.lib;DirectXTex.lib;zlibstatic.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)/EV-Engine/lib</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>
@@ -289,7 +289,7 @@
     <Link>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
-      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mtd.lib;DirectXTexd.lib</AdditionalDependencies>
+      <AdditionalDependencies>d3d12.lib;dxgi.lib;d3dcompiler.lib;dxguid.lib;Shlwapi.lib;assimp-vc145-mt.lib;DirectXTex.lib;zlibstatic.lib</AdditionalDependencies>
       <AdditionalLibraryDirectories>$(SolutionDir)/EV-Engine/lib</AdditionalLibraryDirectories>
     </Link>
     <FxCompile>

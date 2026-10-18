@@ -26,14 +26,14 @@
 #pragma comment(lib, "Shlwapi.lib")  // Debug version
 #pragma comment(lib, "zlibstaticd.lib")  // Debug version
 #else
-#pragma comment(lib, "assimp-vc145-mtd.lib")   // Release version
-#pragma comment(lib, "DirectXTexd.lib")   // Release version
-#pragma comment(lib, "zlibstaticd.lib")   // Release version
+// Release builds need the release builds of the libraries (the debug ones use a different C runtime).
+#pragma comment(lib, "assimp-vc145-mt.lib")   // Release version
+#pragma comment(lib, "DirectXTex.lib")   // Release version
+#pragma comment(lib, "Shlwapi.lib")
+#pragma comment(lib, "zlibstatic.lib")   // Release version
 #endif
 
 // Add other third-party libs here as needed
-// #pragma comment(lib, "DirectXTex.lib")
-// etc.
 
 #endif // _MSC_VER
 
