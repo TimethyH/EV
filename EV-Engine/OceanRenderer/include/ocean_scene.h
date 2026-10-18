@@ -118,7 +118,7 @@ private:
 	float m_loadingProgress;
 	bool m_showFileOpenDialog;
 	bool m_showControls = false;
-	bool m_fullscreen = false;
+	bool m_toggleFullscreen = false; // Applied at the start of the next OnRender.
 	double m_FPS;
 	bool m_showOceanParams = true;
 	bool m_showLightParams = false;

@@ -657,8 +657,13 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
 void Ocean::OnRender()
 {
-
-    m_pWindow->SetFullScreen(m_fullscreen);
+    // Full screen toggles requested by the menu or F11 are applied here, before the frame is recorded:
+    // switching resizes the swap chain. (The window itself also enters full screen when it is maximized.)
+    if (m_toggleFullscreen)
+    {
+        m_pWindow->ToggleFullScreen();
+        m_toggleFullscreen = false;
+    }
 
     // Follow the size of the editor's Scene panel (known from the previous frame).
     if (m_editor->ConsumeViewportResize())
@@ -827,9 +832,8 @@ void Ocean::DrawMenu()
         bool vSync = m_swapChain->GetVSync();
         if (ImGui::MenuItem("V-Sync", "V", &vSync))
             m_swapChain->SetVSync(vSync);
-        bool fullscreen = m_pWindow->IsFullScreen();
-        if (ImGui::MenuItem("Full screen", "Alt+Enter", &fullscreen))
-            m_fullscreen = fullscreen;
+        if (ImGui::MenuItem("Full screen", "F11", m_pWindow->IsFullScreen()))
+            m_toggleFullscreen = true;
         ImGui::EndMenu();
     }
 }
@@ -1258,8 +1262,7 @@ void Ocean::OnKeyPress(KeyEventArgs& e)
         if (e.alt)
         {
     case KeyCode::F11:
-        // OnRender applies m_fullscreen to the window every frame.
-        m_fullscreen = !m_fullscreen;
+        m_toggleFullscreen = true;
         break;
         }
     case KeyCode::V:

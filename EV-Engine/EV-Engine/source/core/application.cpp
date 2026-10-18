@@ -1017,6 +1017,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         // not handled.
         case WM_SYSCHAR:
             break;
+        // Maximizing (the title bar button, double clicking the title bar, Win+Up) goes to borderless full screen.
+        case WM_SYSCOMMAND:
+            if ((wParam & 0xFFF0) == SC_MAXIMIZE)
+            {
+                pWindow->SetFullScreen(true);
+                return 0;
+            }
+            return DefWindowProcW(hwnd, message, wParam, lParam);
         case WM_MOUSEMOVE:
         {
             bool lButton = (wParam & MK_LBUTTON) != 0;
