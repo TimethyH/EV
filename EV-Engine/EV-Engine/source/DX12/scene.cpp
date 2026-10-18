@@ -219,10 +219,8 @@ void Scene::ImportMaterial(CommandList& commandList, const aiMaterial& material,
         pMaterial->SetMetallic(metallic);
     }
 
-    if (material.Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == aiReturn_SUCCESS)
-    {
-        pMaterial->SetRoughness(roughness);
-    }
+    // Formats without a roughness (e.g. OBJ) get glTF's default of fully rough instead of a mirror.
+    pMaterial->SetRoughness(material.Get(AI_MATKEY_ROUGHNESS_FACTOR, roughness) == aiReturn_SUCCESS ? roughness : 1.0f);
 
 
     // Load emissive textures.
