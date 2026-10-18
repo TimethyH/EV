@@ -265,12 +265,14 @@ bool Ocean::LoadContent()
     m_sphere = commandList->CreateSphere(0.1f);
 
     // Place the helmet once so it can be moved in the editor.
-    m_helmet->GetRootNode()->SetLocalTransform(
-        XMMatrixRotationRollPitchYaw(XMConvertToRadians(-90.0f), 0.0f, 0.0f) * XMMatrixTranslation(0.0f, 2.0f, 0.0f));
-    m_helmet->GetRootNode()->SetName("Damaged Helmet");
+    if (m_helmet)
+    {
+        m_helmet->GetRootNode()->SetLocalTransform(
+            XMMatrixRotationRollPitchYaw(XMConvertToRadians(-90.0f), 0.0f, 0.0f) * XMMatrixTranslation(0.0f, 2.0f, 0.0f));
+        m_helmet->GetRootNode()->SetName("Damaged Helmet");
+        m_editor->AddScene("Damaged Helmet", m_helmet);
+    }
     m_oceanPlane->GetRootNode()->SetName("Ocean Plane");
-
-    m_editor->AddScene("Damaged Helmet", m_helmet);
     m_editor->AddScene("Ocean", m_oceanPlane);
 
     // m_defaultTexture = commandList->LoadTextureFromFile(L"assets/Mona_Lisa.jpg", true);
@@ -708,7 +710,10 @@ void Ocean::OnRender()
 
         m_oceanPlane->Accept(oceanVisitor);
 
-        m_helmet->Accept(visitor);
+        if (m_helmet)
+        {
+            m_helmet->Accept(visitor);
+        }
 
         // m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
         //

@@ -201,6 +201,7 @@ namespace EV
         // Texture browser / viewer
         std::weak_ptr<Texture>                  m_viewedTexture;
         std::wstring                            m_viewedTextureName; // Used to find the texture again when it is recreated.
+        std::wstring                            m_startupTextureName;
         std::unique_ptr<TexturePreviewSettings> m_viewerSettings;
         float  m_viewerZoom = 1.0f;
         ImVec2 m_viewerPan = {};

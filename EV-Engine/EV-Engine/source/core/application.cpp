@@ -317,12 +317,27 @@ void Application::Initialize()
     // Always enable the debug layer before doing anything DX12 related
     // so all possible errors generated while creating DX12 objects
     // are caught by the debug layer.
+    // The debug layer is only available when the Graphics Tools are installed.
     ComPtr<ID3D12Debug> debugInterface;
-    ThrowIfFailed(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface)));
-    debugInterface->EnableDebugLayer();
+    if (SUCCEEDED(D3D12GetDebugInterface(IID_PPV_ARGS(&debugInterface))))
+    {
+        debugInterface->EnableDebugLayer();
+    }
+    else
+    {
+        OutputDebugStringW(L"D3D12 debug layer not available (install the Graphics Tools optional feature).\n");
+    }
 #endif
 
-    m_dxgiAdapter = CreateAdapter(false);
+    // Set EV_USE_WARP=1 to force the software rasterizer. WARP is also used when no hardware adapter is found.
+    char useWarp[8] = {};
+    const bool forceWarp = GetEnvironmentVariableA("EV_USE_WARP", useWarp, sizeof(useWarp)) > 0 && useWarp[0] == '1';
+
+    m_dxgiAdapter = forceWarp ? nullptr : CreateAdapter(false);
+    if (!m_dxgiAdapter)
+    {
+        m_dxgiAdapter = CreateAdapter(true);
+    }
     if (m_dxgiAdapter)
     {
         m_device = CreateDevice(m_dxgiAdapter);
