@@ -283,6 +283,7 @@ void Editor::BeginFrame()
 
     UpdateModelDrag();
     UpdateTextureDrops();
+    UpdateSettledTextures();
     m_statusMessageTime = std::max(0.0f, m_statusMessageTime - ImGui::GetIO().DeltaTime);
 
     m_frameTimes[m_frameTimeIndex] = ImGui::GetIO().DeltaTime * 1000.0f;
@@ -565,7 +566,7 @@ void Editor::TextureThumbnail(const std::shared_ptr<Texture>& texture, float siz
     const auto desc = texture->GetD3D12ResourceDesc();
     std::shared_ptr<Texture> image;
 
-    if (TexturePreview::CanPreview(*texture))
+    if (TexturePreview::CanPreview(*texture) && IsTextureSettled(texture))
     {
         TexturePreviewSettings settings = GetDefaultPreviewSettings(*texture, m_nearZ, m_farZ);
         settings.linearFilter = true;
@@ -1294,6 +1295,12 @@ void Editor::DrawTextureViewer()
     ImGui::TextColored(g_colorTextDim, "  %s  %s  %u mips  %s", DescribeDimensions(desc).c_str(), FormatUtils::GetName(desc.Format),
         desc.MipLevels, DescribeUsage(desc).c_str());
 
+    if (!IsTextureSettled(texture))
+    {
+        ImGui::TextColored(g_colorTextDim, "Waiting for background loading to finish...");
+        ImGui::End();
+        return;
+    }
     if (!TexturePreview::CanPreview(*texture))
     {
         ImGui::TextColored(g_colorTextDim, "This texture cannot be previewed (format %s, %u samples).", FormatUtils::GetName(desc.Format),

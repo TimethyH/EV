@@ -21,6 +21,7 @@
 #include <functional>
 #include <future>
 #include <memory>
+#include <set>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -216,6 +217,12 @@ namespace EV
 
         std::shared_ptr<Texture> FindLiveTexture(const std::wstring& name) const;
 
+        // Textures created by background loads may still be uploading on the copy queue; they are not
+        // sampled until all editor loads have finished.
+        bool IsLoadingInBackground() const;
+        void UpdateSettledTextures();
+        bool IsTextureSettled(const std::shared_ptr<Texture>& texture) const;
+
         std::shared_ptr<GUI>             m_gui;
         std::unique_ptr<TexturePreview>  m_texturePreview;
         std::unique_ptr<TextureReadback> m_textureReadback;
@@ -282,6 +289,7 @@ namespace EV
         std::unordered_map<std::wstring, AssetThumbnail> m_assetThumbnails;
         std::unique_ptr<ModelDrag>   m_modelDrag;
         std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
+        std::set<std::weak_ptr<Texture>, std::owner_less<std::weak_ptr<Texture>>> m_settledTextures;
         std::vector<TextureDrop>     m_textureDrops;
         float                        m_dropDistance = 10.0f;
         std::string                  m_statusMessage;
