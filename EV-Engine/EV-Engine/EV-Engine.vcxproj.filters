@@ -108,6 +108,9 @@
     <ClCompile Include="source\UI\format_utils.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\UI\model_preview.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\UI\texture_preview.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -270,6 +273,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\UI\format_utils.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\UI\model_preview.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\UI\texture_preview.h">
