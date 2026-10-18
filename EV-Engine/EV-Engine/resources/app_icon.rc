@@ -1,0 +1,3 @@
+// Application icon (logoSq.png), compiled into every executable that uses the engine.
+// Application::Initialize loads it by this ID for the window class (title bar and taskbar).
+101 ICON "app_icon.ico"

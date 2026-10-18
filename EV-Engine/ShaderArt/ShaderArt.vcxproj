@@ -152,6 +152,9 @@
     <ClCompile Include="source\main.cpp" />
   </ItemGroup>
   <ItemGroup>
+    <ResourceCompile Include="..\EV-Engine\resources\app_icon.rc" />
+  </ItemGroup>
+  <ItemGroup>
     <ClInclude Include="include\landscape.h" />
     <ClInclude Include="include\landscape_pso.h" />
   </ItemGroup>
