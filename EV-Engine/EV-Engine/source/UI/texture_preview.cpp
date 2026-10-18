@@ -431,6 +431,13 @@ void TexturePreview::Render(CommandList& commandList)
         commandList.SetShaderResourceView(SourceTexture, 0, pending.srv, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
         commandList.Draw(3);
     }
+
+    // Leave the inspected textures in the common state so any queue can use them next
+    // (the ocean's textures are written by the compute queue, which cannot leave pixel shader states).
+    for (const auto& pending : m_pending)
+    {
+        commandList.TransitionBarrier(pending.source, D3D12_RESOURCE_STATE_COMMON);
+    }
     m_pending.clear();
 
     ReleaseUnused();
