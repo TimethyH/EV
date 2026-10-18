@@ -121,6 +121,14 @@ namespace EV
         // Models dropped into the scene from the Assets panel. The application renders these.
         std::vector<std::shared_ptr<Scene>> GetSpawnedScenes() const;
 
+        // HDR panoramas dropped into the Scene (or double clicked in the Assets panel) are loaded in the
+        // background and passed to this callback, e.g. to rebuild the skybox and image based lighting.
+        // Without a callback, environment files cannot be dropped.
+        void SetEnvironmentCallback(std::function<void(const std::shared_ptr<Texture>& panorama)> callback)
+        {
+            m_environmentCallback = std::move(callback);
+        }
+
         // Folder shown in the Assets panel (relative to the working directory). Default: "assets".
         void SetAssetRoot(const std::filesystem::path& root);
 
@@ -201,6 +209,13 @@ namespace EV
             std::vector<AssetEntry> entries;
         };
 
+        // An HDR panorama loading in the background, passed to the environment callback once loaded.
+        struct EnvironmentLoad
+        {
+            std::filesystem::path                 path;
+            std::future<std::shared_ptr<Texture>> loading;
+        };
+
         // A model file loaded for its thumbnail in the Assets panel. The model is rendered once and then released.
         struct ModelThumbnail
         {
@@ -253,6 +268,8 @@ namespace EV
         bool DrawModelThumbnail(const std::filesystem::path& path, float size);
         void DrawModelPreview();
         void PreviewModel(const std::filesystem::path& path);
+        void LoadEnvironment(const std::filesystem::path& path);
+        void UpdateEnvironmentLoad();
         void AcceptViewportDrop();
         void UpdateModelDrag();
         void PlaceDraggedModel();
@@ -344,6 +361,8 @@ namespace EV
         PreviewedModel               m_previewedModel;
         bool                         m_showModelPreview = true;
         bool                         m_focusModelPreview = false;
+        std::function<void(const std::shared_ptr<Texture>&)> m_environmentCallback;
+        std::unique_ptr<EnvironmentLoad> m_environmentLoad;
         std::unique_ptr<ModelDrag>   m_modelDrag;
         std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
         std::set<std::weak_ptr<Texture>, std::owner_less<std::weak_ptr<Texture>>> m_settledTextures;

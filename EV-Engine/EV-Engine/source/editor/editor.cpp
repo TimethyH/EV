@@ -292,6 +292,7 @@ void Editor::BeginFrame()
 
     UpdateModelDrag();
     UpdateTextureDrops();
+    UpdateEnvironmentLoad();
     UpdateSettledTextures();
     m_statusMessageTime = std::max(0.0f, m_statusMessageTime - ImGui::GetIO().DeltaTime);
 
