@@ -661,6 +661,8 @@ void Editor::DrawSceneViewport()
         const ImVec2 imageSize(static_cast<float>(width), static_cast<float>(height));
 
         // The invisible button owns the viewport's mouse input, the image is drawn behind it.
+        // Overlap is allowed so the toolbar drawn on top of it can still be clicked.
+        ImGui::SetNextItemAllowOverlap();
         ImGui::InvisibleButton("##SceneViewport", imageSize,
             ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight | ImGuiButtonFlags_MouseButtonMiddle);
         const bool itemHovered = ImGui::IsItemHovered();
@@ -682,9 +684,10 @@ void Editor::DrawSceneViewport()
 
         const bool gizmoActive = DrawGizmo(imagePosition, imageSize);
         DrawViewportToolbar(imagePosition);
+        const bool toolbarHovered = ImGui::IsMouseHoveringRect(imagePosition, ImGui::GetItemRectMax());
 
-        // The toolbar sits on top of the image, so only count the viewport as hovered when no other item is.
-        m_viewportHovered = itemHovered && !gizmoActive;
+        // The toolbar and gizmo sit on top of the image; they take the mouse when hovered.
+        m_viewportHovered = itemHovered && !gizmoActive && !toolbarHovered;
         m_viewportFocused = ImGui::IsWindowFocused(ImGuiFocusedFlags_RootAndChildWindows);
 
         if (m_viewportHovered && (ImGui::IsMouseClicked(ImGuiMouseButton_Right) || ImGui::IsMouseClicked(ImGuiMouseButton_Middle)))

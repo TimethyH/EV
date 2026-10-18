@@ -154,6 +154,9 @@ void TextureReadback::Record(CommandList& commandList)
         commandList.TrackResource(readback.buffer);
         commandList.TrackResource(request.texture->GetD3D12Resource());
 
+        // Leave the texture in the common state so any queue can use it next.
+        commandList.TransitionBarrier(request.texture, D3D12_RESOURCE_STATE_COMMON);
+
         m_inFlight.push_back(std::move(readback));
     }
     m_requests.clear();

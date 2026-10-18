@@ -51,7 +51,7 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
     ImGuiIO& io = ImGui::GetIO();
 
     // Docked editor layout. Multi-viewports are not supported by this renderer.
-    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable | ImGuiConfigFlags_NavEnableKeyboard;
+    io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
     io.ConfigWindowsMoveFromTitleBarOnly = true;
     io.BackendFlags |= ImGuiBackendFlags_RendererHasVtxOffset;
     // Allow user UI scaling using CTRL+Mouse Wheel scrolling
