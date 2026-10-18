@@ -1276,6 +1276,17 @@ void Editor::DrawTextureViewer()
     {
         return;
     }
+
+    // Looked up before Begin: when the viewer is a hidden tab, inspecting the texture brings it to the front.
+    if (!m_startupTextureName.empty())
+    {
+        if (auto startupTexture = FindLiveTexture(m_startupTextureName))
+        {
+            InspectTexture(startupTexture);
+            m_startupTextureName.clear();
+        }
+    }
+
     if (m_focusTextureViewer)
     {
         ImGui::SetNextWindowFocus();
@@ -1285,15 +1296,6 @@ void Editor::DrawTextureViewer()
     {
         ImGui::End();
         return;
-    }
-
-    if (!m_startupTextureName.empty())
-    {
-        if (auto startupTexture = FindLiveTexture(m_startupTextureName))
-        {
-            InspectTexture(startupTexture);
-            m_startupTextureName.clear();
-        }
     }
 
     // Textures that are recreated (e.g. on resize or when parameters change) are found again by name.
