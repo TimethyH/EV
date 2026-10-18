@@ -552,8 +552,9 @@ namespace EV
         // reset.
         TrackedObjects m_trackedObjects;
 
-        // Keep track of loaded textures to avoid loading the same texture multiple times.
-        static std::map<std::wstring, ID3D12Resource* > m_textureCache;
+        // Keep track of loaded textures to avoid loading the same texture multiple times. Weak references:
+        // a texture that is no longer used anywhere is released and loaded again when needed.
+        static std::map<std::wstring, std::weak_ptr<Texture>> m_textureCache;
         static std::mutex m_textureCacheMutex;
 
         // Inlined helper functions

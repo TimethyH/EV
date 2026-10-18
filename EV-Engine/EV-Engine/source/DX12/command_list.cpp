@@ -34,7 +34,7 @@
 
 using namespace EV;
 
-std::map<std::wstring, ID3D12Resource* > CommandList::m_textureCache;
+std::map<std::wstring, std::weak_ptr<Texture>> CommandList::m_textureCache;
 std::mutex CommandList::m_textureCacheMutex;
 
 CommandList::CommandList(D3D12_COMMAND_LIST_TYPE type)
@@ -294,14 +294,17 @@ std::shared_ptr<Texture> CommandList::LoadTextureFromFile(const std::wstring& fi
 		throw std::exception("File not found.");
 	}
 
+	// The same file can be loaded as sRGB (color) and linear (data) texture.
+	const std::wstring cacheKey = fileName + (sRGB ? L"|sRGB" : L"");
+
 	std::lock_guard<std::mutex> lock(m_textureCacheMutex);
-	auto                        iter = m_textureCache.find(fileName);
+	auto                        iter = m_textureCache.find(cacheKey);
 	if (iter != m_textureCache.end())
 	{
-		texture = Application::Get().CreateTexture(iter->second);
-		texture->SetName(fileName);
+		// Expired when every user released it; it is loaded again below.
+		texture = iter->second.lock();
 	}
-	else
+	if (!texture)
 	{
 		TexMetadata  metadata;
 		ScratchImage scratchImage;
@@ -382,7 +385,7 @@ std::shared_ptr<Texture> CommandList::LoadTextureFromFile(const std::wstring& fi
 		}
 
 		// Add the texture resource to the texture cache.
-		m_textureCache[fileName] = textureResource.Get();
+		m_textureCache[cacheKey] = texture;
 	}
 
 	return texture;
