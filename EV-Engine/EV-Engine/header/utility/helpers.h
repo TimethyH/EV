@@ -1,12 +1,19 @@
 #pragma once
+#include <cstdio>
+#include <source_location>
+#include <stdexcept>
 #include <string>
 #include <Windows.h>
 
-inline void ThrowIfFailed(HRESULT hr)
+// Throws with the failing HRESULT and the call site, so crashes can be traced.
+inline void ThrowIfFailed(HRESULT hr, const std::source_location& location = std::source_location::current())
 {
 	if (FAILED(hr))
 	{
-		throw std::exception();
+		char message[512];
+		snprintf(message, sizeof(message), "HRESULT 0x%08X at %s(%u) in %s", static_cast<unsigned int>(hr),
+			location.file_name(), static_cast<unsigned int>(location.line()), location.function_name());
+		throw std::runtime_error(message);
 	}
 }
 
