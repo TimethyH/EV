@@ -418,7 +418,8 @@ void Editor::DrawAssetBrowser()
             const AssetType type = GetAssetType(path);
             ImGui::SetTooltip("%s%s", path.string().c_str(),
                 isDirectory ? "" : (isModel ? "\nClick to preview, double click to place in front of the camera,\ndrag into the Scene to place it under the mouse" :
-                    type == AssetType::Image ? "\nDrag onto an object or a material slot" : ""));
+                    type == AssetType::Image ? "\nDrag onto an object or a material slot" :
+                    type == AssetType::Environment && m_environmentCallback ? "\nDouble click or drag into the Scene to use as skybox" : ""));
         }
         if (!isDirectory && ImGui::IsItemClicked(ImGuiMouseButton_Left))
         {
@@ -437,6 +438,10 @@ void Editor::DrawAssetBrowser()
             else if (isModel)
             {
                 SpawnModelInFrontOfCamera(path);
+            }
+            else if (GetAssetType(path) == AssetType::Environment && m_environmentCallback)
+            {
+                LoadEnvironment(path);
             }
         }
 
@@ -851,6 +856,24 @@ void Editor::AcceptViewportDrop()
                 ImGui::SetTooltip(node ? "Set as diffuse texture of '%s'" : "Drop onto an object", node ? node->GetName().c_str() : "");
             }
         }
+        else if (type == AssetType::Environment)
+        {
+            if (!m_environmentCallback)
+            {
+                if (!payload->IsDelivery())
+                {
+                    ImGui::SetTooltip("This application does not support changing the environment");
+                }
+            }
+            else if (payload->IsDelivery())
+            {
+                LoadEnvironment(path);
+            }
+            else
+            {
+                ImGui::SetTooltip("%s\nRelease to use as skybox and lighting", path.filename().string().c_str());
+            }
+        }
         else if (!payload->IsDelivery())
         {
             ImGui::SetTooltip("This asset type cannot be dropped into the scene");
@@ -977,6 +1000,51 @@ void Editor::UpdateModelDrag()
 }
 
 // ------------------------------------------------------------------------------------------------
+// Environment (skybox) drops
+
+void Editor::LoadEnvironment(const fs::path& path)
+{
+    if (!m_environmentCallback)
+    {
+        return;
+    }
+    if (m_environmentLoad)
+    {
+        m_statusMessage = "Still loading " + m_environmentLoad->path.filename().string();
+        m_statusMessageTime = 3.0f;
+        return;
+    }
+
+    m_environmentLoad = std::make_unique<EnvironmentLoad>();
+    m_environmentLoad->path = path;
+    m_environmentLoad->loading = std::async(std::launch::async, LoadImageTexture, path, true);
+    m_statusMessage = "Loading " + path.filename().string() + "...";
+    m_statusMessageTime = 60.0f;
+}
+
+void Editor::UpdateEnvironmentLoad()
+{
+    if (!m_environmentLoad || !IsReady(m_environmentLoad->loading))
+    {
+        return;
+    }
+
+    const std::string name = m_environmentLoad->path.filename().string();
+    auto panorama = m_environmentLoad->loading.get();
+    m_environmentLoad.reset();
+
+    if (!panorama)
+    {
+        m_statusMessage = "Could not load " + name;
+        m_statusMessageTime = 5.0f;
+        return;
+    }
+    m_environmentCallback(panorama);
+    m_statusMessage = "Environment: " + name;
+    m_statusMessageTime = 3.0f;
+}
+
+// ------------------------------------------------------------------------------------------------
 // Texture drops
 
 void Editor::DropTextureOnMaterial(const fs::path& path, const std::shared_ptr<Material>& material, int slot)
@@ -1040,7 +1108,7 @@ bool Editor::IsLoadingInBackground() const
             return true;
         }
     }
-    return m_previewedModel.loading.valid();
+    return m_previewedModel.loading.valid() || m_environmentLoad;
 }
 
 void Editor::UpdateSettledTextures()

@@ -75,6 +75,9 @@ public:
 	float JonswapPeakFequency(float fetch, float windSpeed);
 	void UpdateSpectrumParameters();
 
+	// Build the skybox cubemap and image based lighting from an HDR panorama.
+	void SetEnvironment(const std::shared_ptr<Texture>& panorama);
+
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender() override;

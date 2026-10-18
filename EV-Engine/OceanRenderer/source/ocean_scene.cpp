@@ -19,6 +19,14 @@
 
 #define PI 3.14159265359f
 
+namespace
+{
+    // Image based lighting: resolution of the BRDF lookup table and the specular irradiance cubemap.
+    constexpr uint32_t g_brdfTextureSize = 512;
+    constexpr uint32_t g_specularMipLevels = 5;
+    constexpr uint32_t g_skyboxCubemapSize = 1024;
+}
+
 
 using namespace DirectX;
 using namespace EV;
@@ -135,6 +143,68 @@ void Ocean::ResizeViewport(uint32_t width, uint32_t height)
     m_viewportRenderTarget.Resize(m_viewportWidth, m_viewportHeight);
 }
 
+void Ocean::SetEnvironment(const std::shared_ptr<Texture>& panorama)
+{
+    auto& app = Application::Get();
+    auto& computeQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    auto commandList = computeQueue.GetCommandList();
+
+    // Convert the 2D panorama to a cubemap.
+    auto cubemapDesc = panorama->GetD3D12ResourceDesc();
+    cubemapDesc.Width = cubemapDesc.Height = g_skyboxCubemapSize;
+    cubemapDesc.DepthOrArraySize = 6;
+    cubemapDesc.MipLevels = 0;
+
+    auto skyboxCubemap = app.CreateTexture(cubemapDesc);
+    skyboxCubemap->SetName(L"Skybox Cubemap");
+    commandList->PanoToCubemap(skyboxCubemap, panorama, 0); // tweak mip quality to blur HDR
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC cubemapSRVDesc = {};
+    cubemapSRVDesc.Format = cubemapDesc.Format;
+    cubemapSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    cubemapSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    cubemapSRVDesc.TextureCube.MipLevels = (UINT)-1;  // Use all mips.
+    auto skyboxCubemapSRV = app.CreateShaderResourceView(skyboxCubemap, &cubemapSRVDesc);
+
+    // Diffuse and specular irradiance cubemaps.
+    DXGI_FORMAT irradianceFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: less precision might also be fine
+    auto irradianceDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_convolutionPlaneSize, m_convolutionPlaneSize, 6);
+    irradianceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    auto specularDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, g_brdfTextureSize, g_brdfTextureSize, 6, g_specularMipLevels);
+    specularDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    auto diffuseIrradianceMap = app.CreateTexture(irradianceDesc);
+    diffuseIrradianceMap->SetName(L"Diffuse Irradiance Texture");
+    auto specularIrradianceMap = app.CreateTexture(specularDesc);
+    specularIrradianceMap->SetName(L"Specular Irradiance Texture");
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC irradianceSRVDesc = {};
+    irradianceSRVDesc.Format = irradianceFormat;
+    irradianceSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    irradianceSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    irradianceSRVDesc.TextureCube.MipLevels = 1;
+    auto diffuseCubemapSRV = app.CreateShaderResourceView(diffuseIrradianceMap, &irradianceSRVDesc);
+    irradianceSRVDesc.TextureCube.MipLevels = g_specularMipLevels;
+    auto specularCubemapSRV = app.CreateShaderResourceView(specularIrradianceMap, &irradianceSRVDesc);
+
+    m_convolutionPSO->Dispatch(commandList, skyboxCubemapSRV, diffuseIrradianceMap, m_convolutionPlaneSize, m_convolutionSampleCount);
+    m_specularConvolutionPSO->DispatchSpecular(commandList, skyboxCubemapSRV, specularIrradianceMap, g_brdfTextureSize, 4096, g_specularMipLevels);
+
+    computeQueue.WaitForFenceValue(computeQueue.ExecuteCommandList(commandList));
+
+    // Swap them in. Frames still in flight keep the previous textures alive (command lists track them).
+    m_skyboxTexture = panorama;
+    m_skyboxCubemap = skyboxCubemap;
+    m_skyboxCubemapSRV = skyboxCubemapSRV;
+    m_diffuseIrradianceMap = diffuseIrradianceMap;
+    m_specularIrradianceMap = specularIrradianceMap;
+    m_diffuseCubemapSRV = diffuseCubemapSRV;
+    m_specularCubemapSRV = specularCubemapSRV;
+
+    m_unlitPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
+    m_displacementPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
+}
+
 std::wstring Ocean::GetModulePath()
 {
     WCHAR buffer[MAX_PATH];
@@ -243,19 +313,8 @@ bool Ocean::LoadContent()
     m_oceanPlane = commandList->CreatePlane(OCEAN_PLANE_SIZE, OCEAN_PLANE_SIZE, OCEAN_SUBRES, OCEAN_SUBRES, false);
 
     m_skybox = commandList->CreateCube(1.0f, true);
-    m_skyboxTexture = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
-
-    // Create a cubemap for the HDR panorama.
-    auto cubemapDesc = m_skyboxTexture->GetD3D12ResourceDesc();
-    cubemapDesc.Width = cubemapDesc.Height = 1024;
-    cubemapDesc.DepthOrArraySize = 6;
-    cubemapDesc.MipLevels = 0;
-
-    m_skyboxCubemap = app.CreateTexture(cubemapDesc);
-    m_skyboxCubemap->SetName(L"Cloud Cubemap");
-
-    // Convert the 2D panorama to a 3D cubemap.
-    commandList->PanoToCubemap(m_skyboxCubemap, m_skyboxTexture, 0); // tweak mip quality to blur HDR
+    // Turned into the skybox cubemap and image based lighting by SetEnvironment, once the PSOs exist.
+    auto skyPanorama = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
 
     // m_cubeMesh = commandList->CreateCube();
     m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
@@ -342,53 +401,18 @@ bool Ocean::LoadContent()
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
-    D3D12_SHADER_RESOURCE_VIEW_DESC cubeMapSRVDesc = {};
-    cubeMapSRVDesc.Format = cubemapDesc.Format;
-    cubeMapSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    cubeMapSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-    cubeMapSRVDesc.TextureCube.MipLevels = (UINT)-1;  // Use all mips.
-
-    m_skyboxCubemapSRV = app.CreateShaderResourceView(m_skyboxCubemap, &cubeMapSRVDesc);
-
     commandQueue.WaitForFenceValue(fence);
 
     auto& computeQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
     auto computeCommandList = computeQueue.GetCommandList();
 
-    DXGI_FORMAT irradianceFormat = DXGI_FORMAT_R16G16B16A16_FLOAT; // TODO: less precision might also be fine
+    // The BRDF lookup table does not depend on the environment.
     DXGI_FORMAT brdfLutFormat = DXGI_FORMAT_R16G16_FLOAT; // TODO: less precision might also be fine
-    uint32_t specularMipLevels = 5;
-    uint32_t brdfTextureSize = 512;
-
-    auto irradianceDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, m_convolutionPlaneSize, m_convolutionPlaneSize, 6);
-    irradianceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    auto iblSpecularDesc = CD3DX12_RESOURCE_DESC::Tex2D(irradianceFormat, brdfTextureSize, brdfTextureSize, 6, specularMipLevels);
-    iblSpecularDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-    auto BRDFDesc = CD3DX12_RESOURCE_DESC::Tex2D(brdfLutFormat, brdfTextureSize, brdfTextureSize);
+    auto BRDFDesc = CD3DX12_RESOURCE_DESC::Tex2D(brdfLutFormat, g_brdfTextureSize, g_brdfTextureSize);
     BRDFDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-	// diffuse irradiance texture
-    m_diffuseIrradianceMap = Application::Get().CreateTexture(irradianceDesc);
-    m_diffuseIrradianceMap->SetName(L"Diffuse Irradiance Texture");
-    // IBL specular texture
-    m_specularIrradianceMap = Application::Get().CreateTexture(iblSpecularDesc);
-    m_specularIrradianceMap->SetName(L"Specular Irradiance Texture");
-    // BRDF LUT
     m_brdfLUT = Application::Get().CreateTexture(BRDFDesc);
     m_brdfLUT->SetName(L"BRDF LUT ");
-
-    // Create cubemap SRVs for IBL
-    D3D12_SHADER_RESOURCE_VIEW_DESC cubeSRVDesc = {};
-    cubeSRVDesc.Format = irradianceFormat;
-    cubeSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    cubeSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-    cubeSRVDesc.TextureCube.MostDetailedMip = 0;
-    cubeSRVDesc.TextureCube.MipLevels = 1;
-
-	m_diffuseCubemapSRV = Application::Get().CreateShaderResourceView(m_diffuseIrradianceMap, &cubeSRVDesc);
-
-    cubeSRVDesc.TextureCube.MipLevels = specularMipLevels;
-    m_specularCubemapSRV = Application::Get().CreateShaderResourceView(m_specularIrradianceMap, &cubeSRVDesc);
 
     D3D12_SHADER_RESOURCE_VIEW_DESC brdfSRVDesc = {};
     brdfSRVDesc.Format = DXGI_FORMAT_R16G16_FLOAT;
@@ -399,13 +423,8 @@ bool Ocean::LoadContent()
 
     m_brdfLUTSRV = app.CreateShaderResourceView(m_brdfLUT, &brdfSRVDesc);
 
-    // Convolution IBL
-    m_convolutionPSO->Dispatch(computeCommandList, m_skyboxCubemapSRV, m_diffuseIrradianceMap, m_convolutionPlaneSize, m_convolutionSampleCount);
-    // specular
-    // computeCommandList->TransitionBarrier(m_specularIrradianceMap, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    m_specularConvolutionPSO->DispatchSpecular(computeCommandList, m_skyboxCubemapSRV, m_specularIrradianceMap, brdfTextureSize, 4096, specularMipLevels);
     // LUT
-    m_brdfLutPSO->DispatchBRDFLUT(computeCommandList, m_brdfLUT, brdfTextureSize);
+    m_brdfLutPSO->DispatchBRDFLUT(computeCommandList, m_brdfLUT, g_brdfTextureSize);
 
     // Update Render params for the ocean.
     m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(0.0f, 0.5f, 0.4f, 1.0f);
@@ -478,13 +497,12 @@ bool Ocean::LoadContent()
     m_viewportRenderTarget.AttachTexture(AttachmentPoint::Color0, m_viewportTexture);
     ResizeViewport(m_editor->GetViewportWidth(), m_editor->GetViewportHeight());
 
-    // Set the skybox SRV before rendering
-    m_unlitPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
-    m_displacementPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
-
-
     auto convolutionFence = computeQueue.ExecuteCommandList(computeCommandList);
     computeQueue.WaitForFenceValue(convolutionFence);
+
+    // Skybox cubemap and image based lighting (also when an HDR file is dropped into the editor).
+    SetEnvironment(skyPanorama);
+    m_editor->SetEnvironmentCallback([this](const std::shared_ptr<Texture>& panorama) { SetEnvironment(panorama); });
 
     m_pWindow->RegisterCallbacks(shared_from_this());
     m_pWindow->Show();
