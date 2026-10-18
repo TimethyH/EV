@@ -111,16 +111,14 @@ jobs:
 
           # Publish the screenshot on the ci-screenshots branch so it can be fetched with git.
           if ("${{ github.event_name }}" -eq "push") {
-            $branch = "ci-screenshots"
-            $exists = gh api "repos/${{ github.repository }}/branches/$branch" 2>$null
-            if (-not $exists) { gh api -X POST "repos/${{ github.repository }}/git/refs" -f "ref=refs/heads/$branch" -f "sha=${{ github.sha }}" | Out-Null }
-            $existing = gh api "repos/${{ github.repository }}/contents/editor.png?ref=$branch" --jq .sha 2>$null
+            $existing = gh api "repos/${{ github.repository }}/contents/editor.png?ref=ci-screenshots" --jq .sha 2>$null
             $content = [Convert]::ToBase64String([IO.File]::ReadAllBytes((Resolve-Path "../screenshots/editor.png")))
-            $body = @{ message = "Screenshot for ${{ github.sha }}"; content = $content; branch = $branch }
+            $body = @{ message = "Screenshot for ${{ github.sha }}"; content = $content; branch = "ci-screenshots" }
             if ($existing) { $body.sha = $existing }
-            $body | ConvertTo-Json | gh api -X PUT "repos/${{ github.repository }}/contents/editor.png" --input - | Out-Null
-            Write-Host "Screenshot published to $branch"
+            $body | ConvertTo-Json | gh api -X PUT "repos/${{ github.repository }}/contents/editor.png" --input - --jq .commit.sha
+            if ($LASTEXITCODE -ne 0) { Write-Host "::warning::Could not publish the screenshot" }
           }
+          exit 0
 
       - name: Upload screenshots
         if: always()
