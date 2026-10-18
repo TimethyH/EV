@@ -1024,6 +1024,13 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
                 pWindow->SetFullScreen(true);
                 return 0;
             }
+            // Restore leaves full screen (the editor's restore button), except when the window is minimized:
+            // then it is restored (from the taskbar) and stays full screen.
+            if ((wParam & 0xFFF0) == SC_RESTORE && pWindow->IsFullScreen() && !::IsIconic(hwnd))
+            {
+                pWindow->SetFullScreen(false);
+                return 0;
+            }
             return DefWindowProcW(hwnd, message, wParam, lParam);
         case WM_MOUSEMOVE:
         {

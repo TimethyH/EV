@@ -44,6 +44,50 @@ namespace
     // Preview slots: thumbnails are keyed per texture, the viewer has its own slot.
     constexpr uint64_t g_viewerPreviewKey = 1;
 
+    enum class WindowButton
+    {
+        Minimize,
+        Restore,
+        Close,
+    };
+
+    // A title bar style button with a drawn icon (the font has no window control symbols).
+    bool DrawWindowButton(const char* id, WindowButton type, const ImVec2& position, const ImVec2& size)
+    {
+        ImGui::SetCursorScreenPos(position);
+        const bool clicked = ImGui::InvisibleButton(id, size);
+        const bool hovered = ImGui::IsItemHovered();
+
+        ImDrawList* drawList = ImGui::GetWindowDrawList();
+        const ImVec2 max(position.x + size.x, position.y + size.y);
+        if (hovered)
+        {
+            const ImU32 hoverColor = type == WindowButton::Close ? IM_COL32(196, 43, 28, 255) : ImGui::GetColorU32(ImGuiCol_ButtonHovered);
+            drawList->AddRectFilled(position, max, hoverColor);
+        }
+
+        const ImU32 color = ImGui::GetColorU32(ImGuiCol_Text);
+        const ImVec2 center(std::floor(position.x + size.x * 0.5f), std::floor(position.y + size.y * 0.5f));
+        const float s = std::floor(size.y * 0.22f);
+        switch (type)
+        {
+        case WindowButton::Minimize:
+            drawList->AddLine(ImVec2(center.x - s, center.y + 0.5f), ImVec2(center.x + s, center.y + 0.5f), color);
+            break;
+        case WindowButton::Restore:
+            // Two overlapping squares.
+            drawList->AddRect(ImVec2(center.x - s + 0.5f, center.y - s + 2.5f), ImVec2(center.x + s - 1.5f, center.y + s + 0.5f), color);
+            drawList->AddLine(ImVec2(center.x - s + 2.5f, center.y - s + 0.5f), ImVec2(center.x + s + 0.5f, center.y - s + 0.5f), color);
+            drawList->AddLine(ImVec2(center.x + s + 0.5f, center.y - s + 0.5f), ImVec2(center.x + s + 0.5f, center.y + s - 1.5f), color);
+            break;
+        case WindowButton::Close:
+            drawList->AddLine(ImVec2(center.x - s, center.y - s), ImVec2(center.x + s, center.y + s), color);
+            drawList->AddLine(ImVec2(center.x - s, center.y + s), ImVec2(center.x + s, center.y - s), color);
+            break;
+        }
+        return clicked;
+    }
+
     std::string GetTextureLabel(const Texture& texture)
     {
         const std::wstring& name = texture.GetName();
@@ -439,11 +483,42 @@ void Editor::DrawMenuBar()
     for (float ms : m_frameTimes) averageMs += ms;
     averageMs /= IM_ARRAYSIZE(m_frameTimes);
 
+    // A borderless (full screen) window has no title bar, so the menu bar gets its minimize, restore and
+    // close buttons. They post the same window messages as the title bar buttons: those are handled between
+    // frames, which matters because leaving full screen resizes the swap chain.
+    HWND hwnd = static_cast<HWND>(ImGui::GetMainViewport()->PlatformHandleRaw);
+    const bool borderless = hwnd && (::GetWindowLongW(hwnd, GWL_STYLE) & WS_CAPTION) != WS_CAPTION;
+    const ImVec2 buttonSize(std::floor(ImGui::GetWindowHeight() * 1.6f), ImGui::GetWindowHeight());
+    const float buttonsWidth = borderless ? buttonSize.x * 3.0f : 0.0f;
+
     char fps[64];
     snprintf(fps, sizeof(fps), "%.0f FPS  %.2f ms", averageMs > 0.0f ? 1000.0f / averageMs : 0.0f, averageMs);
     const float width = ImGui::CalcTextSize(fps).x + ImGui::GetStyle().ItemSpacing.x * 2.0f;
-    ImGui::SameLine(ImGui::GetWindowWidth() - width);
+    ImGui::SameLine(ImGui::GetWindowWidth() - width - buttonsWidth);
     ImGui::TextColored(g_colorTextDim, "%s", fps);
+
+    if (borderless)
+    {
+        const ImVec2 windowPosition = ImGui::GetWindowPos();
+        float x = windowPosition.x + ImGui::GetWindowWidth() - buttonsWidth;
+        if (DrawWindowButton("##minimize", WindowButton::Minimize, ImVec2(x, windowPosition.y), buttonSize))
+        {
+            ::PostMessageW(hwnd, WM_SYSCOMMAND, SC_MINIMIZE, 0);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimize");
+        x += buttonSize.x;
+        if (DrawWindowButton("##restore", WindowButton::Restore, ImVec2(x, windowPosition.y), buttonSize))
+        {
+            ::PostMessageW(hwnd, WM_SYSCOMMAND, SC_RESTORE, 0);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Exit full screen");
+        x += buttonSize.x;
+        if (DrawWindowButton("##close", WindowButton::Close, ImVec2(x, windowPosition.y), buttonSize))
+        {
+            ::PostMessageW(hwnd, WM_CLOSE, 0, 0);
+        }
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Close");
+    }
 
     ImGui::EndMainMenuBar();
 }
