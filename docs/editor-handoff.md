@@ -11,14 +11,20 @@ Branch: `imgui-editor`. Goal: make EV look and work like a full scene editor (re
 - **OceanRenderer** uses the editor: scene renders into `m_viewportTexture`, parameter windows are docked panels, camera = right mouse + WASD/QE when the viewport has focus, renders `Editor::GetSpawnedScenes()`.
 - **CI** (`.github/workflows/windows-build.yml`): builds on windows-2025-vs2026, runs OceanRenderer on WARP and publishes a screenshot to the `ci-screenshots` branch.
 
-## Open problem (top priority)
-On a real GPU the OceanRenderer editor hangs (`DXGI_ERROR_DEVICE_HUNG`, TDR) about a second after starting. WARP does not reproduce it. Already ruled out / fixed: swap-chain resize references, editor previews leaving textures in different states (now restored), depth partial copies, temporary placed textures. The debug layer reports no errors before the hang.
+## Fixed: GPU hang on startup (DEVICE_HUNG / page fault)
+Cause: use-after-free of the resized "Color Render Target". `TexturePreview::GetSourceView` cached an SRV per texture and detected resizes with a raw `ID3D12Resource*`; the SRV only held the `Texture` wrapper, so the old D3D12 resource was freed and a new one could be created at the same address (ABA) – the cached descriptor then pointed at freed GPU memory. It triggered during the first frames while the dock layout resizes the Scene viewport.
+Fix: `ShaderResourceView`/`UnorderedAccessView` keep the `ID3D12Resource` their descriptor was created for (`GetD3D12Resource()`), `CommandList::SetShaderResourceView/SetUnorderedAccessView` track it, and the preview cache compares against it.
+Diagnostics added: the crash report uses DRED's wide names (command lists, queues and freed allocations now show their names), and in Debug every D3D12 warning/error is written to `ev_crash.log` (the debug layer's break otherwise kills the process silently when no debugger is attached).
 
-Next steps:
-1. Run Debug, read the `Device removed` / `Unfinished:` lines (Output window or `EV-Engine/ev_crash.log`) – they name the command list and operation that hung.
-2. Check whether commit `4a25900` (before the editor) hangs too.
-3. Bisect by closing panels (Window menu): Textures, Texture Viewer, Assets; or temporarily skip `m_texturePreview->Render` / `m_textureReadback->Record` in `Editor::EndFrame`.
-4. Suspect: the ocean runs compute (FFT) on the compute queue with no GPU-side sync to the direct queue (only CPU waits), so frame N+1 compute can overlap frame N direct work that reads/transitions the same textures.
+## Fixed: viewport input
+- Right-drag camera rotation: `WndProc` passed mouse buttons as (left, middle, right) to event constructors that take (left, right, middle), so `rightButton` was really the middle button.
+- Zoom out: `Camera::SetFov` only accepted a smaller fov (signed comparison).
+- Gizmo: ImGuizmo only activates when no ImGui item is hovered, but the viewport's InvisibleButton always was. While the gizmo is hovered/used the button is replaced by a Dummy and the Scene window gets `NoMove`.
+
+## Fixed: deleting/reparenting a child node crashed
+`SceneNode::RemoveChild` called `child->SetParent(nullptr)` before erasing the child, and `SetParent(nullptr)` calls `parent->RemoveChild(me)` again – infinite recursion, stack overflow (0xC000041D from the window procedure). Deleting a whole spawned model (scene root) was unaffected. `RemoveChild` now detaches the child itself.
+
+Still worth checking: the ocean runs compute (FFT) on the compute queue with no GPU-side sync to the direct queue (only CPU waits).
 
 ## Planned next
 - Undo/redo for transforms and drops; snapping; multi-select.

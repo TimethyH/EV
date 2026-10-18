@@ -33,6 +33,7 @@
 #include "descriptor_allocation.h"
 
 #include <d3d12.h>  // For D3D12_UNORDERED_ACCESS_VIEW_DESC and D3D12_CPU_DESCRIPTOR_HANDLE
+#include <wrl/client.h>  // For Microsoft::WRL::ComPtr
 #include <memory>   // For std::shared_ptr
 
 namespace EV
@@ -54,6 +55,12 @@ namespace EV
             return m_counterResource;
         }
 
+        // The resource the descriptor was created for (see ShaderResourceView::GetD3D12Resource).
+        Microsoft::WRL::ComPtr<ID3D12Resource> GetD3D12Resource() const
+        {
+            return m_d3d12Resource;
+        }
+
         D3D12_CPU_DESCRIPTOR_HANDLE GetDescriptorHandle() const
         {
             return m_descriptor.GetDescriptorHandle();
@@ -69,6 +76,7 @@ namespace EV
         // Device& m_Device;
         std::shared_ptr<Resource> m_resource;
         std::shared_ptr<Resource> m_counterResource;
+        Microsoft::WRL::ComPtr<ID3D12Resource> m_d3d12Resource;
         DescriptorAllocation      m_descriptor;
     };
 }

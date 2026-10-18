@@ -82,8 +82,7 @@ namespace EV
         struct SourceView
         {
             std::weak_ptr<Texture>              texture;
-            ID3D12Resource*                     resource = nullptr; // Detects resized/recreated textures.
-            std::shared_ptr<ShaderResourceView> srv;
+            std::shared_ptr<ShaderResourceView> srv; // Holds the resource it views, which detects resized textures.
             Variant                             variant = Float2DArray;
             uint64_t                            lastUsedFrame = 0;
         };

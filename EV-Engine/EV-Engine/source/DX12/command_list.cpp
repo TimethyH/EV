@@ -1314,6 +1314,11 @@ void CommandList::SetShaderResourceView(uint32_t rootParameterIndex, uint32_t de
 
 		TrackResource(resource);
 	}
+	// Keep the resource the descriptor points to alive too (it differs from the one above after a resize).
+	if (auto d3d12Resource = srv->GetD3D12Resource())
+	{
+		TrackResource(d3d12Resource);
+	}
 
 	m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
 		rootParameterIndex, descriptorOffset, 1, srv->GetDescriptorHandle());
@@ -1383,6 +1388,10 @@ void CommandList::SetUnorderedAccessView(uint32_t rootParameterIndex, uint32_t d
 		}
 
 		TrackResource(resource);
+	}
+	if (auto d3d12Resource = uav->GetD3D12Resource())
+	{
+		TrackResource(d3d12Resource);
 	}
 
 	m_dynamicDescriptorHeap[D3D12_DESCRIPTOR_HEAP_TYPE_CBV_SRV_UAV]->StageDescriptors(
