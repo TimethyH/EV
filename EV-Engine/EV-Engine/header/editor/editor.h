@@ -30,6 +30,8 @@
 
 #include "imgui.h"
 
+#include "UI/model_preview.h"
+
 namespace EV
 {
     class Camera;
@@ -199,6 +201,34 @@ namespace EV
             std::vector<AssetEntry> entries;
         };
 
+        // A model file loaded for its thumbnail in the Assets panel. The model is rendered once and then released.
+        struct ModelThumbnail
+        {
+            std::future<std::shared_ptr<Scene>> loading;
+            std::shared_ptr<Texture>            image;
+            bool                                failed = false;
+        };
+
+        // The model shown in the Model Preview panel.
+        struct PreviewedModel
+        {
+            std::filesystem::path               path;
+            std::future<std::shared_ptr<Scene>> loading;
+            std::shared_ptr<Scene>              scene;
+            std::shared_ptr<Texture>            image;
+            ModelPreviewView                    view;
+            bool                                failed = false;
+            bool                                dirty = true; // The image has to be rendered again.
+
+            // Shown below the preview.
+            size_t            meshCount = 0;
+            size_t            vertexCount = 0;
+            size_t            triangleCount = 0;
+            size_t            materialCount = 0;
+            size_t            textureCount = 0;
+            DirectX::XMFLOAT3 size = {};
+        };
+
         void ApplyTheme();
         void DrawMenuBar();
         void DrawStatusBar();
@@ -220,6 +250,9 @@ namespace EV
         // Assets and drag & drop (editor_assets.cpp)
         void DrawAssetBrowser();
         void DrawAssetIcon(const std::filesystem::path& path, bool isDirectory, float size);
+        bool DrawModelThumbnail(const std::filesystem::path& path, float size);
+        void DrawModelPreview();
+        void PreviewModel(const std::filesystem::path& path);
         void AcceptViewportDrop();
         void UpdateModelDrag();
         void PlaceDraggedModel();
@@ -241,6 +274,7 @@ namespace EV
 
         std::shared_ptr<GUI>             m_gui;
         std::unique_ptr<TexturePreview>  m_texturePreview;
+        std::unique_ptr<ModelPreview>    m_modelPreview;
         std::unique_ptr<TextureReadback> m_textureReadback;
 
         std::vector<Panel>                 m_panels;
@@ -304,6 +338,11 @@ namespace EV
         char  m_assetFilter[128] = {};
         AssetListing m_assetListing;
         std::unordered_map<std::wstring, AssetThumbnail> m_assetThumbnails;
+        std::unordered_map<std::wstring, ModelThumbnail> m_modelThumbnails;
+        std::filesystem::path        m_selectedAsset;
+        PreviewedModel               m_previewedModel;
+        bool                         m_showModelPreview = true;
+        bool                         m_focusModelPreview = false;
         std::unique_ptr<ModelDrag>   m_modelDrag;
         std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
         std::set<std::weak_ptr<Texture>, std::owner_less<std::weak_ptr<Texture>>> m_settledTextures;

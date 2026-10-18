@@ -10,6 +10,7 @@
 #include <string>
 
 #include "imgui.h"
+#include "imgui_internal.h"
 
 #include "DX12/scene_node.h"
 
@@ -18,6 +19,10 @@ namespace EV::EditorInternal
     // Drag and drop payload types.
     constexpr const char* g_assetPayload = "EV_ASSET"; // UTF-8 path of a file in the asset folder.
     constexpr const char* g_nodePayload = "EV_NODE";   // SceneNode* being dragged in the Hierarchy.
+
+    // Window names used by more than one source file.
+    constexpr const char* g_textureViewerWindow = "Texture Viewer";
+    constexpr const char* g_modelPreviewWindow = "Model Preview";
 
     // Editor palette (dark, similar to the Kudzu editor).
     inline const ImVec4 g_colorBackground0 = ImVec4(0.078f, 0.078f, 0.078f, 1.0f);
@@ -51,6 +56,20 @@ namespace EV::EditorInternal
             MultiByteToWideChar(CP_UTF8, 0, utf8, -1, wide.data(), size);
         }
         return std::filesystem::path(wide);
+    }
+
+    // Bring a docked window's tab to the front without focusing it. Focusing would take the keyboard from
+    // the Scene viewport and cancel a drag in progress (focusing releases the dragged item).
+    // Returns false while the window does not exist or is not docked yet.
+    inline bool ShowDockedTab(const char* windowName)
+    {
+        ImGuiWindow* window = ImGui::FindWindowByName(windowName);
+        if (!window || !window->DockNode || !window->DockNode->TabBar)
+        {
+            return false;
+        }
+        window->DockNode->TabBar->NextSelectedTabId = window->TabId;
+        return true;
     }
 
     inline bool ContainsCaseInsensitive(const std::string& text, const char* filter)

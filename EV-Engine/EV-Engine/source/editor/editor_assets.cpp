@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <mutex>
+#include <set>
 
 #include "imgui_internal.h"
 
@@ -32,6 +33,11 @@ namespace
 
     // Images larger than this are not loaded just for a thumbnail.
     constexpr uintmax_t g_maxThumbnailFileSize = 8ull * 1024ull * 1024ull;
+
+    // Model thumbnails: rendered at a fixed size (larger than the biggest icon size). Loads run one at a
+    // time, so only one thumbnail is queued; a model clicked for the preview then waits for at most one.
+    constexpr uint32_t g_modelThumbnailSize = 192;
+    constexpr int      g_maxModelThumbnailLoads = 1;
 
     enum class AssetType
     {
@@ -236,6 +242,12 @@ void Editor::DrawAssetIcon(const fs::path& path, bool isDirectory, float size)
         }
     }
 
+    // Models are loaded in the background and rendered once with the model preview.
+    if (type == AssetType::Model && DrawModelThumbnail(path, size))
+    {
+        return;
+    }
+
     // Colored tile with the file extension.
     ImU32 color = IM_COL32(90, 90, 90, 255);
     switch (type)
@@ -395,16 +407,37 @@ void Editor::DrawAssetBrowser()
         const ImVec2 cellEnd = ImGui::GetItemRectMax();
         ImGui::SetCursorScreenPos(cellStart);
         ImGui::InvisibleButton("##cell", ImVec2(cellEnd.x - cellStart.x, cellEnd.y - cellStart.y));
+        const bool isModel = !isDirectory && GetAssetType(path) == AssetType::Model;
+        if (path == m_selectedAsset)
+        {
+            ImGui::GetWindowDrawList()->AddRectFilled(cellStart, cellEnd, ImGui::GetColorU32(ImVec4(g_colorAccent.x, g_colorAccent.y, g_colorAccent.z, 0.25f)), 3.0f);
+        }
         if (ImGui::IsItemHovered())
         {
             ImGui::GetWindowDrawList()->AddRect(cellStart, cellEnd, ImGui::GetColorU32(g_colorAccent), 3.0f);
+            const AssetType type = GetAssetType(path);
             ImGui::SetTooltip("%s%s", path.string().c_str(),
-                isDirectory ? "" : (GetAssetType(path) == AssetType::Model ? "\nDrag into the Scene to place it" :
-                    GetAssetType(path) == AssetType::Image ? "\nDrag onto an object or a material slot" : ""));
+                isDirectory ? "" : (isModel ? "\nClick to preview, double click to place in front of the camera,\ndrag into the Scene to place it under the mouse" :
+                    type == AssetType::Image ? "\nDrag onto an object or a material slot" : ""));
         }
-        if (isDirectory && ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        if (!isDirectory && ImGui::IsItemClicked(ImGuiMouseButton_Left))
         {
-            openDirectory = path;
+            m_selectedAsset = path;
+            if (isModel)
+            {
+                PreviewModel(path);
+            }
+        }
+        if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+        {
+            if (isDirectory)
+            {
+                openDirectory = path;
+            }
+            else if (isModel)
+            {
+                SpawnModelInFrontOfCamera(path);
+            }
         }
 
         if (!isDirectory && GetAssetType(path) != AssetType::Unknown && ImGui::BeginDragDropSource())
@@ -435,6 +468,224 @@ void Editor::DrawAssetBrowser()
     if (!openDirectory.empty())
     {
         m_assetDirectory = openDirectory;
+    }
+
+    ImGui::End();
+}
+
+// ------------------------------------------------------------------------------------------------
+// Model thumbnails and preview
+
+bool Editor::DrawModelThumbnail(const fs::path& path, float size)
+{
+    auto& thumbnail = m_modelThumbnails[path.wstring()];
+    if (!thumbnail.image && !thumbnail.failed && !thumbnail.loading.valid() && ImGui::IsRectVisible(ImVec2(size, size)))
+    {
+        const auto loads = std::count_if(m_modelThumbnails.begin(), m_modelThumbnails.end(),
+            [](const auto& entry) { return entry.second.loading.valid(); });
+        if (loads < g_maxModelThumbnailLoads)
+        {
+            thumbnail.loading = std::async(std::launch::async, LoadModel, path);
+        }
+    }
+    if (IsReady(thumbnail.loading))
+    {
+        auto scene = thumbnail.loading.get();
+        if (scene && scene->GetRootNode())
+        {
+            // Rendered before the GUI this frame; the command list keeps the model's GPU resources alive
+            // until then, so the model itself is not kept.
+            thumbnail.image = ModelPreview::CreateImage(g_modelThumbnailSize, g_modelThumbnailSize);
+            m_modelPreview->Request(scene, ModelPreviewView{}, thumbnail.image);
+        }
+        else
+        {
+            thumbnail.failed = true;
+        }
+    }
+    if (!thumbnail.image)
+    {
+        return false;
+    }
+    ImGui::Image(m_gui->GetTextureID(thumbnail.image), ImVec2(size, size));
+    return true;
+}
+
+void Editor::PreviewModel(const fs::path& path)
+{
+    m_showModelPreview = true;
+    m_focusModelPreview = true;
+    if (m_previewedModel.path == path)
+    {
+        return;
+    }
+
+    if (m_previewedModel.loading.valid())
+    {
+        // Destroying a std::async future waits for it, so let the load finish in the background.
+        m_discardedLoads.push_back(std::move(m_previewedModel.loading));
+    }
+    auto image = std::move(m_previewedModel.image);
+    m_previewedModel = PreviewedModel{};
+    m_previewedModel.image = std::move(image);
+    m_previewedModel.path = path;
+    m_previewedModel.loading = std::async(std::launch::async, LoadModel, path);
+}
+
+void Editor::DrawModelPreview()
+{
+    if (!m_showModelPreview)
+    {
+        return;
+    }
+
+    // Not in layouts saved before this panel existed: dock it next to the Texture Viewer.
+    if (ImGuiWindow* viewer = ImGui::FindWindowByName(g_textureViewerWindow); viewer && viewer->DockId != 0)
+    {
+        ImGui::SetNextWindowDockID(viewer->DockId, ImGuiCond_FirstUseEver);
+    }
+    // The tab can only be selected once the window exists and is docked, so a request made before that waits.
+    if (m_focusModelPreview && ShowDockedTab(g_modelPreviewWindow))
+    {
+        m_focusModelPreview = false;
+    }
+    if (!ImGui::Begin(g_modelPreviewWindow, &m_showModelPreview, ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse))
+    {
+        ImGui::End();
+        return;
+    }
+
+    auto& model = m_previewedModel;
+    if (IsReady(model.loading))
+    {
+        model.scene = model.loading.get();
+        model.failed = !model.scene || !model.scene->GetRootNode();
+        model.dirty = true;
+
+        if (!model.failed)
+        {
+            std::set<const Material*> materials;
+            std::set<const ID3D12Resource*> textures; // Textures loaded from the same file share a resource.
+            ForEachNode(model.scene->GetRootNode(), [&](const std::shared_ptr<SceneNode>& node)
+            {
+                for (const auto& mesh : node->GetMeshes())
+                {
+                    if (!mesh)
+                    {
+                        continue;
+                    }
+                    ++model.meshCount;
+                    model.vertexCount += mesh->GetVertexCount();
+                    const size_t indexCount = mesh->GetIndexCount();
+                    model.triangleCount += (indexCount > 0 ? indexCount : mesh->GetVertexCount()) / 3;
+                    if (auto material = mesh->GetMaterial())
+                    {
+                        materials.insert(material.get());
+                        for (int type = 0; type < static_cast<int>(Material::TextureType::NumTypes); ++type)
+                        {
+                            if (auto texture = material->GetTexture(static_cast<Material::TextureType>(type)))
+                            {
+                                textures.insert(texture->GetD3D12Resource().Get());
+                            }
+                        }
+                    }
+                }
+            });
+            model.materialCount = materials.size();
+            model.textureCount = textures.size();
+
+            BoundingBox bounds;
+            if (ComputeWorldBounds(model.scene->GetRootNode(), bounds))
+            {
+                model.size = XMFLOAT3(bounds.Extents.x * 2.0f, bounds.Extents.y * 2.0f, bounds.Extents.z * 2.0f);
+            }
+        }
+        else
+        {
+            model.scene.reset();
+        }
+    }
+
+    const std::string name = model.path.filename().string();
+    if (model.path.empty())
+    {
+        ImGui::TextColored(g_colorTextDim, "Click a model in the Assets panel to preview it.");
+    }
+    else if (model.failed)
+    {
+        ImGui::TextColored(g_colorTextDim, "Could not load %s.", name.c_str());
+    }
+    else if (!model.scene)
+    {
+        ImGui::TextColored(g_colorTextDim, "Loading %s...", name.c_str());
+    }
+    else
+    {
+        // The image fills the panel above the information lines.
+        const float infoHeight = ImGui::GetFrameHeightWithSpacing() + ImGui::GetTextLineHeightWithSpacing() * 3.0f;
+        const ImVec2 available = ImGui::GetContentRegionAvail();
+        const uint32_t width = static_cast<uint32_t>(std::max(16.0f, available.x));
+        const uint32_t height = static_cast<uint32_t>(std::max(16.0f, available.y - infoHeight));
+        if (!model.image || model.image->GetD3D12ResourceDesc().Width != width || model.image->GetD3D12ResourceDesc().Height != height)
+        {
+            model.image = ModelPreview::CreateImage(width, height);
+            model.dirty = true;
+        }
+
+        const ImVec2 imagePosition = ImGui::GetCursorScreenPos();
+        const ImVec2 imageSize(static_cast<float>(width), static_cast<float>(height));
+        ImGui::InvisibleButton("##modelpreview", imageSize, ImGuiButtonFlags_MouseButtonLeft | ImGuiButtonFlags_MouseButtonRight);
+        if (ImGui::IsItemActive())
+        {
+            const ImVec2 delta = ImGui::GetIO().MouseDelta;
+            if (delta.x != 0.0f || delta.y != 0.0f)
+            {
+                model.view.yaw -= delta.x * 0.01f;
+                model.view.pitch = std::clamp(model.view.pitch + delta.y * 0.01f, -1.5f, 1.5f);
+                model.dirty = true;
+            }
+        }
+        if (ImGui::IsItemHovered())
+        {
+            const float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0.0f)
+            {
+                model.view.zoom = std::clamp(model.view.zoom * std::pow(0.85f, wheel), 0.1f, 10.0f);
+                model.dirty = true;
+            }
+            if (ImGui::IsMouseDoubleClicked(ImGuiMouseButton_Left))
+            {
+                model.view = ModelPreviewView{};
+                model.dirty = true;
+            }
+        }
+
+        // Only render again when something changed; the image keeps its contents in between.
+        if (model.dirty)
+        {
+            m_modelPreview->Request(model.scene, model.view, model.image);
+            model.dirty = false;
+        }
+        ImGui::GetWindowDrawList()->AddImage(m_gui->GetTextureID(model.image), imagePosition,
+            ImVec2(imagePosition.x + imageSize.x, imagePosition.y + imageSize.y));
+
+        ImGui::AlignTextToFramePadding();
+        ImGui::TextUnformatted(name.c_str());
+        const char* placeLabel = "Place in Scene";
+        const float placeWidth = ImGui::CalcTextSize(placeLabel).x + ImGui::GetStyle().FramePadding.x * 2.0f;
+        ImGui::SameLine(std::max(ImGui::GetCursorPosX(), ImGui::GetWindowContentRegionMax().x - placeWidth));
+        if (ImGui::Button(placeLabel))
+        {
+            SpawnModelInFrontOfCamera(model.path);
+        }
+        if (ImGui::IsItemHovered())
+        {
+            ImGui::SetTooltip("Place it in front of the camera (or drag it from the Assets panel into the Scene)");
+        }
+        ImGui::TextColored(g_colorTextDim, "%zu meshes, %zu vertices, %zu triangles", model.meshCount, model.vertexCount, model.triangleCount);
+        ImGui::TextColored(g_colorTextDim, "%zu materials, %zu textures, size %.2f x %.2f x %.2f", model.materialCount, model.textureCount,
+            model.size.x, model.size.y, model.size.z);
+        ImGui::TextColored(g_colorTextDim, "Drag to orbit, scroll to zoom, double click to reset");
     }
 
     ImGui::End();
@@ -773,7 +1024,14 @@ bool Editor::IsLoadingInBackground() const
             return true;
         }
     }
-    return false;
+    for (const auto& [path, thumbnail] : m_modelThumbnails)
+    {
+        if (thumbnail.loading.valid())
+        {
+            return true;
+        }
+    }
+    return m_previewedModel.loading.valid();
 }
 
 void Editor::UpdateSettledTextures()

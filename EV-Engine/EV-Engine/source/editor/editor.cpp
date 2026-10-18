@@ -37,7 +37,6 @@ namespace
     constexpr const char* g_hierarchyWindow = "Hierarchy";
     constexpr const char* g_inspectorWindow = "Inspector";
     constexpr const char* g_textureBrowserWindow = "Textures";
-    constexpr const char* g_textureViewerWindow = "Texture Viewer";
     constexpr const char* g_statsWindow = "Stats";
 
     const wchar_t* g_previewTextureName = L"Editor Texture Preview";
@@ -196,6 +195,7 @@ namespace
 Editor::Editor(std::shared_ptr<GUI> gui)
     : m_gui(std::move(gui))
     , m_texturePreview(std::make_unique<TexturePreview>())
+    , m_modelPreview(std::make_unique<ModelPreview>())
     , m_textureReadback(std::make_unique<TextureReadback>(Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT)))
     , m_viewerSettings(std::make_unique<TexturePreviewSettings>())
 {
@@ -207,6 +207,15 @@ Editor::Editor(std::shared_ptr<GUI> gui)
     if (GetEnvironmentVariableW(L"EV_EDITOR_TEXTURE", textureName, _countof(textureName)) > 0)
     {
         m_startupTextureName = textureName;
+    }
+
+    // EV_EDITOR_MODEL=<path> previews a model at startup and shows its folder in the Assets panel.
+    wchar_t modelPath[MAX_PATH] = {};
+    if (GetEnvironmentVariableW(L"EV_EDITOR_MODEL", modelPath, _countof(modelPath)) > 0)
+    {
+        m_assetDirectory = std::filesystem::path(modelPath).parent_path();
+        m_selectedAsset = modelPath;
+        PreviewModel(modelPath);
     }
 }
 
@@ -307,6 +316,7 @@ void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const Ren
     DrawHierarchy();
     DrawInspector();
     DrawAssetBrowser();
+    DrawModelPreview();
     DrawTextureBrowser();
     DrawTextureViewer();
     DrawStats();
@@ -338,6 +348,7 @@ void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const Ren
 
     // Previews and readbacks have to be recorded before the GUI samples them.
     m_texturePreview->Render(*commandList);
+    m_modelPreview->Render(*commandList);
     m_textureReadback->Record(*commandList);
 
     m_gui->Render(commandList, renderTarget);
@@ -365,6 +376,7 @@ void Editor::BuildDefaultLayout(ImGuiID dockspaceID)
     ImGui::DockBuilderDockWindow("Assets", bottom);
     ImGui::DockBuilderDockWindow(g_textureBrowserWindow, bottom);
     ImGui::DockBuilderDockWindow(g_textureViewerWindow, bottomRight);
+    ImGui::DockBuilderDockWindow(g_modelPreviewWindow, bottomRight);
 
     for (const auto& panel : m_panels)
     {
@@ -400,6 +412,7 @@ void Editor::DrawMenuBar()
         ImGui::MenuItem(g_hierarchyWindow, nullptr, &m_showHierarchy);
         ImGui::MenuItem(g_inspectorWindow, nullptr, &m_showInspector);
         ImGui::MenuItem("Assets", nullptr, &m_showAssetBrowser);
+        ImGui::MenuItem(g_modelPreviewWindow, nullptr, &m_showModelPreview);
         ImGui::MenuItem(g_textureBrowserWindow, nullptr, &m_showTextureBrowser);
         ImGui::MenuItem(g_textureViewerWindow, nullptr, &m_showTextureViewer);
         ImGui::MenuItem(g_statsWindow, nullptr, &m_showStats);
