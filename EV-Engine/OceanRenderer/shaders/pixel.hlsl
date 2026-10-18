@@ -130,7 +130,7 @@ cbuffer MaterialCB : register(b0, space1)
 struct Camera
 {
     float3 Position;
-    float pad;
+    float IBLIntensity; // Scales the image based (environment) lighting.
 };
 
 cbuffer CameraCB : register(b1, space0)
@@ -327,7 +327,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 fresnelIBL = PBRCalculateFresnelIBL(NdotV, F0, roughness);
     float3 kd_ibl = (float3(1.0f, 1.0f, 1.0f) - fresnelIBL) * (1.0f - metallic);
     float3 specular = specularColor * (fresnelIBL * envBRDF.x + envBRDF.y);
-    float3 ambient = (kd_ibl * diffuse + specular) * ao;
+    float3 ambient = (kd_ibl * diffuse + specular) * ao * camera.IBLIntensity;
 
      // Combine ambient, point light, and directional light contributions
     BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
