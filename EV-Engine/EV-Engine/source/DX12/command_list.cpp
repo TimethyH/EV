@@ -498,7 +498,8 @@ void CommandList::GenerateMips(const std::shared_ptr<Texture>& texture)
 	}
 
 	// Generate mips with the UAV compatible resource.
-	auto uavTexture = Application::Get().CreateTexture(uavResource);
+	// Temporary (possibly placed/aliased) texture: hidden from the editor, its heap is released after this list.
+	auto uavTexture = Application::Get().CreateTexture(uavResource, nullptr, false);
 	GenerateMips_UAV(uavTexture, Texture::IsSRGBFormat(resourceDesc.Format));
 
 	if (aliasResource)
@@ -794,7 +795,8 @@ void CommandList::PanoToCubemap(const std::shared_ptr<Texture>& cubemapTexture,
 	CD3DX12_RESOURCE_DESC cubemapDesc(cubemapResource->GetDesc());
 
 	auto stagingResource = cubemapResource;
-	auto stagingTexture = app.CreateTexture(stagingResource);
+	// Temporary wrappers used only while recording, hidden from the editor.
+	auto stagingTexture = app.CreateTexture(stagingResource, nullptr, false);
 	// If the passed-in resource does not allow for UAV access
 	// then create a staging resource that is used to generate
 	// the cubemap.
@@ -815,7 +817,7 @@ void CommandList::PanoToCubemap(const std::shared_ptr<Texture>& cubemapTexture,
 
 		ResourceStateTracker::AddGlobalResourceState(stagingResource.Get(), D3D12_RESOURCE_STATE_COPY_DEST);
 
-		stagingTexture = app.CreateTexture(stagingResource);
+		stagingTexture = app.CreateTexture(stagingResource, nullptr, false);
 		stagingTexture->SetName(L"Pano to Cubemap Staging Texture");
 
 		CopyResource(stagingTexture, cubemapTexture);

@@ -327,6 +327,11 @@ void GUI::Render(const std::shared_ptr<CommandList>& commandList, const RenderTa
         for (int j = 0; j < drawList->CmdBuffer.size(); ++j)
         {
             const ImDrawCmd& drawCmd = drawList->CmdBuffer[j];
+            if (drawCmd.UserCallback == ImDrawCallback_ResetRenderState)
+            {
+                // Sentinel value, not a function: our render state is set once per frame, nothing to reset.
+                continue;
+            }
             if (drawCmd.UserCallback)
             {
                 drawCmd.UserCallback(drawList, &drawCmd);
