@@ -1,0 +1,70 @@
+name: Windows build
+
+on:
+  push:
+    branches: [ imgui-editor, main ]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      ASSIMP_SRC: EV-Engine/EV-Engine/thirdparty/assimp
+      LIB_DIR: EV-Engine/EV-Engine/lib
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          vs-prerelease: true
+
+      - name: Show toolchain
+        run: msbuild -version
+
+      # assimp-vc145-mtd.lib and the generated assimp config headers are not committed
+      # (they are produced locally by CMake), so build them here and cache the result.
+      - name: Cache assimp
+        id: cache-assimp
+        uses: actions/cache@v4
+        with:
+          path: assimp-out
+          key: assimp-${{ runner.os }}-${{ hashFiles('EV-Engine/EV-Engine/thirdparty/assimp/CMakeLists.txt', 'EV-Engine/EV-Engine/thirdparty/assimp/code/CMakeLists.txt') }}-v1
+
+      - name: Build assimp
+        if: steps.cache-assimp.outputs.cache-hit != 'true'
+        run: |
+          cmake -S $env:ASSIMP_SRC -B assimp-build -A x64 `
+            -DBUILD_SHARED_LIBS=OFF -DASSIMP_BUILD_TESTS=OFF -DASSIMP_BUILD_ASSIMP_TOOLS=OFF `
+            -DASSIMP_BUILD_SAMPLES=OFF -DASSIMP_INSTALL=OFF -DASSIMP_BUILD_ZLIB=ON -DASSIMP_WARNINGS_AS_ERRORS=OFF
+          cmake --build assimp-build --config Debug --parallel
+          New-Item -ItemType Directory -Force assimp-out/include/assimp | Out-Null
+          Copy-Item assimp-build/include/assimp/*.h assimp-out/include/assimp/
+          Get-ChildItem assimp-build -Recurse -Filter "assimp-*.lib" | ForEach-Object { Copy-Item $_.FullName assimp-out/assimp.lib }
+
+      - name: Stage assimp
+        run: |
+          Copy-Item assimp-out/include/assimp/*.h "$env:ASSIMP_SRC/include/assimp/"
+          Copy-Item assimp-out/assimp.lib "$env:LIB_DIR/assimp-vc145-mtd.lib"
+
+      - name: Build EV-Engine (Debug x64)
+        run: msbuild EV-Engine/EV-Engine/EV-Engine.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
+      - name: Build OceanRenderer (Debug x64)
+        run: msbuild EV-Engine/OceanRenderer/OceanRenderer.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
+      - name: Build ShaderArt (Debug x64)
+        run: msbuild EV-Engine/ShaderArt/ShaderArt.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
+      - name: Upload binaries
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ev-debug-x64
+          path: |
+            EV-Engine/x64/Debug/*.exe
+            EV-Engine/**/x64/Debug/*.exe
+          if-no-files-found: ignore
