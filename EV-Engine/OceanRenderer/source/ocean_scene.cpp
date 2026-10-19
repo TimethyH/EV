@@ -143,6 +143,51 @@ void Ocean::ResizeViewport(uint32_t width, uint32_t height)
     m_viewportRenderTarget.Resize(m_viewportWidth, m_viewportHeight);
 }
 
+void Ocean::CreateBRDFLUT()
+{
+    auto& app = Application::Get();
+    auto& computeQueue = app.GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+    auto commandList = computeQueue.GetCommandList();
+
+    DXGI_FORMAT brdfLutFormat = DXGI_FORMAT_R16G16_FLOAT; // TODO: less precision might also be fine
+    auto BRDFDesc = CD3DX12_RESOURCE_DESC::Tex2D(brdfLutFormat, g_brdfTextureSize, g_brdfTextureSize);
+    BRDFDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+
+    auto brdfLUT = app.CreateTexture(BRDFDesc);
+    brdfLUT->SetName(L"BRDF LUT ");
+
+    D3D12_SHADER_RESOURCE_VIEW_DESC brdfSRVDesc = {};
+    brdfSRVDesc.Format = DXGI_FORMAT_R16G16_FLOAT;
+    brdfSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    brdfSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    brdfSRVDesc.Texture2D.MostDetailedMip = 0;
+    brdfSRVDesc.Texture2D.MipLevels = 1;
+
+    auto brdfLUTSRV = app.CreateShaderResourceView(brdfLUT, &brdfSRVDesc);
+
+    m_brdfLutPSO->DispatchBRDFLUT(commandList, brdfLUT, g_brdfTextureSize);
+    computeQueue.WaitForFenceValue(computeQueue.ExecuteCommandList(commandList));
+
+    // A new texture instead of overwriting the old one, which frames still in flight may be reading.
+    // SetEnvironment hands it to the PSOs.
+    m_brdfLUT = brdfLUT;
+    m_brdfLUTSRV = brdfLUTSRV;
+}
+
+void Ocean::UpdateImageBasedLighting()
+{
+    const uint32_t shaderVersion = m_convolutionPSO->GetShaderVersion() + m_specularConvolutionPSO->GetShaderVersion() +
+        m_brdfLutPSO->GetShaderVersion();
+    if (shaderVersion == m_iblShaderVersion || !m_skyboxTexture)
+    {
+        return;
+    }
+    m_iblShaderVersion = shaderVersion;
+
+    CreateBRDFLUT();
+    SetEnvironment(m_skyboxTexture);
+}
+
 void Ocean::SetEnvironment(const std::shared_ptr<Texture>& panorama)
 {
     auto& app = Application::Get();
@@ -407,24 +452,7 @@ bool Ocean::LoadContent()
     auto computeCommandList = computeQueue.GetCommandList();
 
     // The BRDF lookup table does not depend on the environment.
-    DXGI_FORMAT brdfLutFormat = DXGI_FORMAT_R16G16_FLOAT; // TODO: less precision might also be fine
-    auto BRDFDesc = CD3DX12_RESOURCE_DESC::Tex2D(brdfLutFormat, g_brdfTextureSize, g_brdfTextureSize);
-    BRDFDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
-
-    m_brdfLUT = Application::Get().CreateTexture(BRDFDesc);
-    m_brdfLUT->SetName(L"BRDF LUT ");
-
-    D3D12_SHADER_RESOURCE_VIEW_DESC brdfSRVDesc = {};
-    brdfSRVDesc.Format = DXGI_FORMAT_R16G16_FLOAT;
-    brdfSRVDesc.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    brdfSRVDesc.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    brdfSRVDesc.Texture2D.MostDetailedMip = 0;
-    brdfSRVDesc.Texture2D.MipLevels = 1;
-
-    m_brdfLUTSRV = app.CreateShaderResourceView(m_brdfLUT, &brdfSRVDesc);
-
-    // LUT
-    m_brdfLutPSO->DispatchBRDFLUT(computeCommandList, m_brdfLUT, g_brdfTextureSize);
+    CreateBRDFLUT();
 
     // Update Render params for the ocean.
     m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(0.0f, 0.5f, 0.4f, 1.0f);
@@ -538,6 +566,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     }
 
     m_swapChain->WaitForSwapChain();
+
+    UpdateImageBasedLighting();
 
     // Update Camera
     float speedMultiplier = (m_shift ? 64.0f : 16.0f);

@@ -77,6 +77,10 @@ public:
 
 	// Build the skybox cubemap and image based lighting from an HDR panorama.
 	void SetEnvironment(const std::shared_ptr<Texture>& panorama);
+	// Compute the BRDF lookup table of the image based lighting.
+	void CreateBRDFLUT();
+	// The image based lighting is computed once per environment. Compute it again when one of its shaders was hot reloaded.
+	void UpdateImageBasedLighting();
 
 protected:
 	void OnUpdate(UpdateEventArgs& e) override;
@@ -254,6 +258,7 @@ private:
 	std::shared_ptr<EV::ShaderResourceView> m_specularCubemapSRV; 
 	std::shared_ptr<EV::ShaderResourceView> m_brdfLUTSRV;
 	std::shared_ptr<ShaderResourceView> m_skyboxTextureMip1; 
+	uint32_t m_iblShaderVersion = 0; // Sum of the IBL shaders' versions the maps were computed with.
 
 	// Root signatures
 	std::shared_ptr<RootSignature> m_skyboxSignature;
