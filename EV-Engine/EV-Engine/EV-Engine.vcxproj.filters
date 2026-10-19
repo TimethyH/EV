@@ -156,6 +156,9 @@
     <ClCompile Include="source\DX12\effect_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\DX12\shader_compiler.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\DX12\pano_cubemap_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -345,6 +348,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\effect_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\shader_compiler.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\light.h">
