@@ -4,7 +4,7 @@
  *  @file editor.h
  *
  *  @brief ImGui based scene editor: a docked layout with a scene viewport, hierarchy,
- *  inspector, texture browser/viewer, shaders and stats. Any Game can use it:
+ *  inspector, texture browser/viewer, shaders, render graph and stats. Any Game can use it:
  *
  *      m_editor = std::make_unique<Editor>(m_GUI);
  *      m_editor->AddScene("Helmet", m_helmet);
@@ -38,6 +38,7 @@ namespace EV
     class CommandList;
     class GUI;
     class Material;
+    class RenderGraph;
     class RenderTarget;
     class Scene;
     class SceneNode;
@@ -46,6 +47,7 @@ namespace EV
     class TexturePreview;
     class TextureReadback;
     struct TexturePreviewSettings;
+    struct RenderGraphDebugInfo;
 
     class Editor
     {
@@ -138,6 +140,9 @@ namespace EV
 
         // Extra items for the main menu bar, called inside BeginMainMenuBar/EndMainMenuBar.
         void AddMenuCallback(std::function<void()> callback);
+
+        // The render graph shown in the Render Graph panel (passes, timings, texture captures). Not owned.
+        void SetRenderGraph(RenderGraph* renderGraph) { m_renderGraph = renderGraph; }
 
         // Open a texture in the Texture Viewer panel.
         void InspectTexture(const std::shared_ptr<Texture>& texture);
@@ -267,6 +272,13 @@ namespace EV
         void DrawShaders();
         void UpdateShaderReloads();
 
+        // Render graph debugging (editor_render_graph.cpp)
+        void DrawRenderGraph();
+        void DrawRenderGraphPasses(const RenderGraphDebugInfo& info);
+        void DrawRenderGraphTimeline(const RenderGraphDebugInfo& info);
+        void DrawRenderGraphResources(const RenderGraphDebugInfo& info);
+        void CaptureRenderGraphTexture(const std::string& pass, const std::string& resource);
+
         // Assets and drag & drop (editor_assets.cpp)
         void DrawAssetBrowser();
         void DrawAssetIcon(const std::filesystem::path& path, bool isDirectory, float size);
@@ -311,6 +323,7 @@ namespace EV
         bool m_showTextureViewer = true;
         bool m_showStats = true;
         bool m_showShaders = true;
+        bool m_showRenderGraph = true;
         bool m_showImGuiDemo = false;
         bool m_resetLayout = false;
         bool m_focusTextureViewer = false;
@@ -380,6 +393,11 @@ namespace EV
         // Shaders
         std::weak_ptr<Shader> m_selectedShader;
         uint64_t              m_shaderReloadCount = 0; // ShaderLibrary reload count already reported.
+
+        // Render graph
+        RenderGraph* m_renderGraph = nullptr;
+        int          m_selectedGraphPass = -1;
+        bool         m_inspectRenderGraphCapture = false; // Open the capture in the Texture Viewer once it exists.
 
         // Stats
         float  m_frameTimes[120] = {};

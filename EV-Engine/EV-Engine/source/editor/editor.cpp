@@ -108,20 +108,6 @@ namespace
         return slash == std::string::npos ? label : label.substr(slash + 1);
     }
 
-    std::string FormatBytes(uint64_t bytes)
-    {
-        char buffer[32];
-        if (bytes >= 1024ull * 1024ull)
-        {
-            snprintf(buffer, sizeof(buffer), "%.1f MB", bytes / (1024.0 * 1024.0));
-        }
-        else
-        {
-            snprintf(buffer, sizeof(buffer), "%.1f KB", bytes / 1024.0);
-        }
-        return buffer;
-    }
-
     uint64_t GetTextureMemory(const Texture& texture)
     {
         auto resource = texture.GetD3D12Resource();
@@ -366,6 +352,7 @@ void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const Ren
     DrawTextureBrowser();
     DrawTextureViewer();
     DrawShaders();
+    DrawRenderGraph();
     DrawStats();
 
     // Delete removes the selected object while the scene or hierarchy has focus.
@@ -423,6 +410,7 @@ void Editor::BuildDefaultLayout(ImGuiID dockspaceID)
     ImGui::DockBuilderDockWindow("Assets", bottom);
     ImGui::DockBuilderDockWindow(g_textureBrowserWindow, bottom);
     ImGui::DockBuilderDockWindow(g_shadersWindow, bottom);
+    ImGui::DockBuilderDockWindow(g_renderGraphWindow, bottom);
     ImGui::DockBuilderDockWindow(g_textureViewerWindow, bottomRight);
     ImGui::DockBuilderDockWindow(g_modelPreviewWindow, bottomRight);
 
@@ -464,6 +452,10 @@ void Editor::DrawMenuBar()
         ImGui::MenuItem(g_textureBrowserWindow, nullptr, &m_showTextureBrowser);
         ImGui::MenuItem(g_textureViewerWindow, nullptr, &m_showTextureViewer);
         ImGui::MenuItem(g_shadersWindow, nullptr, &m_showShaders);
+        if (m_renderGraph)
+        {
+            ImGui::MenuItem(g_renderGraphWindow, nullptr, &m_showRenderGraph);
+        }
         ImGui::MenuItem(g_statsWindow, nullptr, &m_showStats);
         if (!m_panels.empty())
         {

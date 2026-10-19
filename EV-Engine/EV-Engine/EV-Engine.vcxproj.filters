@@ -171,6 +171,9 @@
     <ClCompile Include="source\DX12\shader_library.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\editor\editor_render_graph.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\DX12\render_graph.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

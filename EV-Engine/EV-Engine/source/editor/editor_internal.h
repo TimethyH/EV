@@ -4,6 +4,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdio>
 #include <cstring>
 #include <filesystem>
 #include <memory>
@@ -24,6 +25,7 @@ namespace EV::EditorInternal
     constexpr const char* g_textureViewerWindow = "Texture Viewer";
     constexpr const char* g_modelPreviewWindow = "Model Preview";
     constexpr const char* g_shadersWindow = "Shaders";
+    constexpr const char* g_renderGraphWindow = "Render Graph";
 
     // Editor palette (dark, similar to the Kudzu editor).
     inline const ImVec4 g_colorBackground0 = ImVec4(0.078f, 0.078f, 0.078f, 1.0f);
@@ -72,6 +74,20 @@ namespace EV::EditorInternal
         }
         window->DockNode->TabBar->NextSelectedTabId = window->TabId;
         return true;
+    }
+
+    inline std::string FormatBytes(uint64_t bytes)
+    {
+        char buffer[32];
+        if (bytes >= 1024ull * 1024ull)
+        {
+            snprintf(buffer, sizeof(buffer), "%.1f MB", bytes / (1024.0 * 1024.0));
+        }
+        else
+        {
+            snprintf(buffer, sizeof(buffer), "%.1f KB", bytes / 1024.0);
+        }
+        return buffer;
     }
 
     inline bool ContainsCaseInsensitive(const std::string& text, const char* filter)
