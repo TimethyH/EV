@@ -38,6 +38,7 @@
     <ClCompile Include="source\DX12\shader.cpp" />
     <ClCompile Include="source\DX12\shader_compiler.cpp" />
     <ClCompile Include="source\DX12\shader_library.cpp" />
+    <ClCompile Include="source\DX12\gpu_timer.cpp" />
     <ClCompile Include="source\core\game..cpp" />
     <ClCompile Include="source\DX12\generate_mips_pso.cpp" />
     <ClCompile Include="source\UI\GUI.cpp" />
@@ -96,6 +97,7 @@
     <ClInclude Include="header\DX12\shader.h" />
     <ClInclude Include="header\DX12\shader_compiler.h" />
     <ClInclude Include="header\DX12\shader_library.h" />
+    <ClInclude Include="header\DX12\gpu_timer.h" />
     <ClInclude Include="header\core\events.h" />
     <ClInclude Include="header\core\game.h" />
     <ClInclude Include="header\utility\game_framework_includes.h" />
