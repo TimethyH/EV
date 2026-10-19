@@ -33,6 +33,7 @@ protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender() override;
 	void OnGUI(const std::shared_ptr<EV::CommandList>& commandList, const EV::RenderTarget& renderTarget);
+	void DrawShaderErrors();
 	void OnKeyPress(KeyEventArgs& e) override;
 	void OnKeyRelease(KeyEventArgs& e) override;
 	void OnMouseMove(MouseMotionEventArgs& e) override;
