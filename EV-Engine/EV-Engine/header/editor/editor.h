@@ -4,7 +4,7 @@
  *  @file editor.h
  *
  *  @brief ImGui based scene editor: a docked layout with a scene viewport, hierarchy,
- *  inspector, texture browser/viewer and stats. Any Game can use it:
+ *  inspector, texture browser/viewer, shaders and stats. Any Game can use it:
  *
  *      m_editor = std::make_unique<Editor>(m_GUI);
  *      m_editor->AddScene("Helmet", m_helmet);
@@ -41,6 +41,7 @@ namespace EV
     class RenderTarget;
     class Scene;
     class SceneNode;
+    class Shader;
     class Texture;
     class TexturePreview;
     class TextureReadback;
@@ -262,6 +263,10 @@ namespace EV
         void DrawTextureViewer();
         void DrawStats();
 
+        // Shader hot reloading (editor_shaders.cpp)
+        void DrawShaders();
+        void UpdateShaderReloads();
+
         // Assets and drag & drop (editor_assets.cpp)
         void DrawAssetBrowser();
         void DrawAssetIcon(const std::filesystem::path& path, bool isDirectory, float size);
@@ -305,6 +310,7 @@ namespace EV
         bool m_showTextureBrowser = true;
         bool m_showTextureViewer = true;
         bool m_showStats = true;
+        bool m_showShaders = true;
         bool m_showImGuiDemo = false;
         bool m_resetLayout = false;
         bool m_focusTextureViewer = false;
@@ -370,6 +376,10 @@ namespace EV
         float                        m_dropDistance = 10.0f;
         std::string                  m_statusMessage;
         float                        m_statusMessageTime = 0.0f;
+
+        // Shaders
+        std::weak_ptr<Shader> m_selectedShader;
+        uint64_t              m_shaderReloadCount = 0; // ShaderLibrary reload count already reported.
 
         // Stats
         float  m_frameTimes[120] = {};

@@ -123,6 +123,9 @@
     <ClCompile Include="source\editor\editor_assets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\editor\editor_shaders.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="thirdparty\imgui\imgui.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

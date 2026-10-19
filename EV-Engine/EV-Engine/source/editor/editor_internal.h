@@ -23,6 +23,7 @@ namespace EV::EditorInternal
     // Window names used by more than one source file.
     constexpr const char* g_textureViewerWindow = "Texture Viewer";
     constexpr const char* g_modelPreviewWindow = "Model Preview";
+    constexpr const char* g_shadersWindow = "Shaders";
 
     // Editor palette (dark, similar to the Kudzu editor).
     inline const ImVec4 g_colorBackground0 = ImVec4(0.078f, 0.078f, 0.078f, 1.0f);
@@ -33,6 +34,7 @@ namespace EV::EditorInternal
     inline const ImVec4 g_colorText = ImVec4(0.878f, 0.878f, 0.878f, 1.0f);
     inline const ImVec4 g_colorTextDim = ImVec4(0.578f, 0.578f, 0.578f, 1.0f);
     inline const ImVec4 g_colorAccent = ImVec4(0.298f, 0.588f, 0.831f, 1.0f);
+    inline const ImVec4 g_colorError = ImVec4(0.902f, 0.380f, 0.345f, 1.0f);
 
     inline std::string ToUTF8(const std::wstring& wide)
     {
