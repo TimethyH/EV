@@ -118,6 +118,7 @@ namespace EV
          * to be in a particular state can run.
          */
         void UAVBarrier(bool flushBarriers = false);
+        void UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers = false);
 
         /**
          * Add an aliasing barrier to indicate a transition between usages of two
