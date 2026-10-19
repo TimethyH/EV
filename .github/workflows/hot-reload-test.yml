@@ -1,0 +1,168 @@
+name: Shader hot reload test
+
+on:
+  push:
+    branches: [ claude/shader-hot-reload-26017u ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: windows-2025-vs2026
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      ASSIMP_SRC: EV-Engine/EV-Engine/thirdparty/assimp
+      LIB_DIR: EV-Engine/EV-Engine/lib
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          vs-prerelease: true
+
+      - name: Show toolchain
+        run: msbuild -version
+
+      # assimp-vc145-mtd.lib and the generated assimp config headers are not committed
+      # (they are produced locally by CMake), so build them here and cache the result.
+      - name: Cache assimp
+        id: cache-assimp
+        uses: actions/cache@v4
+        with:
+          path: assimp-out
+          key: assimp-${{ runner.os }}-v6.0.2-debug-v1
+
+      # The vendored assimp tree is incomplete (parts are gitignored), so build the matching upstream release.
+      - name: Build assimp
+        if: steps.cache-assimp.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 -b v6.0.2 https://github.com/assimp/assimp.git assimp-src
+          cmake -S assimp-src -B assimp-build -A x64 `
+            -DBUILD_SHARED_LIBS=OFF -DASSIMP_BUILD_TESTS=OFF -DASSIMP_BUILD_ASSIMP_TOOLS=OFF `
+            -DASSIMP_BUILD_SAMPLES=OFF -DASSIMP_INSTALL=OFF -DASSIMP_BUILD_ZLIB=ON -DASSIMP_WARNINGS_AS_ERRORS=OFF
+          cmake --build assimp-build --config Debug --parallel
+          New-Item -ItemType Directory -Force assimp-out/include/assimp | Out-Null
+          Copy-Item assimp-build/include/assimp/*.h assimp-out/include/assimp/
+          Get-ChildItem assimp-build -Recurse -Filter "assimp-*.lib" | ForEach-Object { Copy-Item $_.FullName assimp-out/assimp.lib }
+
+      - name: Stage assimp
+        run: |
+          Copy-Item assimp-out/include/assimp/*.h "$env:ASSIMP_SRC/include/assimp/"
+          Copy-Item assimp-out/assimp.lib "$env:LIB_DIR/assimp-vc145-mtd.lib"
+
+      - name: Build EV-Engine (Debug x64)
+        run: msbuild EV-Engine/EV-Engine/EV-Engine.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
+      - name: Build OceanRenderer (Debug x64)
+        run: msbuild EV-Engine/OceanRenderer/OceanRenderer.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
+      - name: Build ShaderArt (Debug x64)
+        run: msbuild EV-Engine/ShaderArt/ShaderArt.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
+      # Temporary: runs OceanRenderer on WARP, edits shaders while it runs and takes a screenshot after each edit.
+      - name: Hot reload test (WARP)
+        timeout-minutes: 30
+        working-directory: EV-Engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EV_USE_WARP: "1"
+        run: |
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
+          New-Item -ItemType Directory -Force assets/damaged_helmet, ../screenshots | Out-Null
+          gh release download Assets -p sky4k.hdr -D assets -R ${{ github.repository }} --clobber
+          $base = "https://raw.githubusercontent.com/KhronosGroup/glTF-Sample-Assets/main/Models/DamagedHelmet/glTF"
+          foreach ($f in "DamagedHelmet.gltf","DamagedHelmet.bin","Default_albedo.jpg","Default_AO.jpg","Default_emissive.jpg","Default_metalRoughness.jpg","Default_normal.jpg") {
+            curl.exe -sSL -o "assets/damaged_helmet/$f" "$base/$f"
+          }
+          Get-ChildItem "C:\Program Files (x86)\Windows Kits\10\bin" -Recurse -Filter dxcompiler.dll | ForEach-Object { Write-Host "SDK DXC: $($_.FullName)" }
+
+          Add-Type -AssemblyName System.Windows.Forms, System.Drawing
+          function Save-Screenshot($name) {
+            $bounds = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+            $bitmap = New-Object System.Drawing.Bitmap $bounds.Width, $bounds.Height
+            $graphics = [System.Drawing.Graphics]::FromImage($bitmap)
+            $graphics.CopyFromScreen($bounds.Location, [System.Drawing.Point]::Empty, $bounds.Size)
+            $bitmap.Save("../screenshots/$name.png", [System.Drawing.Imaging.ImageFormat]::Png)
+            $graphics.Dispose(); $bitmap.Dispose()
+            Write-Host "Saved $name"
+          }
+          function Check-Alive($step) {
+            $process.Refresh()
+            if ($process.HasExited) { Write-Host "::error::Process exited after '$step' with code $($process.ExitCode)"; return $false }
+            Write-Host "Alive after '$step'"
+            return $true
+          }
+
+          $exe = Get-ChildItem -Recurse -Filter OceanRenderer.exe | Select-Object -First 1
+          Write-Host "Running $($exe.FullName)"
+          $process = Start-Process -FilePath $exe.FullName -WorkingDirectory (Get-Location) -PassThru
+          $start = Get-Date
+          $windowTime = $null
+          while (((Get-Date) - $start).TotalSeconds -lt 900) {
+            Start-Sleep -Seconds 5
+            $process.Refresh()
+            if ($process.HasExited) { Write-Host "Process exited with code $($process.ExitCode)"; break }
+            if (-not $windowTime -and $process.MainWindowHandle -ne 0) { $windowTime = Get-Date; Write-Host "Window shown after $([int]((Get-Date) - $start).TotalSeconds)s" }
+            if ($windowTime -and ((Get-Date) - $windowTime).TotalSeconds -ge 60) { break }
+          }
+          Save-Screenshot "1-start"
+
+          $sdr = "OceanRenderer/shaders/HDR_to_SDR_PS.hlsl"
+          $ocean = "OceanRenderer/shaders/ocean_pixel.hlsl"
+          $alive = Check-Alive "start"
+
+          if ($alive) {
+            # 1. A value change: tint the image red.
+            (Get-Content $sdr -Raw).Replace("return float4(pow(abs(SDR), 1.0f / TonemapParametersCB.Gamma), 1);", "return float4(1.0f, 0.0f, 0.0f, 1.0f) * 0.6f + float4(pow(abs(SDR), 1.0f / TonemapParametersCB.Gamma), 1) * 0.4f;") | Set-Content $sdr -NoNewline
+            Start-Sleep -Seconds 40
+            Save-Screenshot "2-red-tint"
+            $alive = Check-Alive "red tint"
+          }
+          if ($alive) {
+            # 2. A syntax error: the previous (red) shader stays, the Shaders panel shows the error.
+            Add-Content $sdr "`nthis is not valid hlsl"
+            Start-Sleep -Seconds 40
+            Save-Screenshot "3-compile-error"
+            $alive = Check-Alive "compile error"
+          }
+          if ($alive) {
+            # 3. Back to the original.
+            git checkout -- $sdr
+            Start-Sleep -Seconds 40
+            Save-Screenshot "4-restored"
+            $alive = Check-Alive "restored"
+          }
+          if ($alive) {
+            # 4. Compiles, but uses a register the root signature does not have: pipeline state creation fails.
+            (Get-Content $ocean -Raw).Replace("float4 main(PixelShaderInput IN) : SV_Target", "cbuffer HotReloadTestCB : register(b9) { float4 hotReloadTest; };`nfloat4 main(PixelShaderInput IN) : SV_Target").Replace("return float4(BRDF, 1.0f);", "return float4(BRDF, 1.0f) + hotReloadTest;") | Set-Content $ocean -NoNewline
+            Start-Sleep -Seconds 40
+            Save-Screenshot "5-pipeline-error"
+            $alive = Check-Alive "pipeline error"
+            git checkout -- $ocean
+          }
+          if ($alive) {
+            # 5. Reload of a compute shader (fft) and an IBL shader: the IBL is computed again.
+            Add-Content "OceanRenderer/shaders/fft.hlsl" "`n// hot reload test"
+            Add-Content "OceanRenderer/shaders/ibl_specular.hlsl" "`n// hot reload test"
+            Start-Sleep -Seconds 60
+            Save-Screenshot "6-compute-reload"
+            $alive = Check-Alive "compute reload"
+          }
+
+          if (-not $process.HasExited) { Stop-Process -Id $process.Id -Force }
+          if (Test-Path ev_crash.log) { Write-Host "ev_crash.log:"; Get-Content ev_crash.log | Write-Host }
+
+          # Publish the screenshots on this branch so they can be fetched with git.
+          foreach ($file in Get-ChildItem ../screenshots -Filter *.png) {
+            $path = "ci-test/$($file.Name)"
+            $existing = gh api "repos/${{ github.repository }}/contents/$($path)?ref=${{ github.ref_name }}" --jq .sha 2>$null
+            $body = @{ message = "Hot reload test screenshot $($file.Name)"; content = [Convert]::ToBase64String([IO.File]::ReadAllBytes($file.FullName)); branch = "${{ github.ref_name }}" }
+            if ($existing) { $body.sha = $existing }
+            $body | ConvertTo-Json | gh api -X PUT "repos/${{ github.repository }}/contents/$path" --input - --jq .commit.sha
+          }
+          if (-not $alive) { exit 1 }
+          exit 0
