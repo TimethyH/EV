@@ -55,6 +55,17 @@ Diagnostics added: the crash report uses DRED's wide names (command lists, queue
 
 Still worth checking: the ocean runs compute (FFT) on the compute queue with no GPU-side sync to the direct queue (only CPU waits).
 
+## Shader hot reloading
+Branch: `shader-hot-reload`. Save an `.hlsl` file while an app runs and the change shows up right away; no restart or rebuild.
+- `DX12/shader.h` (`Shader`, `PipelineShaders`), `DX12/shader_library.h` (`ShaderLibrary`), `DX12/shader_compiler.h` (`ShaderCompiler`). The application owns the library (`Application::LoadShader`, `Application::GetShaderLibrary`) and calls `ShaderLibrary::Update` on every `WM_PAINT`, before the frame is rendered.
+- `LoadShader(L"/vertex.cso")` loads the compiled shader next to the executable like before, then looks for `vertex.hlsl` in `<exe name>/shaders` or `shaders` next to or above the executable's folder (`x64/Debug/OceanRenderer.exe` finds `OceanRenderer/shaders`), plus folders added with `ShaderLibrary::AddSourceDirectory`.
+- The source and the files it `#include "..."`s are checked 4 times per second. On a change the shader is recompiled with DXC using the profile read from the `.cso` (e.g. `ps_6_0`), entry point `main`, `-Zi -Qembed_debug -Od` in Debug. The `.cso` files are not changed; the next build compiles the edited source as usual.
+- DXC is loaded on first use (the engine does not link it): `dxcompiler.dll`/`dxil.dll` next to the executable, otherwise the newest Windows SDK (`Windows Kits\10\bin\<version>\x64`, found through the registry), otherwise the DLL search path. Without it shaders still load, they just cannot be recompiled (the Shaders panel says why).
+- PSOs: `BasePSO::LoadShaders` + `CreatePipelineState()` (builds the pipeline state from `m_vertexShader`/`m_pixelShader`) + `UpdatePipelineState()` at the start of `Apply`. The compute PSOs in OceanRenderer do the same with a `PipelineShaders` member. Root signatures are not rebuilt; a changed shader has to keep its bindings.
+- Errors never take the app down: a compile error keeps the previous bytecode; a shader that compiles but no longer fits the root signature/input layout keeps the previous pipeline state (the debug layer's break on errors is turned off while that pipeline state is created, and its messages are shown with the error). The command list keeps replaced pipeline states alive until the GPU is done with them.
+- Editor: **Shaders** panel (docked with Assets/Textures): every loaded shader with profile, status and last reload, per shader and "Reload All" buttons, "Reload on save" toggle, the selected shader's paths, includes and error output. The status bar reports reloads; a failed reload selects the shader in the panel. ShaderArt (no editor) shows a "Shader Errors" window while a shader has errors.
+- Not hot reloaded: the engine's built-in shaders (mip generation and ImGui are embedded byte arrays, `pano_to_cubemap_CS` is loaded per command list) and the editor's embedded preview shaders. OceanRenderer computes the image based lighting again (BRDF LUT + `SetEnvironment` with the current panorama) when `ibl_convolution`, `ibl_specular` or `brdf_lut` is reloaded, because those only run once per environment.
+
 ## Planned next
 - Undo/redo for transforms and drops; snapping; multi-select.
 - `.hdr` drop to change the skybox (needs IBL recompute in the app).
