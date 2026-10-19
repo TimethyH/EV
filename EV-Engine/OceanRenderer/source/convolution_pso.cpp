@@ -22,13 +22,9 @@
 
 ConvolutionCompute::ConvolutionCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams)
 {
-    // Get the folder of the running executable.
-    std::wstring parentPath = ModulePath();
-    std::wstring computeShader = parentPath + computePath;
-
-    // Load the compute shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> computeShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(computeShader.c_str(), &computeShaderBlob));
+    // Load the compute shader. It is recompiled when its source is saved.
+    m_computeShader = Application::Get().LoadShader(computePath);
+    m_pipelineShaders = PipelineShaders({ m_computeShader });
 
     D3D12_ROOT_SIGNATURE_FLAGS computeFlags =
         D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
@@ -52,6 +48,11 @@ ConvolutionCompute::ConvolutionCompute(const std::wstring& computePath, CD3DX12_
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
+    CreatePipelineState();
+}
+
+void ConvolutionCompute::CreatePipelineState()
+{
     struct PipelineStateStream
     {
         CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
@@ -59,24 +60,23 @@ ConvolutionCompute::ConvolutionCompute(const std::wstring& computePath, CD3DX12_
     } pipelineStateStream;
 
     pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
-    pipelineStateStream.CS = CD3DX12_SHADER_BYTECODE(computeShaderBlob.Get());
+    pipelineStateStream.CS = m_computeShader->GetBytecode();
 
     m_pipelineStateObject = Application::Get().CreatePipelineStateObject(pipelineStateStream);
-
 }
 
-std::wstring ConvolutionCompute::ModulePath()
+void ConvolutionCompute::SetPipelineState(CommandList& commandList)
 {
-    WCHAR buffer[MAX_PATH];
-    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-    PathRemoveFileSpecW(buffer);
-    return std::wstring(buffer);
+    // Create the pipeline state again if the shader was recompiled.
+    m_pipelineShaders.Update([this]() { CreatePipelineState(); });
+
+    commandList.SetPipelineState(m_pipelineStateObject);
+    commandList.SetComputeRootSignature(m_rootSignature);
 }
 
 void ConvolutionCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     // Bind constant buffer (b0)
     struct IrradianceCB
@@ -109,8 +109,7 @@ void ConvolutionCompute::DispatchSpecular(
     uint32_t sampleCount,
     uint32_t mipLevels)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     for (uint32_t mip = 0; mip < mipLevels; mip++)
     {
@@ -145,8 +144,7 @@ void ConvolutionCompute::DispatchBRDFLUT(
     const std::shared_ptr<Texture>& brdfLUT,
     uint32_t lutSize)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     // No cbuffer needed, but UAV at root param 0
     commandList->SetUnorderedAccessView(0, 0, brdfLUT, 0);

@@ -12,13 +12,9 @@
 
 OceanCompute::OceanCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams)
 {
-    // Get the folder of the running executable.
-    std::wstring parentPath = ModulePath();
-    std::wstring computeShader = parentPath + computePath;
-
-    // Load the compute shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> computeShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(computeShader.c_str(), &computeShaderBlob));
+    // Load the compute shader. It is recompiled when its source is saved.
+    m_computeShader = Application::Get().LoadShader(computePath);
+    m_pipelineShaders = PipelineShaders({ m_computeShader });
 
     D3D12_ROOT_SIGNATURE_FLAGS computeFlags =
         D3D12_ROOT_SIGNATURE_FLAG_DENY_VERTEX_SHADER_ROOT_ACCESS |
@@ -33,6 +29,11 @@ OceanCompute::OceanCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMET
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
+    CreatePipelineState();
+}
+
+void OceanCompute::CreatePipelineState()
+{
     struct PipelineStateStream
     {
         CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
@@ -40,25 +41,24 @@ OceanCompute::OceanCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMET
     } pipelineStateStream;
 
     pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
-    pipelineStateStream.CS = CD3DX12_SHADER_BYTECODE(computeShaderBlob.Get());
+    pipelineStateStream.CS = m_computeShader->GetBytecode();
 
     m_pipelineStateObject = Application::Get().CreatePipelineStateObject(pipelineStateStream);
-
 }
 
-std::wstring OceanCompute::ModulePath()
+void OceanCompute::SetPipelineState(CommandList& commandList)
 {
-    WCHAR buffer[MAX_PATH];
-    GetModuleFileNameW(nullptr, buffer, MAX_PATH);
-    PathRemoveFileSpecW(buffer);
-    return std::wstring(buffer);
+    // Create the pipeline state again if the shader was recompiled.
+    m_pipelineShaders.Update([this]() { CreatePipelineState(); });
+
+    commandList.SetPipelineState(m_pipelineStateObject);
+    commandList.SetComputeRootSignature(m_rootSignature);
 }
 
 // TODO: make more clear which dispatch belongs to which pass since they are all different anyway
 void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, float patchSize, DirectX::XMUINT3 dispatchDimension)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     // Bind H0
     commandList->SetShaderResourceView(RootParameters::ReadTextures, 0, inputTexture,
@@ -83,8 +83,7 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
 
 void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     // Bind Phase UAV
     commandList->SetUnorderedAccessView(0, 0, RWTexture, 0);
@@ -97,8 +96,7 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
 
 void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     // Bind constant buffer (b0)
     struct IrradianceCB
@@ -125,8 +123,7 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
 
 void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, std::vector<float> foamData, DirectX::XMUINT3 dispatchDimension)
 {
-    commandList->SetPipelineState(m_pipelineStateObject);
-    commandList->SetComputeRootSignature(m_rootSignature);
+    SetPipelineState(*commandList);
 
     // Bind Phase UAV
     commandList->SetUnorderedAccessView(0, 0, RWDisplacementTexture, 0);
