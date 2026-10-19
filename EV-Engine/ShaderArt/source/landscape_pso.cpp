@@ -12,17 +12,7 @@ using namespace EV;
 
 LandscapePSO::LandscapePSO(const std::wstring& vertexPath, const std::wstring& pixelPath)
 {
-    // Get the folder of the running executable.
-    std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + vertexPath;
-    std::wstring pixelShader = parentPath + pixelPath;
-
-    // Setup the root signature
-    // Load the vertex shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-    Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
+    LoadShaders(vertexPath, pixelPath);
 
     // Create a root signature.
     // Allow input layout and deny unnecessary access to certain pipeline stages.
@@ -47,6 +37,23 @@ LandscapePSO::LandscapePSO(const std::wstring& vertexPath, const std::wstring& p
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
+    CreatePipelineState();
+
+    //// Create an SRV that can be used to pad unused texture slots.
+    //D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
+    //defaultSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    //defaultSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    //defaultSRV.Texture2D.MostDetailedMip = 0;
+    //defaultSRV.Texture2D.MipLevels = 1;
+    //defaultSRV.Texture2D.PlaneSlice = 0;
+    //defaultSRV.Texture2D.ResourceMinLODClamp = 0;
+    //defaultSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+    //m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
+}
+
+void LandscapePSO::CreatePipelineState()
+{
     // Setup the pipeline state.
     struct PipelineStateStream
     {
@@ -77,8 +84,8 @@ LandscapePSO::LandscapePSO(const std::wstring& vertexPath, const std::wstring& p
     rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
     pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
-    pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-    pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+    pipelineStateStream.VS = m_vertexShader->GetBytecode();
+    pipelineStateStream.PS = m_pixelShader->GetBytecode();
     pipelineStateStream.RasterizerState = rasterizerState;
     pipelineStateStream.InputLayout = { nullptr, 0 };
     pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -87,22 +94,12 @@ LandscapePSO::LandscapePSO(const std::wstring& vertexPath, const std::wstring& p
     pipelineStateStream.SampleDesc = sampleDesc;
 
     m_pipelineStateObject = Application::Get().CreatePipelineStateObject(pipelineStateStream);
-
-    //// Create an SRV that can be used to pad unused texture slots.
-    //D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
-    //defaultSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    //defaultSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    //defaultSRV.Texture2D.MostDetailedMip = 0;
-    //defaultSRV.Texture2D.MipLevels = 1;
-    //defaultSRV.Texture2D.PlaneSlice = 0;
-    //defaultSRV.Texture2D.ResourceMinLODClamp = 0;
-    //defaultSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-    //m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
 }
 
 void LandscapePSO::Apply(CommandList& commandList)
 {
+    UpdatePipelineState();
+
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetGraphicsRootSignature(m_rootSignature);
     commandList.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);

@@ -188,6 +188,8 @@ namespace EV
 
 
     private:
+        void CreatePipelineState() override;
+
     	// Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
             const std::shared_ptr<Texture>& texture);

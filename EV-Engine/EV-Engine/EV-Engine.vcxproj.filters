@@ -156,6 +156,9 @@
     <ClCompile Include="source\DX12\effect_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\DX12\base_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\DX12\shader.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

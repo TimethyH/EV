@@ -3,6 +3,7 @@
 #include <DirectXMath.h>
 #include <Shlwapi.h>
 
+#include "DX12/shader.h"
 #include "resources/texture.h"
 
 namespace EV
@@ -29,7 +30,18 @@ namespace EV
 
 
     protected:
-        
+        /**
+         * Load the vertex and pixel shader (paths relative to the executable's folder, e.g. L"/vertex.cso").
+         * They are recompiled when their source is saved; UpdatePipelineState then creates the pipeline state again.
+         */
+        void LoadShaders(const std::wstring& vertexPath, const std::wstring& pixelPath);
+
+        // Create m_pipelineStateObject from the current bytecode of m_vertexShader and m_pixelShader.
+        virtual void CreatePipelineState() = 0;
+
+        // Create the pipeline state again if a shader was recompiled. Call at the start of Apply.
+        void UpdatePipelineState();
+
         enum DirtyFlags
         {
             DF_None = 0,
@@ -64,6 +76,9 @@ namespace EV
         std::shared_ptr<RootSignature>       m_rootSignature;
         std::shared_ptr<PipelineStateObject> m_pipelineStateObject;
 
+        std::shared_ptr<Shader> m_vertexShader;
+        std::shared_ptr<Shader> m_pixelShader;
+
         // Which properties need to be bound to the
         uint32_t m_dirtyFlags = DF_All;
 
@@ -71,6 +86,7 @@ namespace EV
         std::shared_ptr<Material> m_material;
 
     private:
+        PipelineShaders m_pipelineShaders;
     };
 
     inline std::wstring BasePSO::GetModulePath()

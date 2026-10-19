@@ -106,6 +106,8 @@ namespace EV
         }m_oceanRenderParams;
 
 	private:
+        void CreatePipelineState() override;
+
         enum RootParameters
         {
             // Vertex shader parameter
