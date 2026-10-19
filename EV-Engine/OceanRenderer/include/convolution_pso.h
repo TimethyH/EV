@@ -5,6 +5,7 @@
 #include <string>
 #include <wrl/client.h>
 
+#include "DX12/shader.h"
 #include "resources/texture.h"
 
 struct CD3DX12_ROOT_PARAMETER1;
@@ -22,7 +23,6 @@ class ConvolutionCompute
 {
 public:
     ConvolutionCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams);
-    std::wstring ModulePath();
     // ~OceanCompute();
 
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount);
@@ -42,6 +42,12 @@ public:
     };
 
 private:
+    void CreatePipelineState();
+    // Binds the pipeline state and root signature, after creating the pipeline state again if the shader was recompiled.
+    void SetPipelineState(CommandList& commandList);
+
+    std::shared_ptr<Shader> m_computeShader;
+    PipelineShaders m_pipelineShaders;
     std::shared_ptr<RootSignature> m_rootSignature;
     std::shared_ptr<PipelineStateObject> m_pipelineStateObject;
 

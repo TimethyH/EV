@@ -5,6 +5,7 @@
 #include <string>
 #include <wrl/client.h>
 
+#include "DX12/shader.h"
 #include "resources/texture.h"
 
 struct CD3DX12_ROOT_PARAMETER1;
@@ -22,7 +23,6 @@ class OceanCompute
 {
 public:
     OceanCompute(const std::wstring& computePath, CD3DX12_ROOT_PARAMETER1* rootParams, uint32_t numRootParams);
-    std::wstring ModulePath();
     // ~OceanCompute();
 
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& inputTexture, std::shared_ptr<Texture> slopeTexture, std::shared_ptr<Texture> displacementTexture, float totalTime, float patchSize, DirectX::XMUINT3 dispatchDimension);
@@ -39,6 +39,12 @@ public:
     };
 
 private:
+    void CreatePipelineState();
+    // Binds the pipeline state and root signature, after creating the pipeline state again if the shader was recompiled.
+    void SetPipelineState(CommandList& commandList);
+
+    std::shared_ptr<Shader> m_computeShader;
+    PipelineShaders m_pipelineShaders;
     std::shared_ptr<RootSignature> m_rootSignature;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_phasePSO;
     Microsoft::WRL::ComPtr<ID3D12PipelineState> m_fftPSO;
