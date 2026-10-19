@@ -171,6 +171,9 @@
     <ClCompile Include="source\DX12\shader_library.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\DX12\render_graph.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\DX12\gpu_timer.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -372,6 +375,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\shader_library.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\render_graph.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\gpu_timer.h">
