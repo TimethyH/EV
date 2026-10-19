@@ -11,6 +11,7 @@
 #include "resources/index_buffer.h"
 #include "DX12/pipeline_state_object.h"
 #include "DX12/root_signature.h"
+#include "DX12/shader_library.h"
 #include "DX12/shader_resource_view.h"
 #include "DX12/swapchain.h"
 #include "DX12/unordered_access_view.h"
@@ -260,6 +261,7 @@ void Application::Stop()
 Application::Application(HINSTANCE hInst)
     : m_hInstance(hInst)
     , m_tearingSupported(false)
+    , m_shaderLibrary(std::make_unique<ShaderLibrary>())
 {
     // Windows 10 Creators update adds Per Monitor V2 DPI awareness context.
     // Using this awareness context allows the client area of the window 
@@ -568,6 +570,16 @@ bool Application::CheckTearingSupport()
     }
 
     return allowTearing == TRUE;
+}
+
+std::shared_ptr<Shader> Application::LoadShader(const std::wstring& compiledPath)
+{
+    return m_shaderLibrary->Load(compiledPath);
+}
+
+ShaderLibrary& Application::GetShaderLibrary()
+{
+    return *m_shaderLibrary;
 }
 
 std::shared_ptr<PipelineStateObject> Application::DoCreatePipelineStateObject(
@@ -964,6 +976,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
         }
         case WM_PAINT:
         {
+            // Recompile shaders whose source was saved, before the frame uses them.
+            Application::Get().GetShaderLibrary().Update();
+
             // ++Application::m_frameCount;
             // Delta time will be filled in by the Window.
             UpdateEventArgs updateEventArgs(0.0f, 0.0f);
