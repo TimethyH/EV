@@ -21,6 +21,8 @@
 #include "DX12/swapchain.h"
 #include "DX12/light.h"
 #include "DX12/effect_pso.h"
+#include "DX12/shader.h"
+#include "DX12/shader_library.h"
 
 // Resource includes
 #include "resources/mesh.h"

@@ -30,6 +30,8 @@ class Window;
 class Game;
 class CommandQueue;
 class PipelineStateObject;
+class Shader;
+class ShaderLibrary;
 
 	/**
 	 * Windows message handler.
@@ -131,6 +133,13 @@ class PipelineStateObject;
 
 		std::shared_ptr<RootSignature> CreateRootSignature(const D3D12_ROOT_SIGNATURE_DESC1& rootSignatureDesc);
 
+		/**
+		 * Load a compiled shader (path relative to the executable's folder, e.g. L"/vertex.cso").
+		 * The shader is recompiled when its .hlsl source is saved (see ShaderLibrary).
+		 */
+		std::shared_ptr<Shader> LoadShader(const std::wstring& compiledPath);
+		ShaderLibrary& GetShaderLibrary();
+
 		template<class PipelineStateStream>
 		std::shared_ptr<PipelineStateObject> CreatePipelineStateObject(PipelineStateStream& pipelineStateStream)
 		{
@@ -212,6 +221,8 @@ class PipelineStateObject;
 
 		std::mutex m_liveTexturesMutex;
 		std::vector<std::weak_ptr<Texture>> m_liveTextures;
+
+		std::unique_ptr<ShaderLibrary> m_shaderLibrary;
 
 	};
 }
