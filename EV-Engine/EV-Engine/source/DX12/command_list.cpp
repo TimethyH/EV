@@ -105,6 +105,23 @@ void CommandList::UAVBarrier(bool flushBarriers)
 	}
 }
 
+void CommandList::UAVBarrier(const std::shared_ptr<Resource>& resource, bool flushBarriers)
+{
+	Microsoft::WRL::ComPtr<ID3D12Resource> d3d12Resource = resource ? resource->GetD3D12Resource() : nullptr;
+	auto barrier = CD3DX12_RESOURCE_BARRIER::UAV(d3d12Resource.Get());
+
+	m_resourceStateTracker->ResourceBarrier(barrier);
+	if (resource)
+	{
+		TrackResource(resource);
+	}
+
+	if (flushBarriers)
+	{
+		FlushResourceBarriers();
+	}
+}
+
 void CommandList::AliasingBarrier(Microsoft::WRL::ComPtr<ID3D12Resource> beforeResource,
 	Microsoft::WRL::ComPtr<ID3D12Resource> afterResource, bool flushBarriers)
 {
