@@ -338,6 +338,7 @@ void Editor::BeginFrame()
     UpdateTextureDrops();
     UpdateEnvironmentLoad();
     UpdateSettledTextures();
+    UpdateShaderReloads();
     m_statusMessageTime = std::max(0.0f, m_statusMessageTime - ImGui::GetIO().DeltaTime);
 
     m_frameTimes[m_frameTimeIndex] = ImGui::GetIO().DeltaTime * 1000.0f;
@@ -364,6 +365,7 @@ void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const Ren
     DrawModelPreview();
     DrawTextureBrowser();
     DrawTextureViewer();
+    DrawShaders();
     DrawStats();
 
     // Delete removes the selected object while the scene or hierarchy has focus.
@@ -420,6 +422,7 @@ void Editor::BuildDefaultLayout(ImGuiID dockspaceID)
     ImGui::DockBuilderDockWindow(g_inspectorWindow, right);
     ImGui::DockBuilderDockWindow("Assets", bottom);
     ImGui::DockBuilderDockWindow(g_textureBrowserWindow, bottom);
+    ImGui::DockBuilderDockWindow(g_shadersWindow, bottom);
     ImGui::DockBuilderDockWindow(g_textureViewerWindow, bottomRight);
     ImGui::DockBuilderDockWindow(g_modelPreviewWindow, bottomRight);
 
@@ -460,6 +463,7 @@ void Editor::DrawMenuBar()
         ImGui::MenuItem(g_modelPreviewWindow, nullptr, &m_showModelPreview);
         ImGui::MenuItem(g_textureBrowserWindow, nullptr, &m_showTextureBrowser);
         ImGui::MenuItem(g_textureViewerWindow, nullptr, &m_showTextureViewer);
+        ImGui::MenuItem(g_shadersWindow, nullptr, &m_showShaders);
         ImGui::MenuItem(g_statsWindow, nullptr, &m_showStats);
         if (!m_panels.empty())
         {
