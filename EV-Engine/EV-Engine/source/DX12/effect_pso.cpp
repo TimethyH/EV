@@ -26,17 +26,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
 {
     m_pAlignedMVP = (MVP*)_aligned_malloc(sizeof(MVP), 16);
 
-    // Get the folder of the running executable.
-    std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + vertexpath;
-    std::wstring pixelShader = parentPath + pixelPath;
-
-    // Setup the root signature
-    // Load the vertex shader.
-    ComPtr<ID3DBlob> vertexShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-    ComPtr<ID3DBlob> pixelShaderBlob;
-	ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
+    LoadShaders(vertexpath, pixelPath);
 
     // Create a root signature.
     // Allow input layout and deny unnecessary access to certain pipeline stages.
@@ -79,44 +69,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
-    // Setup the pipeline state.
-    struct PipelineStateStream
-    {
-        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
-        CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
-        CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
-        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            RasterizerState;
-        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT          InputLayout;
-        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
-        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DSVFormat;
-        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
-        CD3DX12_PIPELINE_STATE_STREAM_SAMPLE_DESC           SampleDesc;
-    } pipelineStateStream;
-
-    // Create a color buffer with sRGB for gamma correction.
-    DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
-
-    // Check the best multisample quality level that can be used for the given back buffer format.
-    DXGI_SAMPLE_DESC sampleDesc = {1,0};
-
-    D3D12_RT_FORMAT_ARRAY rtvFormats = {};
-    rtvFormats.NumRenderTargets = 1;
-    rtvFormats.RTFormats[0] = backBufferFormat;
-
-    CD3DX12_RASTERIZER_DESC rasterizerState(D3D12_DEFAULT);
-
-    pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
-    pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-    pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
-    pipelineStateStream.RasterizerState = rasterizerState;
-    pipelineStateStream.InputLayout = VertexPositionNormalTangentBitangentTexture::inputLayout;
-    pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    pipelineStateStream.DSVFormat = depthBufferFormat;
-    pipelineStateStream.RTVFormats = rtvFormats;
-    pipelineStateStream.SampleDesc = sampleDesc;
-
-    m_pipelineStateObject = Application::Get().CreatePipelineStateObject(pipelineStateStream);
+    CreatePipelineState();
 
     // Create an SRV that can be used to pad unused texture slots.
     D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
@@ -146,6 +99,48 @@ EffectPSO::~EffectPSO()
     _aligned_free(m_pAlignedMVP);
 }
 
+void EffectPSO::CreatePipelineState()
+{
+    // Setup the pipeline state.
+    struct PipelineStateStream
+    {
+        CD3DX12_PIPELINE_STATE_STREAM_ROOT_SIGNATURE        pRootSignature;
+        CD3DX12_PIPELINE_STATE_STREAM_VS                    VS;
+        CD3DX12_PIPELINE_STATE_STREAM_PS                    PS;
+        CD3DX12_PIPELINE_STATE_STREAM_RASTERIZER            RasterizerState;
+        CD3DX12_PIPELINE_STATE_STREAM_INPUT_LAYOUT          InputLayout;
+        CD3DX12_PIPELINE_STATE_STREAM_PRIMITIVE_TOPOLOGY    PrimitiveTopologyType;
+        CD3DX12_PIPELINE_STATE_STREAM_DEPTH_STENCIL_FORMAT  DSVFormat;
+        CD3DX12_PIPELINE_STATE_STREAM_RENDER_TARGET_FORMATS RTVFormats;
+        CD3DX12_PIPELINE_STATE_STREAM_SAMPLE_DESC           SampleDesc;
+    } pipelineStateStream;
+
+    // Create a color buffer with sRGB for gamma correction.
+    DXGI_FORMAT backBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
+    DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
+
+    // Check the best multisample quality level that can be used for the given back buffer format.
+    DXGI_SAMPLE_DESC sampleDesc = {1,0};
+
+    D3D12_RT_FORMAT_ARRAY rtvFormats = {};
+    rtvFormats.NumRenderTargets = 1;
+    rtvFormats.RTFormats[0] = backBufferFormat;
+
+    CD3DX12_RASTERIZER_DESC rasterizerState(D3D12_DEFAULT);
+
+    pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
+    pipelineStateStream.VS = m_vertexShader->GetBytecode();
+    pipelineStateStream.PS = m_pixelShader->GetBytecode();
+    pipelineStateStream.RasterizerState = rasterizerState;
+    pipelineStateStream.InputLayout = VertexPositionNormalTangentBitangentTexture::inputLayout;
+    pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
+    pipelineStateStream.DSVFormat = depthBufferFormat;
+    pipelineStateStream.RTVFormats = rtvFormats;
+    pipelineStateStream.SampleDesc = sampleDesc;
+
+    m_pipelineStateObject = Application::Get().CreatePipelineStateObject(pipelineStateStream);
+}
+
 inline void EffectPSO::BindTexture(CommandList& commandList, uint32_t offset, const std::shared_ptr<Texture>& texture)
 {
     if (texture)
@@ -162,6 +157,8 @@ inline void EffectPSO::BindTexture(CommandList& commandList, uint32_t offset, co
 
 void EffectPSO::Apply(CommandList& commandList)
 {
+    UpdatePipelineState();
+
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetGraphicsRootSignature(m_rootSignature);
 

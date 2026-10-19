@@ -19,23 +19,7 @@ EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pix
     auto& app = Application::Get();
     m_pAlignedMVP = (MVP*)_aligned_malloc(sizeof(MVP), 16);
 
-    // Get the folder of the running executable.
-    std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + vertexpath;
-    std::wstring pixelShader = parentPath + pixelPath;
-
-    // Setup the root signature
-    // Load the vertex shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
-    Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-	ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
-
-    // Setup the input layout for the skybox vertex shader.
-    D3D12_INPUT_ELEMENT_DESC inputLayout[1] = {
-        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
-          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
-    };
+    LoadShaders(vertexpath, pixelPath);
 
     // Allow input layout and deny unnecessary access to certain pipeline stages.
     D3D12_ROOT_SIGNATURE_FLAGS rootSignatureFlags = D3D12_ROOT_SIGNATURE_FLAG_ALLOW_INPUT_ASSEMBLER_INPUT_LAYOUT |
@@ -58,6 +42,17 @@ EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pix
     rootSignatureDescription.Init_1_1(2, rootParameters, 1, &linearClampSampler, rootSignatureFlags);
 
     m_rootSignature = app.CreateRootSignature(rootSignatureDescription.Desc_1_1);
+
+    CreatePipelineState();
+}
+
+void SkyboxPSO::CreatePipelineState()
+{
+    // Setup the input layout for the skybox vertex shader.
+    D3D12_INPUT_ELEMENT_DESC inputLayout[1] = {
+        { "POSITION", 0, DXGI_FORMAT_R32G32B32_FLOAT, 0, D3D12_APPEND_ALIGNED_ELEMENT,
+          D3D12_INPUT_CLASSIFICATION_PER_VERTEX_DATA, 0 },
+    };
 
     // Setup the Skybox pipeline state.
     struct SkyboxPipelineState
@@ -86,17 +81,19 @@ EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pix
     skyboxPipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
     skyboxPipelineStateStream.InputLayout = { inputLayout, 1 };
     skyboxPipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    skyboxPipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-    skyboxPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+    skyboxPipelineStateStream.VS = m_vertexShader->GetBytecode();
+    skyboxPipelineStateStream.PS = m_pixelShader->GetBytecode();
     skyboxPipelineStateStream.RTVFormats = rtvFormats;
     skyboxPipelineStateStream.DSVFormat = depthBufferFormat;
     skyboxPipelineStateStream.DepthStencil = dsDesc;
 
-    m_pipelineStateObject = app.CreatePipelineStateObject(skyboxPipelineStateStream);
+    m_pipelineStateObject = Application::Get().CreatePipelineStateObject(skyboxPipelineStateStream);
 }
 
 void SkyboxPSO::Apply(CommandList& commandList)
 {
+    UpdatePipelineState();
+
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetGraphicsRootSignature(m_rootSignature);
 

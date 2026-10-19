@@ -22,17 +22,7 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
     m_textures.resize(m_cascadeCount);
 
 
-    // Get the folder of the running executable.
-    std::wstring parentPath = GetModulePath();
-    std::wstring vertexShader = parentPath + vertexPath;
-    std::wstring pixelShader = parentPath + pixelPath;
-
-    // Setup the root signature
-    // Load the vertex shader.
-    Microsoft::WRL::ComPtr<ID3DBlob> vertexShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(vertexShader.c_str(), &vertexShaderBlob));
-    Microsoft::WRL::ComPtr<ID3DBlob> pixelShaderBlob;
-    ThrowIfFailed(D3DReadFileToBlob(pixelShader.c_str(), &pixelShaderBlob));
+    LoadShaders(vertexPath, pixelPath);
 
     // Create a root signature.
     // Allow input layout and deny unnecessary access to certain pipeline stages.
@@ -86,6 +76,33 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
 
     m_rootSignature = Application::Get().CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
+    CreatePipelineState();
+
+    // Create an SRV that can be used to pad unused texture slots.
+    D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
+    defaultSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    defaultSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
+    defaultSRV.Texture2D.MostDetailedMip = 0;   
+    defaultSRV.Texture2D.MipLevels = 1;
+    defaultSRV.Texture2D.PlaneSlice = 0;
+    defaultSRV.Texture2D.ResourceMinLODClamp = 0;
+    defaultSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+
+    m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
+
+    // Default dubemapSRV
+    D3D12_SHADER_RESOURCE_VIEW_DESC defaultCubeSRV = {};
+    defaultCubeSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
+    defaultCubeSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
+    defaultCubeSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
+    defaultCubeSRV.TextureCube.MipLevels = 1;
+    defaultCubeSRV.TextureCube.MostDetailedMip = 0;
+
+    m_defaultCubeSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultCubeSRV);
+}
+
+void EV::OceanPSO::CreatePipelineState()
+{
     // Setup the pipeline state.
     struct PipelineStateStream
     {
@@ -116,8 +133,8 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
 	rasterizerState.CullMode = D3D12_CULL_MODE_NONE;
 
     pipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
-    pipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vertexShaderBlob.Get());
-    pipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(pixelShaderBlob.Get());
+    pipelineStateStream.VS = m_vertexShader->GetBytecode();
+    pipelineStateStream.PS = m_pixelShader->GetBytecode();
     pipelineStateStream.RasterizerState = rasterizerState;
     pipelineStateStream.InputLayout = VertexPositionNormalTangentBitangentTexture::inputLayout;
     pipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
@@ -126,28 +143,6 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
     pipelineStateStream.SampleDesc = sampleDesc;
 
     m_pipelineStateObject = Application::Get().CreatePipelineStateObject(pipelineStateStream);
-
-    // Create an SRV that can be used to pad unused texture slots.
-    D3D12_SHADER_RESOURCE_VIEW_DESC defaultSRV;
-    defaultSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    defaultSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURE2D;
-    defaultSRV.Texture2D.MostDetailedMip = 0;   
-    defaultSRV.Texture2D.MipLevels = 1;
-    defaultSRV.Texture2D.PlaneSlice = 0;
-    defaultSRV.Texture2D.ResourceMinLODClamp = 0;
-    defaultSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-
-    m_defaultSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultSRV);
-
-    // Default dubemapSRV
-    D3D12_SHADER_RESOURCE_VIEW_DESC defaultCubeSRV = {};
-    defaultCubeSRV.Format = DXGI_FORMAT_R8G8B8A8_UNORM;
-    defaultCubeSRV.ViewDimension = D3D12_SRV_DIMENSION_TEXTURECUBE;
-    defaultCubeSRV.Shader4ComponentMapping = D3D12_DEFAULT_SHADER_4_COMPONENT_MAPPING;
-    defaultCubeSRV.TextureCube.MipLevels = 1;
-    defaultCubeSRV.TextureCube.MostDetailedMip = 0;
-
-    m_defaultCubeSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultCubeSRV);
 }
 
 inline void EV::OceanPSO::BindTexture(CommandList& commandList, uint32_t offset, const std::shared_ptr<Texture>& texture)
@@ -166,6 +161,8 @@ inline void EV::OceanPSO::BindTexture(CommandList& commandList, uint32_t offset,
 
 void EV::OceanPSO::Apply(CommandList& commandList)
 {
+    UpdatePipelineState();
+
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetGraphicsRootSignature(m_rootSignature);
 

@@ -65,7 +65,7 @@ using namespace EV;
 EV::SDRPSO::SDRPSO(const std::wstring& vertexPath, const std::wstring& pixelPath)
 {
     auto& app = Application::Get();
-    std::wstring parentPath = GetModulePath();
+    LoadShaders(vertexPath, pixelPath);
 
     CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
@@ -82,16 +82,12 @@ EV::SDRPSO::SDRPSO(const std::wstring& vertexPath, const std::wstring& pixelPath
 
     m_rootSignature = app.CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
+    CreatePipelineState();
+}
+
+void SDRPSO::CreatePipelineState()
+{
     // Create the SDR PSO
-    Microsoft::WRL::ComPtr<ID3DBlob> vs;
-    Microsoft::WRL::ComPtr<ID3DBlob> ps;
-
-    std::wstring vsPath = parentPath + vertexPath;
-    std::wstring psPath = parentPath + pixelPath;
-
-    ThrowIfFailed(D3DReadFileToBlob(vsPath.c_str(), &vs));
-    ThrowIfFailed(D3DReadFileToBlob(psPath.c_str(), &ps));
-
     CD3DX12_RASTERIZER_DESC rasterizerDesc(D3D12_DEFAULT);
     rasterizerDesc.CullMode = D3D12_CULL_MODE_NONE;
 
@@ -112,12 +108,12 @@ EV::SDRPSO::SDRPSO(const std::wstring& vertexPath, const std::wstring& pixelPath
 
     sdrPipelineStateStream.pRootSignature = m_rootSignature->GetRootSignature().Get();
     sdrPipelineStateStream.PrimitiveTopologyType = D3D12_PRIMITIVE_TOPOLOGY_TYPE_TRIANGLE;
-    sdrPipelineStateStream.VS = CD3DX12_SHADER_BYTECODE(vs.Get());
-    sdrPipelineStateStream.PS = CD3DX12_SHADER_BYTECODE(ps.Get());
+    sdrPipelineStateStream.VS = m_vertexShader->GetBytecode();
+    sdrPipelineStateStream.PS = m_pixelShader->GetBytecode();
     sdrPipelineStateStream.Rasterizer = rasterizerDesc;
     sdrPipelineStateStream.RTVFormats = rtv;
 
-    m_pipelineStateObject = app.CreatePipelineStateObject(sdrPipelineStateStream);
+    m_pipelineStateObject = Application::Get().CreatePipelineStateObject(sdrPipelineStateStream);
 }
 
 
@@ -127,6 +123,8 @@ void SDRPSO::SetMaterial(const std::shared_ptr<Material>& material)
 
 void SDRPSO::Apply(CommandList& commandList)
 {
+    UpdatePipelineState();
+
     // commandList.SetRenderTarget(m_swapChain->GetRenderTarget());
     // commandList.SetViewport(m_viewport);
     commandList.SetPipelineState(m_pipelineStateObject);

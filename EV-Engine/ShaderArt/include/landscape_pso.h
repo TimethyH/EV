@@ -44,6 +44,7 @@ namespace EV
         void Apply(CommandList& commandList) override;
 
 	private:
+        void CreatePipelineState() override;
 
 		enum RootParameters
 		{

@@ -24,6 +24,8 @@ namespace EV
 
 		
 	private:
+		void CreatePipelineState() override;
+
 		std::shared_ptr<ShaderResourceView> m_skyboxSRV = nullptr;
 	};
 }

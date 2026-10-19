@@ -34,6 +34,7 @@
     <ClCompile Include="source\DX12\dx12_includes.cpp" />
     <ClCompile Include="source\DX12\dynamic_descriptor_heap.cpp" />
     <ClCompile Include="source\DX12\effect_pso.cpp" />
+    <ClCompile Include="source\DX12\base_pso.cpp" />
     <ClCompile Include="source\DX12\shader.cpp" />
     <ClCompile Include="source\DX12\shader_compiler.cpp" />
     <ClCompile Include="source\DX12\shader_library.cpp" />

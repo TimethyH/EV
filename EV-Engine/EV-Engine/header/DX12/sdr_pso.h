@@ -18,6 +18,8 @@ namespace EV
 
 		void SetHDRTexture(std::shared_ptr<Texture> inTexture);
 	private:
+		void CreatePipelineState() override;
+
 		std::shared_ptr<Texture> m_hdrTexture = nullptr;
 	};
 }
