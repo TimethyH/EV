@@ -33,6 +33,9 @@ public:
     void DispatchBRDFLUT(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& brdfLUT,
                          uint32_t lutSize);
 
+    // Increases when the shader is recompiled, so what was computed with it can be computed again.
+    uint32_t GetShaderVersion() const { return m_computeShader->GetVersion(); }
+
     enum RootParameters
     {
         ReadTextures,
