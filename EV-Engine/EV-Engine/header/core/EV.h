@@ -23,6 +23,8 @@
 #include "DX12/effect_pso.h"
 #include "DX12/shader.h"
 #include "DX12/shader_library.h"
+#include "DX12/gpu_timer.h"
+#include "DX12/render_graph.h"
 
 // Resource includes
 #include "resources/mesh.h"
