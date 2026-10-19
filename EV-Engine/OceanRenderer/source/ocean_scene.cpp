@@ -70,8 +70,6 @@ static uint16_t FloatToHalf(float f) {
 
 Ocean::Ocean(const std::wstring& name, uint32_t width, uint32_t height, bool bVSync)
     : super(name, width, height, bVSync)
-    , m_scissorRect(CD3DX12_RECT(0, 0, LONG_MAX, LONG_MAX))
-    , m_viewport(CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(width), static_cast<float>(height)))
     , m_forward(0)
     , m_backward(0)
     , m_left(0)
@@ -137,9 +135,7 @@ void Ocean::ResizeViewport(uint32_t width, uint32_t height)
     float aspectRatio = m_viewportWidth / (float)m_viewportHeight;
     m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 
-    m_viewport = CD3DX12_VIEWPORT(0.0f, 0.0f, static_cast<float>(m_viewportWidth), static_cast<float>(m_viewportHeight));
-
-    m_renderTarget.Resize(m_viewportWidth, m_viewportHeight);
+    // The HDR color and depth buffers are render graph textures, created at the size RecordRenderGraph asks for.
     m_viewportRenderTarget.Resize(m_viewportWidth, m_viewportHeight);
 }
 
@@ -484,39 +480,6 @@ bool Ocean::LoadContent()
     m_foamParameters.resize(sizeof(Constants) / 4);
     m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamThreshold };
     
-    DXGI_FORMAT HDRbackBufferFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
-    DXGI_FORMAT depthBufferFormat = DXGI_FORMAT_D32_FLOAT;
-
-    DXGI_SAMPLE_DESC sampleDesc = app.GetMultisampleQualityLevels(HDRbackBufferFormat, D3D12_MAX_MULTISAMPLE_SAMPLE_COUNT);
-
-    // offscreen render target
-    auto colorDesc = CD3DX12_RESOURCE_DESC::Tex2D(HDRbackBufferFormat, m_width, m_height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
-
-    D3D12_CLEAR_VALUE clearColor;
-    clearColor.Format = colorDesc.Format;
-    clearColor.Color[0] = 0.0f;
-    clearColor.Color[1] = 0.0f;
-    clearColor.Color[2] = 0.3f;
-    clearColor.Color[3] = 1.0f;
-
-    // Texture colorTexture = Texture(colorDesc, &clearColor, TextureUsage::RenderTarget, L"Color Render Target");
-    m_HDRTexture = Application::Get().CreateTexture(colorDesc, &clearColor);
-    m_HDRTexture->SetName(L"Color Render Target");
-
-    auto depthDesc = CD3DX12_RESOURCE_DESC::Tex2D(depthBufferFormat, m_width, m_height, 1, 1, 1, 0, D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL);
-
-    D3D12_CLEAR_VALUE depthClearValue;
-    depthClearValue.Format = depthDesc.Format;
-    depthClearValue.DepthStencil = { 1.0f, 0 };
-
-    // Texture depthTexture = Texture(depthDesc, &depthClearValue, TextureUsage::Depth, L"Depth Render Target");
-    auto depthTexture = Application::Get().CreateTexture(depthDesc, &depthClearValue);
-    depthTexture->SetName(L"Depth Render Target");
-
-    // attach textures to the render target
-    m_renderTarget.AttachTexture(AttachmentPoint::Color0, m_HDRTexture);
-    m_renderTarget.AttachTexture(AttachmentPoint::DepthStencil, depthTexture);
-
     // Tonemapped output shown in the editor's Scene panel (same format as the swapchain for the SDR pass).
     auto viewportDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_width, m_height, 1, 1, 1, 0,
         D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
@@ -531,6 +494,7 @@ bool Ocean::LoadContent()
     // Skybox cubemap and image based lighting (also when an HDR file is dropped into the editor).
     SetEnvironment(skyPanorama);
     m_editor->SetEnvironmentCallback([this](const std::shared_ptr<Texture>& panorama) { SetEnvironment(panorama); });
+    m_editor->SetRenderGraph(&m_renderGraph);
 
     m_pWindow->RegisterCallbacks(shared_from_this());
     m_pWindow->Show();
@@ -543,9 +507,6 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     static uint64_t frameCount = 0;
     static double totalTime = 0.0;
     static double oceanTime = 0.0;
-
-    auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-    auto commandList = commandQueue.GetCommandList();
 
     // super::OnUpdate(e);
 
@@ -622,32 +583,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_skyboxPSO->SetViewMatrix(viewMatrix);
     m_skyboxPSO->SetProjectionMatrix(projMatrix);
 
-    uint32_t phaseDispatchSize = OCEAN_SUBRES / 16;
-    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
-    {
-        m_oceanPSO->Dispatch(commandList, m_oceanCascades[i].H0Texture, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, oceanTime, m_oceanPatchSizes[i], XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
-        commandList->UAVBarrier(true);
-
-        // Displacement
-        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
-        commandList->UAVBarrier(true);
-        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].displacementTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
-        commandList->UAVBarrier(true);
-
-        // Slope
-        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 0); // horizontal fft
-        commandList->UAVBarrier(true);
-        m_fftPSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, XMUINT3(OCEAN_SUBRES, 1, 1), 1); // vertical fft
-
-        // Permutation
-        commandList->UAVBarrier(true);
-        // m_permuteSlopePSO->Dispatch(commandList, m_slopeTexture, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1), 0);
-        m_permutePSO->Dispatch(commandList, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].displacementTexture, m_oceanCascades[i].foamTexture, m_foamParameters, XMUINT3(phaseDispatchSize, phaseDispatchSize, 1));
-
-        commandList->UAVBarrier(true);
-    }
-
-    auto fence = commandQueue.ExecuteCommandList(commandList);
+    // The ocean simulation runs in the render graph (RecordRenderGraph).
+    m_oceanTime = oceanTime;
 
     m_unlitPSO->SetDirectionalLights(m_directionalLights);
     m_displacementPSO->SetDirectionalLights(m_directionalLights);
@@ -680,7 +617,6 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // Update heightmap
     // UpdateSpectrum(time);
 
-    commandQueue.WaitForFenceValue(fence);
     OnRender();
 
 }
@@ -704,113 +640,16 @@ void Ocean::OnRender()
     auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_DIRECT);
     auto commandList = commandQueue.GetCommandList();
 
-    const auto& renderTarget = m_isLoading ? m_swapChain->GetRenderTarget() : m_renderTarget;
-
     if (m_isLoading)
     {
-
         FLOAT clearColor[] = { 0.9f, 0.2f, 0.4f, 1.0f };
-
-        commandList->ClearTexture(renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
+        commandList->ClearTexture(m_swapChain->GetRenderTarget().GetTexture(AttachmentPoint::Color0), clearColor);
     }
     else
     {
-        SceneVisitor visitor(*commandList, m_camera, *m_unlitPSO, false);
-        SceneVisitor oceanVisitor(*commandList, m_camera, *m_displacementPSO, false);
-        SceneVisitor skyboxVisitor(*commandList, m_camera, *m_skyboxPSO, false);
-
-
-         // Clear the render targets.
-        {
-            FLOAT clearColor[] = { 0.4f, 0.6f, 0.9f, 1.0f };
-
-            commandList->ClearTexture(renderTarget.GetTexture(AttachmentPoint::Color0), clearColor);
-            commandList->ClearDepthStencilTexture(renderTarget.GetTexture(AttachmentPoint::DepthStencil),
-                D3D12_CLEAR_FLAG_DEPTH);
-        }
-
-        commandList->SetViewport(m_viewport);
-        commandList->SetScissorRect(m_scissorRect);
-        commandList->SetRenderTarget(m_renderTarget);
-
-        m_skybox->Accept(skyboxVisitor);
-
-
-        // m_scene->Accept(visitor);
-        XMMATRIX duckTranslation = XMMatrixTranslation(-4.0f, 0.0f, 0.0f);
-        // m_boat->GetRootNode()->SetLocalTransform(XMMatrixIdentity() * XMMatrixIdentity() * duckTranslation);
-        // m_boat->Accept(visitor);
-
-        // Set Ocean Textures
-        for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
-        {
-        	m_displacementPSO->SetOceanTextures(m_oceanCascades[i].displacementTexture, m_oceanCascades[i].slopeTexture, m_oceanCascades[i].foamTexture, i);
-        }
-        
-        // m_displacementPSO->SetDirectionalLights(m_directionalLights);
-        // m_displacementPSO->SetPointLights(m_pointLights);
-
-
-
-        // REMINDER: Transform is built with Scale * Rotation * Translation (SRT)
-        XMMATRIX scale = XMMatrixScaling(5.0f, 5.0f, 5.0f);
-        XMMATRIX rotation = XMMatrixRotationRollPitchYaw(XMConvertToRadians(-90.0f), 0.0f, 0.0f);
-        XMMATRIX translation = XMMatrixTranslation(5.0f, 0.0f, 0.0f);
-
-        
-        // m_scene->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
-
-
-        m_oceanPlane->Accept(oceanVisitor);
-
-        if (m_helmet)
-        {
-            m_helmet->Accept(visitor);
-        }
-
-        // Models dropped into the scene from the editor's Assets panel.
-        for (const auto& scene : m_editor->GetSpawnedScenes())
-        {
-            scene->Accept(visitor);
-        }
-
-        // m_chessboard->GetRootNode()->SetLocalTransform(scale * XMMatrixIdentity() * translation);
-        //
-        // m_chessboard->Accept(visitor);
-
-    	// Visualize the point light as a small sphere
-        for (const auto& l : m_pointLights)
-        {
-            auto lightPos = XMLoadFloat4(&l.positionWS);
-            auto worldMatrix = XMMatrixTranslationFromVector(lightPos);
-            m_sphere->GetRootNode()->SetLocalTransform(worldMatrix);
-            m_sphere->Accept(visitor);
-        }
-
-        // // Resolve the MSAA render target to the swapchain's backbuffer.
-        // auto& swapChainRT = m_swapChain->GetRenderTarget();
-        // auto  swapChainBackBuffer = swapChainRT.GetTexture(AttachmentPoint::Color0);
-        // auto  msaaRenderTarget = m_renderTarget.GetTexture(AttachmentPoint::Color0);
-        //
-        // commandList->ResolveSubresource(swapChainBackBuffer, msaaRenderTarget);
-
-	    // Perform HDR -> SDR tonemapping directly to the SwapChain's render target.
-        
-
-        // barrier
-
-	    commandList->SetRenderTarget(m_viewportRenderTarget);
-        m_sdrPSO->SetHDRTexture(m_HDRTexture);
-        m_sdrPSO->Apply(*commandList);
-
+        RecordRenderGraph(commandList);
     }
 
-    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
-    {
-        commandList->TransitionBarrier(m_oceanCascades[i].slopeTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        commandList->TransitionBarrier(m_oceanCascades[i].displacementTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-        commandList->TransitionBarrier(m_oceanCascades[i].foamTexture, D3D12_RESOURCE_STATE_UNORDERED_ACCESS);
-    }
     // The scene is shown inside the editor, so the back buffer only holds the GUI.
     {
         FLOAT clearColor[] = { 0.078f, 0.078f, 0.078f, 1.0f };
@@ -822,6 +661,151 @@ void Ocean::OnRender()
 	    commandQueue.ExecuteCommandList(commandList);
 
     m_swapChain->Present();
+}
+
+void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
+{
+    RenderGraph& rg = m_renderGraph;
+
+    // Ocean simulation, per cascade: animate the spectrum, inverse FFT (horizontal, then vertical) the displacement
+    // and slope, then permute and accumulate foam. The cascade textures are simulation state that lives across
+    // frames, so they are imported. The graph adds the UAV barriers between the passes.
+    struct CascadeTextures
+    {
+        RGTexture h0, slope, displacement, foam;
+    } cascades[m_oceanCascadesNumber];
+
+    const uint32_t phaseGroups = OCEAN_SUBRES / 16;
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+    {
+        const std::string cascade = " " + std::to_string(i);
+        CascadeTextures& c = cascades[i];
+        c.h0 = rg.Import("H0" + cascade, m_oceanCascades[i].H0Texture);
+        c.slope = rg.Import("Slope" + cascade, m_oceanCascades[i].slopeTexture);
+        c.displacement = rg.Import("Displacement" + cascade, m_oceanCascades[i].displacementTexture);
+        c.foam = rg.Import("Foam" + cascade, m_oceanCascades[i].foamTexture);
+
+        rg.AddPass("Ocean Spectrum" + cascade)
+            .Read(c.h0, RGAccess::NonPixelShaderRead)
+            .Write(c.slope)
+            .Write(c.displacement)
+            .Execute([this, i, c, phaseGroups](RGPassContext& context)
+            {
+                m_oceanPSO->Dispatch(context.GetCommandListPtr(), context.GetTexture(c.h0), context.GetTexture(c.slope),
+                    context.GetTexture(c.displacement), static_cast<float>(m_oceanTime), m_oceanPatchSizes[i],
+                    XMUINT3(phaseGroups, phaseGroups, 1));
+            });
+
+        const std::pair<const char*, RGTexture> ffts[] = { { "Displacement", c.displacement }, { "Slope", c.slope } };
+        for (const auto& fft : ffts)
+        {
+            const RGTexture texture = fft.second;
+            for (uint32_t direction = 0; direction < 2; ++direction)
+            {
+                rg.AddPass(std::string("FFT ") + fft.first + (direction == 0 ? " Horizontal" : " Vertical") + cascade)
+                    .Write(texture)
+                    .Execute([this, texture, direction](RGPassContext& context)
+                    {
+                        m_fftPSO->Dispatch(context.GetCommandListPtr(), context.GetTexture(texture), XMUINT3(OCEAN_SUBRES, 1, 1), direction);
+                    });
+            }
+        }
+
+        rg.AddPass("Ocean Permute" + cascade)
+            .Write(c.slope)
+            .Write(c.displacement)
+            .Write(c.foam)
+            .Execute([this, c, phaseGroups](RGPassContext& context)
+            {
+                m_permutePSO->Dispatch(context.GetCommandListPtr(), context.GetTexture(c.slope), context.GetTexture(c.displacement),
+                    context.GetTexture(c.foam), m_foamParameters, XMUINT3(phaseGroups, phaseGroups, 1));
+            });
+    }
+
+    // The skybox and image based lighting come from SetEnvironment. Imported so the graph shows who reads them.
+    const RGTexture skyboxCubemap = rg.Import("Skybox Cubemap", m_skyboxCubemap);
+    const RGTexture diffuseIrradiance = rg.Import("Diffuse Irradiance", m_diffuseIrradianceMap);
+    const RGTexture specularIrradiance = rg.Import("Specular Irradiance", m_specularIrradianceMap);
+    const RGTexture brdfLUT = rg.Import("BRDF LUT", m_brdfLUT);
+
+    // The scene is rendered at the size of the editor's Scene panel. These only live during the frame: the graph
+    // creates them (again when the panel is resized) and reuses them in the next frames.
+    const RGTexture hdrColor = rg.Create("HDR Color", RGTextureDesc::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, m_viewportWidth, m_viewportHeight));
+    const RGTexture depth = rg.Create("Depth Render Target", RGTextureDesc::Tex2D(DXGI_FORMAT_D32_FLOAT, m_viewportWidth, m_viewportHeight));
+
+    rg.AddPass("Skybox")
+        .Read(skyboxCubemap, RGAccess::PixelShaderRead)
+        .RenderTarget(hdrColor, RGClear::Color(0.4f, 0.6f, 0.9f, 1.0f))
+        .DepthStencil(depth, RGClear::Depth(1.0f))
+        .Execute([this](RGPassContext& context)
+        {
+            SceneVisitor skyboxVisitor(context.GetCommandList(), m_camera, *m_skyboxPSO, false);
+            m_skybox->Accept(skyboxVisitor);
+        });
+
+    // The ocean's vertex shader displaces the plane, its pixel shader shades it: both read the cascades.
+    auto oceanPass = rg.AddPass("Ocean Surface");
+    for (const auto& c : cascades)
+    {
+        oceanPass.Read(c.displacement).Read(c.slope).Read(c.foam);
+    }
+    oceanPass
+        .Read(diffuseIrradiance)
+        .Read(specularIrradiance)
+        .Read(brdfLUT)
+        .RenderTarget(hdrColor)
+        .DepthStencil(depth)
+        .Execute([this](RGPassContext& context)
+        {
+            for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+            {
+                m_displacementPSO->SetOceanTextures(m_oceanCascades[i].displacementTexture, m_oceanCascades[i].slopeTexture,
+                    m_oceanCascades[i].foamTexture, i);
+            }
+            SceneVisitor oceanVisitor(context.GetCommandList(), m_camera, *m_displacementPSO, false);
+            m_oceanPlane->Accept(oceanVisitor);
+        });
+
+    rg.AddPass("Objects")
+        .Read(diffuseIrradiance, RGAccess::PixelShaderRead)
+        .Read(specularIrradiance, RGAccess::PixelShaderRead)
+        .Read(brdfLUT, RGAccess::PixelShaderRead)
+        .RenderTarget(hdrColor)
+        .DepthStencil(depth)
+        .Execute([this](RGPassContext& context)
+        {
+            SceneVisitor visitor(context.GetCommandList(), m_camera, *m_unlitPSO, false);
+            if (m_helmet)
+            {
+                m_helmet->Accept(visitor);
+            }
+
+            // Models dropped into the scene from the editor's Assets panel.
+            for (const auto& scene : m_editor->GetSpawnedScenes())
+            {
+                scene->Accept(visitor);
+            }
+
+            // Visualize the point lights as small spheres.
+            for (const auto& light : m_pointLights)
+            {
+                m_sphere->GetRootNode()->SetLocalTransform(XMMatrixTranslationFromVector(XMLoadFloat4(&light.positionWS)));
+                m_sphere->Accept(visitor);
+            }
+        });
+
+    // HDR -> SDR into the image the editor's Scene panel shows.
+    const RGTexture viewport = rg.Import("Scene Viewport", m_viewportTexture);
+    rg.AddPass("Tonemap")
+        .Read(hdrColor, RGAccess::PixelShaderRead)
+        .RenderTarget(viewport)
+        .Execute([this, hdrColor](RGPassContext& context)
+        {
+            m_sdrPSO->SetHDRTexture(context.GetTexture(hdrColor));
+            m_sdrPSO->Apply(context.GetCommandList());
+        });
+
+    rg.Execute(commandList);
 }
 
 void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget)
@@ -1017,7 +1001,6 @@ void Ocean::UnloadContent()
     }
     m_skyboxTexture.reset();
     m_skyboxCubemap.reset();
-    m_HDRTexture.reset();
     m_skyboxCubemapSRV.reset();
     m_skyboxSignature.reset();
     m_HDRRootSignature.reset();

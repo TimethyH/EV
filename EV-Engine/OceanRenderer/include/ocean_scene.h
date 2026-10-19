@@ -6,6 +6,7 @@
 #include "core/camera.h"
 #include "core/game.h"
 #include "core/window.h"
+#include "DX12/render_graph.h"
 #include "DX12/render_target.h"
 #include <complex>
 
@@ -86,6 +87,8 @@ protected:
 	void OnUpdate(UpdateEventArgs& e) override;
 	void OnRender() override;
 	void OnGUI(const std::shared_ptr<EV::CommandList>& commandList, const EV::RenderTarget& renderTarget);
+	// Declare the frame (ocean simulation, scene, tonemapping) in the render graph and record it.
+	void RecordRenderGraph(const std::shared_ptr<EV::CommandList>& commandList);
 	void DrawMenu();
 	void DrawOceanParameters();
 	void DrawLightParameters();
@@ -129,8 +132,6 @@ private:
 
 	// TODO: add textures
 	std::shared_ptr<EV::Texture> m_defaultTexture;
-
-	EV::RenderTarget m_renderTarget = {};
 
 	std::shared_ptr<EV::RootSignature> m_rootSignature = nullptr;
 
@@ -186,8 +187,6 @@ private:
 	// Microsoft::WRL::ComPtr<ID3D12RootSignature> m_rootSignature = {};
 	// Microsoft::WRL::ComPtr<ID3D12PipelineState> m_pipelineState = {};
 
-	D3D12_VIEWPORT m_viewport = {};
-	D3D12_RECT m_scissorRect = {};
 
 	// float m_fov = 0.0f;
 	// DirectX::XMMATRIX m_model = {};
@@ -203,6 +202,8 @@ private:
 	std::shared_ptr<EV::SwapChain> m_swapChain = nullptr;
 	std::shared_ptr<EV::GUI> m_GUI = nullptr;
 	std::unique_ptr<EV::Editor> m_editor;
+	EV::RenderGraph m_renderGraph;
+	double m_oceanTime = 0.0;
 
 	// The tonemapped scene shown in the editor's Scene panel, sized to that panel.
 	std::shared_ptr<EV::Texture> m_viewportTexture;
@@ -248,7 +249,6 @@ private:
 
 	std::shared_ptr<Texture> m_skyboxTexture; 
 	std::shared_ptr<Texture> m_skyboxCubemap; 
-	std::shared_ptr<Texture> m_HDRTexture; 
 	std::shared_ptr<Texture> m_diffuseIrradianceMap; 
 	std::shared_ptr<Texture> m_specularIrradianceMap; 
 	std::shared_ptr<Texture> m_brdfLUT; 
