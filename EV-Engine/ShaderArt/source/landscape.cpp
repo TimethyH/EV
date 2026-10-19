@@ -104,7 +104,35 @@ void Landscape::OnRender()
 void Landscape::OnGUI(const std::shared_ptr<EV::CommandList>& commandList, const EV::RenderTarget& renderTarget)
 {
     m_GUI->NewFrame();
+    DrawShaderErrors();
     m_GUI->Render(commandList, renderTarget);
+}
+
+void Landscape::DrawShaderErrors()
+{
+    // Shaders are recompiled when their source is saved. Without the editor's Shaders panel, compile errors
+    // are shown in a window until they are fixed.
+    const auto& shaders = Application::Get().GetShaderLibrary().GetShaders();
+    if (std::none_of(shaders.begin(), shaders.end(), [](const auto& shader) { return !shader->GetError().empty(); }))
+    {
+        return;
+    }
+
+    ImGui::SetNextWindowPos(ImVec2(20.0f, 20.0f), ImGuiCond_FirstUseEver);
+    ImGui::SetNextWindowSize(ImVec2(800.0f, 300.0f), ImGuiCond_FirstUseEver);
+    if (ImGui::Begin("Shader Errors"))
+    {
+        for (const auto& shader : shaders)
+        {
+            if (!shader->GetError().empty())
+            {
+                ImGui::TextColored(ImVec4(0.9f, 0.38f, 0.35f, 1.0f), "%s.hlsl", shader->GetName().c_str());
+                ImGui::TextWrapped("%s", shader->GetError().c_str());
+                ImGui::Separator();
+            }
+        }
+    }
+    ImGui::End();
 }
 
 void Landscape::OnKeyPress(KeyEventArgs& e)
