@@ -10,6 +10,7 @@
 #include "core/application.h"
 #include "DX12/command_list.h"
 #include "DX12/gpu_timer.h"
+#include "resources/buffer.h"
 #include "resources/texture.h"
 #include "utility/helpers.h"
 
@@ -17,8 +18,8 @@ using namespace EV;
 
 namespace
 {
-    // Textures the graph created are released when no frame used them for this many frames.
-    constexpr uint64_t g_keepUnusedTexturesFrames = 8;
+    // Textures and buffers the graph created are released when no frame used them for this many frames.
+    constexpr uint64_t g_keepUnusedResourcesFrames = 8;
 
     // Name of the texture RenderGraph::SetCapture copies into, also how the editor finds it.
     const wchar_t* g_captureTextureName = L"Render Graph Capture";
@@ -36,6 +37,10 @@ namespace
         // state even when the pass only tests against it.
         case RGAccess::DepthWrite: return D3D12_RESOURCE_STATE_DEPTH_WRITE;
         case RGAccess::DepthRead: return D3D12_RESOURCE_STATE_DEPTH_WRITE;
+        case RGAccess::VertexBuffer:
+        case RGAccess::ConstantBuffer: return D3D12_RESOURCE_STATE_VERTEX_AND_CONSTANT_BUFFER;
+        case RGAccess::IndexBuffer: return D3D12_RESOURCE_STATE_INDEX_BUFFER;
+        case RGAccess::IndirectArgument: return D3D12_RESOURCE_STATE_INDIRECT_ARGUMENT;
         case RGAccess::CopySource: return D3D12_RESOURCE_STATE_COPY_SOURCE;
         case RGAccess::CopyDest: return D3D12_RESOURCE_STATE_COPY_DEST;
         }
@@ -86,6 +91,10 @@ const char* EV::GetAccessName(RGAccess access)
     case RGAccess::RenderTarget: return "Render target";
     case RGAccess::DepthWrite: return "Depth write";
     case RGAccess::DepthRead: return "Depth test";
+    case RGAccess::VertexBuffer: return "Vertex buffer";
+    case RGAccess::IndexBuffer: return "Index buffer";
+    case RGAccess::ConstantBuffer: return "Constant buffer";
+    case RGAccess::IndirectArgument: return "Indirect argument";
     case RGAccess::CopySource: return "Copy source";
     case RGAccess::CopyDest: return "Copy destination";
     }
@@ -98,6 +107,17 @@ bool EV::IsWriteAccess(RGAccess access)
         access == RGAccess::CopyDest;
 }
 
+bool EV::IsTextureAccess(RGAccess access)
+{
+    return access != RGAccess::VertexBuffer && access != RGAccess::IndexBuffer && access != RGAccess::ConstantBuffer &&
+        access != RGAccess::IndirectArgument;
+}
+
+bool EV::IsBufferAccess(RGAccess access)
+{
+    return access != RGAccess::RenderTarget && access != RGAccess::DepthWrite && access != RGAccess::DepthRead;
+}
+
 // ------------------------------------------------------------------------------------------------
 // RGPassContext
 
@@ -106,28 +126,55 @@ std::shared_ptr<Texture> RGPassContext::GetTexture(RGTexture texture) const
     return m_graph.GetResource(texture).texture;
 }
 
+std::shared_ptr<Buffer> RGPassContext::GetBuffer(RGBuffer buffer) const
+{
+    return m_graph.GetResource(buffer).buffer;
+}
+
 // ------------------------------------------------------------------------------------------------
 // RGPassBuilder
 
+namespace
+{
+    void CheckReadOrWrite(const std::string& passName, RGAccess access, bool write)
+    {
+        if (IsWriteAccess(access) != write)
+        {
+            throw std::logic_error("Render graph pass '" + passName + "': " + GetAccessName(access) + " is a " +
+                (write ? "read, use Read" : "write, use Write"));
+        }
+    }
+}
+
 RGPassBuilder& RGPassBuilder::Read(RGTexture texture, RGAccess access)
 {
-    if (IsWriteAccess(access))
-    {
-        throw std::logic_error("Render graph pass '" + m_graph.m_passes[m_pass].name + "': " + GetAccessName(access) +
-            " is a write, use Write");
-    }
-    m_graph.AddAccess(m_pass, texture, access);
+    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, false);
+    m_graph.GetResource(texture); // Validates the handle.
+    m_graph.AddAccess(m_pass, texture.index, access);
     return *this;
 }
 
 RGPassBuilder& RGPassBuilder::Write(RGTexture texture, RGAccess access)
 {
-    if (!IsWriteAccess(access))
-    {
-        throw std::logic_error("Render graph pass '" + m_graph.m_passes[m_pass].name + "': " + GetAccessName(access) +
-            " is a read, use Read");
-    }
-    m_graph.AddAccess(m_pass, texture, access);
+    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, true);
+    m_graph.GetResource(texture);
+    m_graph.AddAccess(m_pass, texture.index, access);
+    return *this;
+}
+
+RGPassBuilder& RGPassBuilder::Read(RGBuffer buffer, RGAccess access)
+{
+    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, false);
+    m_graph.GetResource(buffer);
+    m_graph.AddAccess(m_pass, buffer.index, access);
+    return *this;
+}
+
+RGPassBuilder& RGPassBuilder::Write(RGBuffer buffer, RGAccess access)
+{
+    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, true);
+    m_graph.GetResource(buffer);
+    m_graph.AddAccess(m_pass, buffer.index, access);
     return *this;
 }
 
@@ -138,10 +185,10 @@ RGPassBuilder& RGPassBuilder::RenderTarget(RGTexture texture, RGClear clear, uin
     {
         throw std::logic_error("Render graph pass '" + pass.name + "': render target slot " + std::to_string(slot) + " is out of range");
     }
-    m_graph.AddAccess(m_pass, texture, RGAccess::RenderTarget);
+    auto& resource = m_graph.GetResource(texture);
+    m_graph.AddAccess(m_pass, texture.index, RGAccess::RenderTarget);
     pass.colorAttachments[slot] = { texture, clear };
 
-    auto& resource = m_graph.GetResource(texture);
     if (clear.enabled && !resource.hasClearValue)
     {
         resource.hasClearValue = true;
@@ -157,10 +204,10 @@ RGPassBuilder& RGPassBuilder::DepthStencil(RGTexture texture, RGClear clear, boo
     {
         throw std::logic_error("Render graph pass '" + pass.name + "': a depth buffer that is cleared is written");
     }
-    m_graph.AddAccess(m_pass, texture, write ? RGAccess::DepthWrite : RGAccess::DepthRead);
+    auto& resource = m_graph.GetResource(texture);
+    m_graph.AddAccess(m_pass, texture.index, write ? RGAccess::DepthWrite : RGAccess::DepthRead);
     pass.depthAttachment = { texture, clear };
 
-    auto& resource = m_graph.GetResource(texture);
     if (clear.enabled && !resource.hasClearValue)
     {
         resource.hasClearValue = true;
@@ -186,13 +233,52 @@ void RGPassBuilder::Execute(RGPassCallback callback)
 RenderGraph::RenderGraph() = default;
 RenderGraph::~RenderGraph() = default;
 
+std::shared_ptr<EV::Resource> RenderGraph::Resource::GetGpuResource() const
+{
+    if (isBuffer)
+    {
+        return buffer;
+    }
+    return texture;
+}
+
+uint32_t RenderGraph::AddResource(Resource resource)
+{
+    // Importing the same texture or buffer twice gives the same handle, so its uses are ordered as one resource.
+    if (resource.imported)
+    {
+        const auto object = resource.GetGpuResource();
+        for (uint32_t i = 0; i < m_resources.size(); ++i)
+        {
+            if (m_resources[i].imported && m_resources[i].GetGpuResource() == object)
+            {
+                return i;
+            }
+        }
+    }
+    m_resources.push_back(std::move(resource));
+    return static_cast<uint32_t>(m_resources.size() - 1);
+}
+
 RGTexture RenderGraph::Create(const std::string& name, const RGTextureDesc& desc)
 {
     Resource resource;
     resource.name = name;
     resource.desc = desc;
-    m_resources.push_back(std::move(resource));
-    return { static_cast<uint32_t>(m_resources.size() - 1) };
+    return { AddResource(std::move(resource)) };
+}
+
+RGBuffer RenderGraph::Create(const std::string& name, const RGBufferDesc& desc)
+{
+    if (desc.size == 0)
+    {
+        throw std::logic_error("Render graph: buffer '" + name + "' has size 0");
+    }
+    Resource resource;
+    resource.name = name;
+    resource.isBuffer = true;
+    resource.bufferDesc = desc;
+    return { AddResource(std::move(resource)) };
 }
 
 RGTexture RenderGraph::Import(const std::string& name, const std::shared_ptr<Texture>& texture)
@@ -201,22 +287,28 @@ RGTexture RenderGraph::Import(const std::string& name, const std::shared_ptr<Tex
     {
         throw std::logic_error("Render graph: imported texture '" + name + "' is null");
     }
-    // Importing the same texture twice gives the same handle, so its uses are ordered as one resource.
-    for (uint32_t i = 0; i < m_resources.size(); ++i)
-    {
-        if (m_resources[i].imported && m_resources[i].texture == texture)
-        {
-            return { i };
-        }
-    }
-
     Resource resource;
     resource.name = name;
     resource.desc = GetTextureDesc(*texture);
     resource.imported = true;
     resource.texture = texture;
-    m_resources.push_back(std::move(resource));
-    return { static_cast<uint32_t>(m_resources.size() - 1) };
+    return { AddResource(std::move(resource)) };
+}
+
+RGBuffer RenderGraph::Import(const std::string& name, const std::shared_ptr<Buffer>& buffer, uint32_t stride)
+{
+    if (!buffer)
+    {
+        throw std::logic_error("Render graph: imported buffer '" + name + "' is null");
+    }
+    Resource resource;
+    resource.name = name;
+    resource.isBuffer = true;
+    resource.bufferDesc.size = buffer->GetD3D12ResourceDesc().Width;
+    resource.bufferDesc.stride = stride;
+    resource.imported = true;
+    resource.buffer = buffer;
+    return { AddResource(std::move(resource)) };
 }
 
 RGPassBuilder RenderGraph::AddPass(const std::string& name)
@@ -232,13 +324,28 @@ const RGTextureDesc& RenderGraph::GetDesc(RGTexture texture) const
     return GetResource(texture).desc;
 }
 
+const RGBufferDesc& RenderGraph::GetDesc(RGBuffer buffer) const
+{
+    return GetResource(buffer).bufferDesc;
+}
+
+RenderGraph::Resource& RenderGraph::GetResource(uint32_t index)
+{
+    if (index >= m_resources.size())
+    {
+        throw std::logic_error("Render graph: invalid handle (handles are only valid for the frame they were made in)");
+    }
+    return m_resources[index];
+}
+
 RenderGraph::Resource& RenderGraph::GetResource(RGTexture texture)
 {
-    if (texture.index >= m_resources.size())
+    auto& resource = GetResource(texture.index);
+    if (resource.isBuffer)
     {
-        throw std::logic_error("Render graph: invalid texture handle (handles are only valid for the frame they were made in)");
+        throw std::logic_error("Render graph: '" + resource.name + "' is a buffer, not a texture");
     }
-    return m_resources[texture.index];
+    return resource;
 }
 
 const RenderGraph::Resource& RenderGraph::GetResource(RGTexture texture) const
@@ -246,22 +353,43 @@ const RenderGraph::Resource& RenderGraph::GetResource(RGTexture texture) const
     return const_cast<RenderGraph*>(this)->GetResource(texture);
 }
 
-void RenderGraph::AddAccess(uint32_t passIndex, RGTexture texture, RGAccess access)
+RenderGraph::Resource& RenderGraph::GetResource(RGBuffer buffer)
+{
+    auto& resource = GetResource(buffer.index);
+    if (!resource.isBuffer)
+    {
+        throw std::logic_error("Render graph: '" + resource.name + "' is a texture, not a buffer");
+    }
+    return resource;
+}
+
+const RenderGraph::Resource& RenderGraph::GetResource(RGBuffer buffer) const
+{
+    return const_cast<RenderGraph*>(this)->GetResource(buffer);
+}
+
+void RenderGraph::AddAccess(uint32_t passIndex, uint32_t resourceIndex, RGAccess access)
 {
     auto& pass = m_passes[passIndex];
-    auto& resource = GetResource(texture);
+    auto& resource = GetResource(resourceIndex);
+
+    if (resource.isBuffer ? !IsBufferAccess(access) : !IsTextureAccess(access))
+    {
+        throw std::logic_error("Render graph pass '" + pass.name + "': " + GetAccessName(access) + " cannot be used for " +
+            (resource.isBuffer ? "buffer '" : "texture '") + resource.name + "'");
+    }
 
     for (const auto& existing : pass.accesses)
     {
-        if (existing.resource == texture.index && (IsWriteAccess(existing.access) || IsWriteAccess(access)))
+        if (existing.resource == resourceIndex && (IsWriteAccess(existing.access) || IsWriteAccess(access)))
         {
             throw std::logic_error("Render graph pass '" + pass.name + "' uses '" + resource.name + "' as " +
                 GetAccessName(existing.access) + " and as " + GetAccessName(access) +
-                ". A pass can read a texture several times, but not read and write it (use UnorderedAccess for both).");
+                ". A pass can read a resource several times, but not read and write it (use UnorderedAccess for both).");
         }
     }
 
-    pass.accesses.push_back({ texture.index, access });
+    pass.accesses.push_back({ resourceIndex, access });
     resource.flags |= GetRequiredFlags(access);
 }
 
@@ -307,7 +435,7 @@ void RenderGraph::CullPasses()
     }
 }
 
-void RenderGraph::CreateTransientTextures()
+void RenderGraph::CreateTransientResources()
 {
     auto& app = Application::Get();
     std::vector<bool> used(m_resources.size(), false);
@@ -330,13 +458,18 @@ void RenderGraph::CreateTransientTextures()
             continue;
         }
 
-        // Reuse a texture from an earlier frame with the same description, flags and clear value.
-        PooledTexture* pooled = nullptr;
+        // Reuse a texture or buffer from an earlier frame with the same description, flags and clear value.
+        PooledResource* pooled = nullptr;
         for (auto& candidate : m_pool)
         {
-            if (candidate.lastUsedFrame != m_frame && candidate.desc == resource.desc && candidate.flags == resource.flags &&
-                candidate.hasClearValue == resource.hasClearValue &&
-                (!resource.hasClearValue || SameClearValue(candidate.clearValue, resource.clearValue)))
+            if (candidate.lastUsedFrame == m_frame || candidate.isBuffer != resource.isBuffer || candidate.flags != resource.flags)
+            {
+                continue;
+            }
+            const bool sameDesc = resource.isBuffer ? candidate.bufferSize == resource.bufferDesc.size :
+                candidate.desc == resource.desc && candidate.hasClearValue == resource.hasClearValue &&
+                (!resource.hasClearValue || SameClearValue(candidate.clearValue, resource.clearValue));
+            if (sameDesc)
             {
                 pooled = &candidate;
                 break;
@@ -345,54 +478,68 @@ void RenderGraph::CreateTransientTextures()
 
         if (!pooled)
         {
-            auto desc = CD3DX12_RESOURCE_DESC::Tex2D(resource.desc.format, resource.desc.width, resource.desc.height,
-                resource.desc.depthOrArraySize, resource.desc.mipLevels, 1, 0, resource.flags);
+            PooledResource created;
+            created.isBuffer = resource.isBuffer;
+            created.flags = resource.flags;
 
-            // Attachments get an optimized clear value: the first clear of the frame, or black / far depth.
-            D3D12_CLEAR_VALUE clearValue = {};
-            const D3D12_CLEAR_VALUE* clearValuePointer = nullptr;
-            if (resource.flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+            if (resource.isBuffer)
             {
-                clearValue.Format = resource.desc.format;
-                if (resource.flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
-                {
-                    clearValue.DepthStencil = { resource.hasClearValue ? resource.clearValue.depth : 1.0f, 0 };
-                }
-                else if (resource.hasClearValue)
-                {
-                    memcpy(clearValue.Color, resource.clearValue.color, sizeof(clearValue.Color));
-                }
-                clearValuePointer = &clearValue;
+                const auto desc = CD3DX12_RESOURCE_DESC::Buffer(resource.bufferDesc.size, resource.flags);
+                created.bufferSize = resource.bufferDesc.size;
+                created.buffer = app.CreateBuffer(desc);
+                created.size = app.GetDevice()->GetResourceAllocationInfo(0, 1, &desc).SizeInBytes;
             }
+            else
+            {
+                const auto desc = CD3DX12_RESOURCE_DESC::Tex2D(resource.desc.format, resource.desc.width, resource.desc.height,
+                    resource.desc.depthOrArraySize, resource.desc.mipLevels, 1, 0, resource.flags);
 
-            PooledTexture texture;
-            texture.desc = resource.desc;
-            texture.flags = resource.flags;
-            texture.hasClearValue = resource.hasClearValue;
-            texture.clearValue = resource.clearValue;
-            texture.texture = app.CreateTexture(desc, clearValuePointer);
-            texture.size = app.GetDevice()->GetResourceAllocationInfo(0, 1, &desc).SizeInBytes;
-            m_pool.push_back(std::move(texture));
+                // Attachments get an optimized clear value: the first clear of the frame, or black / far depth.
+                D3D12_CLEAR_VALUE clearValue = {};
+                const D3D12_CLEAR_VALUE* clearValuePointer = nullptr;
+                if (resource.flags & (D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET | D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL))
+                {
+                    clearValue.Format = resource.desc.format;
+                    if (resource.flags & D3D12_RESOURCE_FLAG_ALLOW_DEPTH_STENCIL)
+                    {
+                        clearValue.DepthStencil = { resource.hasClearValue ? resource.clearValue.depth : 1.0f, 0 };
+                    }
+                    else if (resource.hasClearValue)
+                    {
+                        memcpy(clearValue.Color, resource.clearValue.color, sizeof(clearValue.Color));
+                    }
+                    clearValuePointer = &clearValue;
+                }
+
+                created.desc = resource.desc;
+                created.hasClearValue = resource.hasClearValue;
+                created.clearValue = resource.clearValue;
+                created.texture = app.CreateTexture(desc, clearValuePointer);
+                created.size = app.GetDevice()->GetResourceAllocationInfo(0, 1, &desc).SizeInBytes;
+            }
+            m_pool.push_back(std::move(created));
             pooled = &m_pool.back();
         }
 
         pooled->lastUsedFrame = m_frame;
         resource.texture = pooled->texture;
+        resource.buffer = pooled->buffer;
 
-        // Pooled textures carry the name of the resource they are used for (the editor shows it).
+        // Pooled resources carry the name of what they are used for (PIX, the editor and DRED show it).
         const std::wstring name = ConvertString(resource.name);
-        if (resource.texture->GetName() != name)
+        auto object = resource.GetGpuResource();
+        if (object->GetName() != name)
         {
-            resource.texture->SetName(name);
+            object->SetName(name);
         }
     }
 }
 
-void RenderGraph::ReleaseUnusedTextures()
+void RenderGraph::ReleaseUnusedResources()
 {
-    // Command lists still in flight keep their own references to the textures.
+    // Command lists still in flight keep their own references to the textures and buffers.
     m_pool.erase(std::remove_if(m_pool.begin(), m_pool.end(),
-        [&](const PooledTexture& texture) { return texture.lastUsedFrame + g_keepUnusedTexturesFrames < m_frame; }),
+        [&](const PooledResource& pooled) { return pooled.lastUsedFrame + g_keepUnusedResourcesFrames < m_frame; }),
         m_pool.end());
 }
 
@@ -414,7 +561,8 @@ void RenderGraph::Execute(const std::shared_ptr<CommandList>& commandList)
     } resetFrame{ *this };
 
     CullPasses();
-    CreateTransientTextures();
+    CreateTransientResources();
+    ReadCapturedBuffer();
 
     if (m_profilingEnabled)
     {
@@ -441,7 +589,7 @@ void RenderGraph::Execute(const std::shared_ptr<CommandList>& commandList)
     }
 
     UpdateDebugInfo();
-    ReleaseUnusedTextures();
+    ReleaseUnusedResources();
 }
 
 void RenderGraph::ExecutePass(Pass& pass, const std::shared_ptr<CommandList>& commandList, std::vector<bool>& lastUseWasUAV)
@@ -453,7 +601,7 @@ void RenderGraph::ExecutePass(Pass& pass, const std::shared_ptr<CommandList>& co
     const std::wstring eventName = ConvertString(pass.name);
     d3d12CommandList->BeginEvent(0, eventName.c_str(), static_cast<UINT>((eventName.size() + 1) * sizeof(wchar_t)));
 
-    // Move every texture to the state this pass needs. Several reads of one texture combine their states.
+    // Move every resource to the state this pass needs. Several reads of one resource combine their states.
     std::vector<D3D12_RESOURCE_STATES> states(m_resources.size(), D3D12_RESOURCE_STATES(-1));
     for (const auto& access : pass.accesses)
     {
@@ -466,14 +614,14 @@ void RenderGraph::ExecutePass(Pass& pass, const std::shared_ptr<CommandList>& co
         {
             continue;
         }
-        const auto& texture = m_resources[i].texture;
+        const auto object = m_resources[i].GetGpuResource();
         // UAV to UAV is not a transition, but the previous pass's writes have to finish first.
         const bool uav = states[i] == D3D12_RESOURCE_STATE_UNORDERED_ACCESS;
         if (uav && lastUseWasUAV[i])
         {
-            cl.UAVBarrier(texture);
+            cl.UAVBarrier(object);
         }
-        cl.TransitionBarrier(texture, states[i]);
+        cl.TransitionBarrier(object, states[i]);
         lastUseWasUAV[i] = uav;
     }
     cl.FlushResourceBarriers();
@@ -540,7 +688,7 @@ void RenderGraph::ExecutePass(Pass& pass, const std::shared_ptr<CommandList>& co
     if (!m_capturePass.empty() && pass.name == m_capturePass)
     {
         CapturePass(pass, cl);
-        // The capture copy moved the texture to COPY_SOURCE; the next pass that uses it transitions it again.
+        // The capture copy moved the resource to COPY_SOURCE; the next pass that uses it transitions it again.
         for (const auto& access : pass.accesses)
         {
             lastUseWasUAV[access.resource] = false;
@@ -555,8 +703,13 @@ void RenderGraph::ExecutePass(Pass& pass, const std::shared_ptr<CommandList>& co
 
 void RenderGraph::SetCapture(const std::string& passName, const std::string& resourceName)
 {
-    m_capturePass = passName;
-    m_captureResource = resourceName;
+    if (passName != m_capturePass || resourceName != m_captureResource)
+    {
+        // Results of the previous capture must not be shown as this one.
+        ClearCapture();
+        m_capturePass = passName;
+        m_captureResource = resourceName;
+    }
 }
 
 void RenderGraph::ClearCapture()
@@ -564,7 +717,14 @@ void RenderGraph::ClearCapture()
     m_capturePass.clear();
     m_captureResource.clear();
     m_capturedTexture.reset();
+    m_capturedBufferData.clear();
+    m_capturedBufferDesc = {};
+    for (auto& readback : m_bufferReadbacks)
+    {
+        readback.size = 0;
+    }
     m_captureFound = false;
+    m_captureIsBuffer = false;
 }
 
 void RenderGraph::CapturePass(const Pass& pass, CommandList& commandList)
@@ -578,8 +738,14 @@ void RenderGraph::CapturePass(const Pass& pass, CommandList& commandList)
             break;
         }
     }
-    if (!source || !source->texture || !source->texture->GetD3D12Resource())
+    if (!source || !source->GetGpuResource() || !source->GetGpuResource()->GetD3D12Resource())
     {
+        return;
+    }
+    m_captureIsBuffer = source->isBuffer;
+    if (source->isBuffer)
+    {
+        CaptureBuffer(*source, commandList);
         return;
     }
 
@@ -593,6 +759,54 @@ void RenderGraph::CapturePass(const Pass& pass, CommandList& commandList)
     }
     commandList.CopyResource(m_capturedTexture, source->texture);
     m_captureFound = true;
+}
+
+void RenderGraph::CaptureBuffer(const Resource& source, CommandList& commandList)
+{
+    // Each frame in flight copies into its own readback buffer; ReadCapturedBuffer reads it ReadbackFrames
+    // frames later, when the GPU is done with it.
+    BufferReadback& readback = m_bufferReadbacks[m_frame % ReadbackFrames];
+    const uint64_t size = std::min<uint64_t>(source.bufferDesc.size, MaxBufferCaptureSize);
+    if (!readback.buffer || readback.capacity < size)
+    {
+        CD3DX12_HEAP_PROPERTIES heapProperties(D3D12_HEAP_TYPE_READBACK);
+        const auto desc = CD3DX12_RESOURCE_DESC::Buffer(size);
+        ThrowIfFailed(Application::Get().GetDevice()->CreateCommittedResource(&heapProperties, D3D12_HEAP_FLAG_NONE, &desc,
+            D3D12_RESOURCE_STATE_COPY_DEST, nullptr, IID_PPV_ARGS(&readback.buffer)));
+        readback.buffer->SetName(L"Render Graph Buffer Capture");
+        readback.capacity = size;
+    }
+
+    commandList.TransitionBarrier(source.buffer, D3D12_RESOURCE_STATE_COPY_SOURCE, D3D12_RESOURCE_BARRIER_ALL_SUBRESOURCES, true);
+    commandList.GetCommandList()->CopyBufferRegion(readback.buffer.Get(), 0, source.buffer->GetD3D12Resource().Get(), 0, size);
+    commandList.TrackResource(readback.buffer);
+    commandList.TrackResource(source.buffer->GetD3D12Resource());
+
+    readback.size = size;
+    readback.desc = source.bufferDesc;
+    m_captureFound = true;
+}
+
+void RenderGraph::ReadCapturedBuffer()
+{
+    // This slot was filled ReadbackFrames frames ago.
+    BufferReadback& readback = m_bufferReadbacks[m_frame % ReadbackFrames];
+    if (readback.size == 0)
+    {
+        return;
+    }
+
+    const D3D12_RANGE readRange = { 0, static_cast<SIZE_T>(readback.size) };
+    void* data = nullptr;
+    if (SUCCEEDED(readback.buffer->Map(0, &readRange, &data)))
+    {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        m_capturedBufferData.assign(bytes, bytes + readback.size);
+        m_capturedBufferDesc = readback.desc;
+        const D3D12_RANGE writtenRange = { 0, 0 };
+        readback.buffer->Unmap(0, &writtenRange);
+    }
+    readback.size = 0;
 }
 
 void RenderGraph::UpdateDebugInfo()
@@ -640,7 +854,9 @@ void RenderGraph::UpdateDebugInfo()
     {
         RenderGraphDebugInfo::Resource resourceInfo;
         resourceInfo.name = resource.name;
+        resourceInfo.isBuffer = resource.isBuffer;
         resourceInfo.desc = resource.desc;
+        resourceInfo.bufferDesc = resource.bufferDesc;
         resourceInfo.imported = resource.imported;
         resourceInfo.texture = resource.texture;
         info.resources.push_back(std::move(resourceInfo));
@@ -662,11 +878,12 @@ void RenderGraph::UpdateDebugInfo()
         }
     }
 
-    for (const auto& texture : m_pool)
+    for (const auto& pooled : m_pool)
     {
-        info.transientMemory += texture.size;
+        info.transientMemory += pooled.size;
     }
     info.captureFound = m_captureFound;
+    info.captureIsBuffer = m_captureIsBuffer;
 
     m_debugInfo = std::move(info);
 }
