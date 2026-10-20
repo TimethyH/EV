@@ -7,6 +7,8 @@
 
 #include "DX12/render_graph.h"
 #include "resources/texture.h"
+
+#include <cstring>
 #include "UI/format_utils.h"
 
 #include "editor_internal.h"
@@ -32,6 +34,25 @@ namespace
         return uav ? "Compute" : "Other";
     }
 
+    std::string DescribeTexture(const RGTextureDesc& desc);
+
+    std::string DescribeResource(const RenderGraphDebugInfo::Resource& resource)
+    {
+        if (!resource.isBuffer)
+        {
+            return DescribeTexture(resource.desc);
+        }
+        const auto& desc = resource.bufferDesc;
+        if (desc.stride > 0)
+        {
+            char text[96];
+            snprintf(text, sizeof(text), "%s, %llu x %u B", FormatBytes(desc.size).c_str(),
+                static_cast<unsigned long long>(desc.size / desc.stride), desc.stride);
+            return text;
+        }
+        return FormatBytes(desc.size) + ", raw";
+    }
+
     std::string DescribeTexture(const RGTextureDesc& desc)
     {
         char text[96];
@@ -47,11 +68,13 @@ namespace
     }
 }
 
-void Editor::CaptureRenderGraphTexture(const std::string& pass, const std::string& resource)
+void Editor::CaptureRenderGraphResource(const std::string& pass, const std::string& resource)
 {
-    // The copy is made while the next frame executes; the Texture Viewer opens it once it exists.
+    // The copy is made while the next frame executes. A texture opens in the Texture Viewer once it exists,
+    // a buffer in the Buffer tab.
     m_renderGraph->SetCapture(pass, resource);
     m_inspectRenderGraphCapture = true;
+    m_selectBufferCaptureTab = true;
 }
 
 void Editor::DrawRenderGraph()
@@ -68,11 +91,12 @@ void Editor::DrawRenderGraph()
 
     const RenderGraphDebugInfo& info = m_renderGraph->GetDebugInfo();
 
-    if (m_inspectRenderGraphCapture && info.captureFound && m_renderGraph->GetCapturedTexture())
+    if (m_inspectRenderGraphCapture && info.captureFound && !info.captureIsBuffer && m_renderGraph->GetCapturedTexture())
     {
         InspectTexture(m_renderGraph->GetCapturedTexture());
         m_inspectRenderGraphCapture = false;
     }
+    const bool bufferCapture = !m_renderGraph->GetCapturePass().empty() && info.captureIsBuffer;
 
     // Summary
     const auto culledCount = std::count_if(info.passes.begin(), info.passes.end(), [](const auto& pass) { return pass.culled; });
@@ -82,7 +106,7 @@ void Editor::DrawRenderGraph()
         m_renderGraph->SetProfilingEnabled(profiling);
     }
     ImGui::SameLine();
-    ImGui::TextColored(g_colorTextDim, "%zu passes (%zu skipped), %zu textures, %s transient",
+    ImGui::TextColored(g_colorTextDim, "%zu passes (%zu skipped), %zu resources, %s transient",
         info.passes.size(), static_cast<size_t>(culledCount), info.resources.size(), FormatBytes(info.transientMemory).c_str());
     if (profiling)
     {
@@ -97,9 +121,16 @@ void Editor::DrawRenderGraph()
             m_renderGraph->GetCaptureResource().c_str(), m_renderGraph->GetCapturePass().c_str(),
             info.captureFound ? "" : " (that pass did not use it this frame)");
         ImGui::SameLine();
-        if (ImGui::SmallButton("View") && m_renderGraph->GetCapturedTexture())
+        if (ImGui::SmallButton("View"))
         {
-            InspectTexture(m_renderGraph->GetCapturedTexture());
+            if (bufferCapture)
+            {
+                m_selectBufferCaptureTab = true;
+            }
+            else if (m_renderGraph->GetCapturedTexture())
+            {
+                InspectTexture(m_renderGraph->GetCapturedTexture());
+            }
         }
         ImGui::SameLine();
         if (ImGui::SmallButton("Stop"))
@@ -110,7 +141,7 @@ void Editor::DrawRenderGraph()
     }
     else
     {
-        ImGui::TextColored(g_colorTextDim, "Click a cell in the Timeline (or Capture in a pass) to see a texture as it was after that pass");
+        ImGui::TextColored(g_colorTextDim, "Click a cell in the Timeline (or Capture in a pass) to see a texture or buffer as it was after that pass");
     }
 
     if (ImGui::BeginTabBar("##rendergraphtabs"))
@@ -129,6 +160,16 @@ void Editor::DrawRenderGraph()
         {
             DrawRenderGraphResources(info);
             ImGui::EndTabItem();
+        }
+        if (bufferCapture)
+        {
+            const ImGuiTabItemFlags flags = m_selectBufferCaptureTab ? ImGuiTabItemFlags_SetSelected : ImGuiTabItemFlags_None;
+            if (ImGui::BeginTabItem("Buffer", nullptr, flags))
+            {
+                DrawRenderGraphBufferCapture();
+                ImGui::EndTabItem();
+            }
+            m_selectBufferCaptureTab = false;
         }
         ImGui::EndTabBar();
     }
@@ -235,14 +276,14 @@ void Editor::DrawRenderGraphPasses(const RenderGraphDebugInfo& info)
         ImGui::SameLine();
         ImGui::Text("%s", resource.name.c_str());
         ImGui::SameLine();
-        ImGui::TextColored(g_colorTextDim, "%s, %s%s", GetAccessName(access.access), DescribeTexture(resource.desc).c_str(),
+        ImGui::TextColored(g_colorTextDim, "%s, %s%s", GetAccessName(access.access), DescribeResource(resource).c_str(),
             resource.imported ? ", imported" : "");
         if (!pass.culled)
         {
             ImGui::SameLine();
             if (ImGui::SmallButton("Capture"))
             {
-                CaptureRenderGraphTexture(pass.name, resource.name);
+                CaptureRenderGraphResource(pass.name, resource.name);
             }
             if (ImGui::IsItemHovered())
             {
@@ -374,7 +415,8 @@ void Editor::DrawRenderGraphTimeline(const RenderGraphDebugInfo& info)
         }
         if (access)
         {
-            ImGui::Text("%s: %s", info.resources[hoveredResource].name.c_str(), GetAccessName(access->access));
+            ImGui::Text("%s (%s): %s", info.resources[hoveredResource].name.c_str(),
+                info.resources[hoveredResource].isBuffer ? "buffer" : "texture", GetAccessName(access->access));
             if (!pass.culled)
             {
                 ImGui::TextColored(g_colorTextDim, "Click to see it as it is after this pass");
@@ -384,7 +426,7 @@ void Editor::DrawRenderGraphTimeline(const RenderGraphDebugInfo& info)
 
         if (clicked && access && !pass.culled)
         {
-            CaptureRenderGraphTexture(pass.name, info.resources[hoveredResource].name);
+            CaptureRenderGraphResource(pass.name, info.resources[hoveredResource].name);
         }
     }
 
@@ -400,7 +442,7 @@ void Editor::DrawRenderGraphResources(const RenderGraphDebugInfo& info)
         return;
     }
     ImGui::TableSetupScrollFreeze(0, 1);
-    ImGui::TableSetupColumn("Texture", ImGuiTableColumnFlags_WidthStretch, 2.5f);
+    ImGui::TableSetupColumn("Resource", ImGuiTableColumnFlags_WidthStretch, 2.5f);
     ImGui::TableSetupColumn("Size / format", ImGuiTableColumnFlags_WidthStretch, 2.5f);
     ImGui::TableSetupColumn("Kind", ImGuiTableColumnFlags_WidthStretch, 0.8f);
     ImGui::TableSetupColumn("Used by passes", ImGuiTableColumnFlags_WidthStretch, 1.0f);
@@ -416,9 +458,10 @@ void Editor::DrawRenderGraphResources(const RenderGraphDebugInfo& info)
         ImGui::TableSetColumnIndex(0);
         ImGui::TextUnformatted(resource.name.c_str());
         ImGui::TableSetColumnIndex(1);
-        ImGui::TextUnformatted(DescribeTexture(resource.desc).c_str());
+        ImGui::TextUnformatted(DescribeResource(resource).c_str());
         ImGui::TableSetColumnIndex(2);
-        ImGui::TextColored(resource.imported ? g_colorTextDim : g_colorAccent, "%s", resource.imported ? "Imported" : "Transient");
+        ImGui::TextColored(resource.imported ? g_colorTextDim : g_colorAccent, "%s %s", resource.imported ? "Imported" : "Transient",
+            resource.isBuffer ? "buffer" : "texture");
         ImGui::TableSetColumnIndex(3);
         if (resource.firstPass >= 0)
         {
@@ -429,13 +472,114 @@ void Editor::DrawRenderGraphResources(const RenderGraphDebugInfo& info)
             ImGui::TextColored(g_colorTextDim, "unused");
         }
         ImGui::TableSetColumnIndex(4);
-        const auto texture = resource.texture.lock();
-        if (texture && ImGui::SmallButton("View"))
+        if (resource.isBuffer)
+        {
+            // Buffers are read back: capture them after the last pass that uses them.
+            if (resource.lastPass >= 0 && ImGui::SmallButton("View"))
+            {
+                CaptureRenderGraphResource(info.passes[resource.lastPass].name, resource.name);
+            }
+        }
+        else if (const auto texture = resource.texture.lock(); texture && ImGui::SmallButton("View"))
         {
             // The texture as it is at the end of the frame.
             InspectTexture(texture);
         }
         ImGui::PopID();
+    }
+    ImGui::EndTable();
+}
+
+void Editor::DrawRenderGraphBufferCapture()
+{
+    const auto& data = m_renderGraph->GetCapturedBufferData();
+    const auto& desc = m_renderGraph->GetCapturedBufferDesc();
+    if (data.empty())
+    {
+        ImGui::TextColored(g_colorTextDim, "Waiting for the GPU: buffer data arrives a few frames after it is copied");
+        return;
+    }
+
+    static const char* formats[] = { "Float", "Int", "Uint", "Hex" };
+    ImGui::SetNextItemWidth(100.0f);
+    ImGui::Combo("View as", &m_bufferViewFormat, formats, IM_ARRAYSIZE(formats));
+    ImGui::SameLine();
+
+    // One element per row for structured buffers (when the stride is a whole number of 32 bit values).
+    const int strideColumns = desc.stride > 0 && desc.stride % 4 == 0 ? static_cast<int>(desc.stride / 4) : 4;
+    int columns = m_bufferViewColumns > 0 ? m_bufferViewColumns : strideColumns;
+    ImGui::SetNextItemWidth(100.0f);
+    if (ImGui::InputInt("Values per row", &columns))
+    {
+        m_bufferViewColumns = std::clamp(columns, 1, 64);
+    }
+    columns = std::clamp(columns, 1, 64);
+    ImGui::SameLine();
+    ImGui::TextColored(g_colorTextDim, "%s of %s%s", FormatBytes(data.size()).c_str(), FormatBytes(desc.size).c_str(),
+        desc.size > data.size() ? " (shows the start)" : "");
+
+    const size_t valueCount = data.size() / 4;
+    const int rowCount = static_cast<int>((valueCount + columns - 1) / columns);
+
+    const ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY |
+        ImGuiTableFlags_ScrollX | ImGuiTableFlags_SizingFixedFit;
+    if (!ImGui::BeginTable("##buffer", columns + 1, tableFlags))
+    {
+        return;
+    }
+    ImGui::TableSetupScrollFreeze(1, 1);
+    ImGui::TableSetupColumn(desc.stride > 0 && desc.stride % 4 == 0 && columns == strideColumns ? "Element" : "Offset");
+    for (int c = 0; c < columns; ++c)
+    {
+        char label[16];
+        snprintf(label, sizeof(label), "+%d", c * 4);
+        ImGui::TableSetupColumn(label);
+    }
+    ImGui::TableHeadersRow();
+
+    ImGuiListClipper clipper;
+    clipper.Begin(rowCount);
+    while (clipper.Step())
+    {
+        for (int row = clipper.DisplayStart; row < clipper.DisplayEnd; ++row)
+        {
+            ImGui::TableNextRow();
+            ImGui::TableSetColumnIndex(0);
+            if (columns == strideColumns && desc.stride > 0 && desc.stride % 4 == 0)
+            {
+                ImGui::TextColored(g_colorTextDim, "%d", row);
+            }
+            else
+            {
+                ImGui::TextColored(g_colorTextDim, "0x%08zX", static_cast<size_t>(row) * columns * 4);
+            }
+
+            for (int c = 0; c < columns; ++c)
+            {
+                const size_t index = static_cast<size_t>(row) * columns + c;
+                if (index >= valueCount)
+                {
+                    break;
+                }
+                uint32_t value = 0;
+                memcpy(&value, data.data() + index * 4, sizeof(value));
+
+                ImGui::TableSetColumnIndex(c + 1);
+                switch (m_bufferViewFormat)
+                {
+                case 0:
+                {
+                    float f = 0.0f;
+                    memcpy(&f, &value, sizeof(f));
+                    ImGui::Text("%g", f);
+                    break;
+                }
+                case 1: ImGui::Text("%d", static_cast<int32_t>(value)); break;
+                case 2: ImGui::Text("%u", value); break;
+                default: ImGui::Text("%08X", value); break;
+                }
+            }
+        }
     }
     ImGui::EndTable();
 }
