@@ -18,6 +18,7 @@ namespace EV
 {
 
 class SwapChain;
+class Buffer;
 class UnorderedAccessView;
 class Resource;
 class ShaderResourceView;
@@ -120,6 +121,12 @@ class ShaderLibrary;
 			const D3D12_CLEAR_VALUE* clearValue = nullptr, bool trackLiveTexture = true);
 		// Every texture created through CreateTexture that is still alive. Used by the editor's texture browser.
 		std::vector<std::shared_ptr<Texture>> GetLiveTextures();
+
+		/**
+		 * Create a buffer resource (in the default heap), e.g. for structured or raw data a compute shader writes.
+		 * Use CD3DX12_RESOURCE_DESC::Buffer(sizeInBytes, flags) for the description.
+		 */
+		std::shared_ptr<Buffer> CreateBuffer(const D3D12_RESOURCE_DESC& resourceDesc);
 
 		std::shared_ptr<GUI> CreateGUI(HWND hWnd, const RenderTarget& renderTarget);
 
