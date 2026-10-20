@@ -128,6 +128,17 @@ public:
 };
 
 
+class MakeBuffer : public Buffer
+{
+public:
+    MakeBuffer(const D3D12_RESOURCE_DESC& resourceDesc)
+        : Buffer(resourceDesc)
+    {
+    }
+
+    virtual ~MakeBuffer() {}
+};
+
 class MakeTexture : public Texture
 {
 public:
@@ -1381,6 +1392,11 @@ std::vector<std::shared_ptr<Texture>> Application::GetLiveTextures()
     }
 
     return textures;
+}
+
+std::shared_ptr<Buffer> Application::CreateBuffer(const D3D12_RESOURCE_DESC& resourceDesc)
+{
+    return std::make_shared<MakeBuffer>(resourceDesc);
 }
 
 std::shared_ptr<GUI> Application::CreateGUI(HWND hWnd, const RenderTarget& renderTarget)
