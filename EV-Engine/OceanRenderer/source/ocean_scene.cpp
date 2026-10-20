@@ -136,7 +136,10 @@ void Ocean::ResizeViewport(uint32_t width, uint32_t height)
     m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 
     // The HDR color and depth buffers are render graph textures, created at the size RecordRenderGraph asks for.
-    m_viewportTexture->Resize(m_viewportWidth, m_viewportHeight);
+    if (m_viewportTexture)
+    {
+        m_viewportTexture->Resize(m_viewportWidth, m_viewportHeight);
+    }
 }
 
 void Ocean::CreateBRDFLUT()
@@ -753,8 +756,9 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
     {
         for (const auto& [slot, vertexBuffer] : mesh->GetVertexBuffers())
         {
-            oceanPass.Read(rg.Import("Ocean Plane Vertices", vertexBuffer, static_cast<uint32_t>(vertexBuffer->GetVertexStride())),
-                RGAccess::VertexBuffer);
+            // Captures find resources by name, so every slot gets its own.
+            const std::string name = slot == 0 ? "Ocean Plane Vertices" : "Ocean Plane Vertices " + std::to_string(slot);
+            oceanPass.Read(rg.Import(name, vertexBuffer, static_cast<uint32_t>(vertexBuffer->GetVertexStride())), RGAccess::VertexBuffer);
         }
         if (const auto indexBuffer = mesh->GetIndexBuffer())
         {
