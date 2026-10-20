@@ -244,6 +244,8 @@ namespace EV
         friend class RenderGraph;
         RGPassBuilder(RenderGraph& graph, uint32_t pass) : m_graph(graph), m_pass(pass) {}
 
+        RGPassBuilder& Declare(uint32_t resource, RGAccess access, bool write);
+
         RenderGraph& m_graph;
         uint32_t     m_pass;
     };
