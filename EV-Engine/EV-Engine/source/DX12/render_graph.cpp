@@ -109,13 +109,48 @@ bool EV::IsWriteAccess(RGAccess access)
 
 bool EV::IsTextureAccess(RGAccess access)
 {
-    return access != RGAccess::VertexBuffer && access != RGAccess::IndexBuffer && access != RGAccess::ConstantBuffer &&
-        access != RGAccess::IndirectArgument;
+    switch (access)
+    {
+    case RGAccess::ShaderRead:
+    case RGAccess::PixelShaderRead:
+    case RGAccess::NonPixelShaderRead:
+    case RGAccess::UnorderedAccess:
+    case RGAccess::RenderTarget:
+    case RGAccess::DepthWrite:
+    case RGAccess::DepthRead:
+    case RGAccess::CopySource:
+    case RGAccess::CopyDest:
+        return true;
+    case RGAccess::VertexBuffer:
+    case RGAccess::IndexBuffer:
+    case RGAccess::ConstantBuffer:
+    case RGAccess::IndirectArgument:
+        return false;
+    }
+    return false;
 }
 
 bool EV::IsBufferAccess(RGAccess access)
 {
-    return access != RGAccess::RenderTarget && access != RGAccess::DepthWrite && access != RGAccess::DepthRead;
+    switch (access)
+    {
+    case RGAccess::ShaderRead:
+    case RGAccess::PixelShaderRead:
+    case RGAccess::NonPixelShaderRead:
+    case RGAccess::UnorderedAccess:
+    case RGAccess::VertexBuffer:
+    case RGAccess::IndexBuffer:
+    case RGAccess::ConstantBuffer:
+    case RGAccess::IndirectArgument:
+    case RGAccess::CopySource:
+    case RGAccess::CopyDest:
+        return true;
+    case RGAccess::RenderTarget:
+    case RGAccess::DepthWrite:
+    case RGAccess::DepthRead:
+        return false;
+    }
+    return false;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -134,48 +169,40 @@ std::shared_ptr<Buffer> RGPassContext::GetBuffer(RGBuffer buffer) const
 // ------------------------------------------------------------------------------------------------
 // RGPassBuilder
 
-namespace
+RGPassBuilder& RGPassBuilder::Declare(uint32_t resource, RGAccess access, bool write)
 {
-    void CheckReadOrWrite(const std::string& passName, RGAccess access, bool write)
+    if (IsWriteAccess(access) != write)
     {
-        if (IsWriteAccess(access) != write)
-        {
-            throw std::logic_error("Render graph pass '" + passName + "': " + GetAccessName(access) + " is a " +
-                (write ? "read, use Read" : "write, use Write"));
-        }
+        throw std::logic_error("Render graph pass '" + m_graph.m_passes[m_pass].name + "': " + GetAccessName(access) +
+            " is a " + (write ? "read, use Read" : "write, use Write"));
     }
+    m_graph.AddAccess(m_pass, resource, access);
+    return *this;
 }
 
+// The typed GetResource calls check that the handle is a texture or a buffer.
 RGPassBuilder& RGPassBuilder::Read(RGTexture texture, RGAccess access)
 {
-    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, false);
-    m_graph.GetResource(texture); // Validates the handle.
-    m_graph.AddAccess(m_pass, texture.index, access);
-    return *this;
+    m_graph.GetResource(texture);
+    return Declare(texture.index, access, false);
 }
 
 RGPassBuilder& RGPassBuilder::Write(RGTexture texture, RGAccess access)
 {
-    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, true);
     m_graph.GetResource(texture);
-    m_graph.AddAccess(m_pass, texture.index, access);
-    return *this;
+    return Declare(texture.index, access, true);
 }
 
 RGPassBuilder& RGPassBuilder::Read(RGBuffer buffer, RGAccess access)
 {
-    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, false);
     m_graph.GetResource(buffer);
-    m_graph.AddAccess(m_pass, buffer.index, access);
-    return *this;
+    return Declare(buffer.index, access, false);
 }
 
 RGPassBuilder& RGPassBuilder::Write(RGBuffer buffer, RGAccess access)
 {
-    CheckReadOrWrite(m_graph.m_passes[m_pass].name, access, true);
     m_graph.GetResource(buffer);
-    m_graph.AddAccess(m_pass, buffer.index, access);
-    return *this;
+    return Declare(buffer.index, access, true);
 }
 
 RGPassBuilder& RGPassBuilder::RenderTarget(RGTexture texture, RGClear clear, uint32_t slot)
@@ -297,9 +324,17 @@ RGTexture RenderGraph::Import(const std::string& name, const std::shared_ptr<Tex
 
 RGBuffer RenderGraph::Import(const std::string& name, const std::shared_ptr<Buffer>& buffer, uint32_t stride)
 {
-    if (!buffer)
+    if (!buffer || !buffer->GetD3D12Resource())
     {
         throw std::logic_error("Render graph: imported buffer '" + name + "' is null");
+    }
+    // Upload and readback heap buffers stay in one state for their whole life, the graph cannot transition them.
+    D3D12_HEAP_PROPERTIES heapProperties = {};
+    if (SUCCEEDED(buffer->GetD3D12Resource()->GetHeapProperties(&heapProperties, nullptr)) &&
+        (heapProperties.Type == D3D12_HEAP_TYPE_UPLOAD || heapProperties.Type == D3D12_HEAP_TYPE_READBACK))
+    {
+        throw std::logic_error("Render graph: imported buffer '" + name + "' is in an upload or readback heap; "
+            "only default heap buffers can be used in the graph");
     }
     Resource resource;
     resource.name = name;
