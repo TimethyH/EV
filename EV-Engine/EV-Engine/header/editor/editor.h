@@ -278,7 +278,7 @@ namespace EV
         void DrawRenderGraphTimeline(const RenderGraphDebugInfo& info);
         void DrawRenderGraphResources(const RenderGraphDebugInfo& info);
         void DrawRenderGraphBufferCapture();
-        void CaptureRenderGraphResource(const std::string& pass, const std::string& resource);
+        void CaptureRenderGraphResource(const std::string& pass, const std::string& resource, bool isBuffer);
 
         // Assets and drag & drop (editor_assets.cpp)
         void DrawAssetBrowser();
@@ -400,7 +400,7 @@ namespace EV
         int          m_selectedGraphPass = -1;
         bool         m_inspectRenderGraphCapture = false; // Open a texture capture in the Texture Viewer once it exists.
         bool         m_selectBufferCaptureTab = false;
-        int          m_bufferViewFormat = 0;  // Float, int, uint or hex.
+        int          m_bufferViewFormat = -1; // Float, int, uint, hex (32 bit), uint16, hex16; -1 = from the stride.
         int          m_bufferViewColumns = 0; // Values per row, 0 = from the buffer's stride.
 
         // Stats
