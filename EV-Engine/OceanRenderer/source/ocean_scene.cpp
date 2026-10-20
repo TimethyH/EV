@@ -749,6 +749,20 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
     {
         oceanPass.Read(c.displacement).Read(c.slope).Read(c.foam);
     }
+    // The plane's geometry, so its vertices and indices can be inspected in the editor (Render Graph > Buffer).
+    for (const auto& mesh : m_oceanPlane->GetRootNode()->GetMeshes())
+    {
+        for (const auto& [slot, vertexBuffer] : mesh->GetVertexBuffers())
+        {
+            oceanPass.Read(rg.Import("Ocean Plane Vertices", vertexBuffer, static_cast<uint32_t>(vertexBuffer->GetVertexStride())),
+                RGAccess::VertexBuffer);
+        }
+        if (const auto indexBuffer = mesh->GetIndexBuffer())
+        {
+            const uint32_t indexSize = indexBuffer->GetIndexFormat() == DXGI_FORMAT_R16_UINT ? 2 : 4;
+            oceanPass.Read(rg.Import("Ocean Plane Indices", indexBuffer, indexSize), RGAccess::IndexBuffer);
+        }
+    }
     oceanPass
         .Read(diffuseIrradiance)
         .Read(specularIrradiance)
