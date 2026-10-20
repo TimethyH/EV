@@ -125,8 +125,6 @@ void SDRPSO::Apply(CommandList& commandList)
 {
     UpdatePipelineState();
 
-    // commandList.SetRenderTarget(m_swapChain->GetRenderTarget());
-    // commandList.SetViewport(m_viewport);
     commandList.SetPipelineState(m_pipelineStateObject);
     commandList.SetPrimitiveTopology(D3D_PRIMITIVE_TOPOLOGY_TRIANGLELIST);
     commandList.SetGraphicsRootSignature(m_rootSignature);
