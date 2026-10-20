@@ -68,13 +68,15 @@ namespace
     }
 }
 
-void Editor::CaptureRenderGraphResource(const std::string& pass, const std::string& resource)
+void Editor::CaptureRenderGraphResource(const std::string& pass, const std::string& resource, bool isBuffer)
 {
     // The copy is made while the next frame executes. A texture opens in the Texture Viewer once it exists,
     // a buffer in the Buffer tab.
     m_renderGraph->SetCapture(pass, resource);
-    m_inspectRenderGraphCapture = true;
-    m_selectBufferCaptureTab = true;
+    m_inspectRenderGraphCapture = !isBuffer;
+    m_selectBufferCaptureTab = isBuffer;
+    m_bufferViewFormat = -1;
+    m_bufferViewColumns = 0;
 }
 
 void Editor::DrawRenderGraph()
@@ -283,7 +285,7 @@ void Editor::DrawRenderGraphPasses(const RenderGraphDebugInfo& info)
             ImGui::SameLine();
             if (ImGui::SmallButton("Capture"))
             {
-                CaptureRenderGraphResource(pass.name, resource.name);
+                CaptureRenderGraphResource(pass.name, resource.name, resource.isBuffer);
             }
             if (ImGui::IsItemHovered())
             {
@@ -426,7 +428,7 @@ void Editor::DrawRenderGraphTimeline(const RenderGraphDebugInfo& info)
 
         if (clicked && access && !pass.culled)
         {
-            CaptureRenderGraphResource(pass.name, info.resources[hoveredResource].name);
+            CaptureRenderGraphResource(pass.name, info.resources[hoveredResource].name, info.resources[hoveredResource].isBuffer);
         }
     }
 
@@ -477,7 +479,7 @@ void Editor::DrawRenderGraphResources(const RenderGraphDebugInfo& info)
             // Buffers are read back: capture them after the last pass that uses them.
             if (resource.lastPass >= 0 && ImGui::SmallButton("View"))
             {
-                CaptureRenderGraphResource(info.passes[resource.lastPass].name, resource.name);
+                CaptureRenderGraphResource(info.passes[resource.lastPass].name, resource.name, true);
             }
         }
         else if (const auto texture = resource.texture.lock(); texture && ImGui::SmallButton("View"))
@@ -500,13 +502,20 @@ void Editor::DrawRenderGraphBufferCapture()
         return;
     }
 
-    static const char* formats[] = { "Float", "Int", "Uint", "Hex" };
+    // 32 bit values, or 16 bit values for buffers with a 2 byte stride (16 bit index buffers).
+    static const char* formats[] = { "Float", "Int", "Uint", "Hex", "Uint16", "Hex16" };
+    if (m_bufferViewFormat < 0)
+    {
+        m_bufferViewFormat = desc.stride == 2 ? 4 : 0;
+    }
     ImGui::SetNextItemWidth(100.0f);
     ImGui::Combo("View as", &m_bufferViewFormat, formats, IM_ARRAYSIZE(formats));
     ImGui::SameLine();
+    const uint32_t valueSize = m_bufferViewFormat >= 4 ? 2 : 4;
 
-    // One element per row for structured buffers (when the stride is a whole number of 32 bit values).
-    const int strideColumns = desc.stride > 0 && desc.stride % 4 == 0 ? static_cast<int>(desc.stride / 4) : 4;
+    // One element per row for structured buffers (when the stride is a whole number of values).
+    const bool elementRows = desc.stride > 0 && desc.stride % valueSize == 0 && desc.stride / valueSize > 1;
+    const int strideColumns = elementRows ? static_cast<int>(desc.stride / valueSize) : (valueSize == 2 ? 8 : 4);
     int columns = m_bufferViewColumns > 0 ? m_bufferViewColumns : strideColumns;
     ImGui::SetNextItemWidth(100.0f);
     if (ImGui::InputInt("Values per row", &columns))
@@ -518,7 +527,8 @@ void Editor::DrawRenderGraphBufferCapture()
     ImGui::TextColored(g_colorTextDim, "%s of %s%s", FormatBytes(data.size()).c_str(), FormatBytes(desc.size).c_str(),
         desc.size > data.size() ? " (shows the start)" : "");
 
-    const size_t valueCount = data.size() / 4;
+    const bool showElements = elementRows && columns == strideColumns;
+    const size_t valueCount = (data.size() + valueSize - 1) / valueSize;
     const int rowCount = static_cast<int>((valueCount + columns - 1) / columns);
 
     const ImGuiTableFlags tableFlags = ImGuiTableFlags_RowBg | ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_ScrollY |
@@ -528,11 +538,11 @@ void Editor::DrawRenderGraphBufferCapture()
         return;
     }
     ImGui::TableSetupScrollFreeze(1, 1);
-    ImGui::TableSetupColumn(desc.stride > 0 && desc.stride % 4 == 0 && columns == strideColumns ? "Element" : "Offset");
+    ImGui::TableSetupColumn(showElements ? "Element" : "Offset");
     for (int c = 0; c < columns; ++c)
     {
         char label[16];
-        snprintf(label, sizeof(label), "+%d", c * 4);
+        snprintf(label, sizeof(label), "+%u", c * valueSize);
         ImGui::TableSetupColumn(label);
     }
     ImGui::TableHeadersRow();
@@ -545,13 +555,13 @@ void Editor::DrawRenderGraphBufferCapture()
         {
             ImGui::TableNextRow();
             ImGui::TableSetColumnIndex(0);
-            if (columns == strideColumns && desc.stride > 0 && desc.stride % 4 == 0)
+            if (showElements)
             {
                 ImGui::TextColored(g_colorTextDim, "%d", row);
             }
             else
             {
-                ImGui::TextColored(g_colorTextDim, "0x%08zX", static_cast<size_t>(row) * columns * 4);
+                ImGui::TextColored(g_colorTextDim, "0x%08zX", static_cast<size_t>(row) * columns * valueSize);
             }
 
             for (int c = 0; c < columns; ++c)
@@ -561,8 +571,10 @@ void Editor::DrawRenderGraphBufferCapture()
                 {
                     break;
                 }
+                // The last value may be cut off by the end of the data; the missing bytes read as zero.
                 uint32_t value = 0;
-                memcpy(&value, data.data() + index * 4, sizeof(value));
+                const size_t offset = index * valueSize;
+                memcpy(&value, data.data() + offset, std::min<size_t>(valueSize, data.size() - offset));
 
                 ImGui::TableSetColumnIndex(c + 1);
                 switch (m_bufferViewFormat)
@@ -576,7 +588,9 @@ void Editor::DrawRenderGraphBufferCapture()
                 }
                 case 1: ImGui::Text("%d", static_cast<int32_t>(value)); break;
                 case 2: ImGui::Text("%u", value); break;
-                default: ImGui::Text("%08X", value); break;
+                case 3: ImGui::Text("%08X", value); break;
+                case 4: ImGui::Text("%u", value & 0xFFFF); break;
+                default: ImGui::Text("%04X", value & 0xFFFF); break;
                 }
             }
         }
