@@ -136,7 +136,7 @@ void Ocean::ResizeViewport(uint32_t width, uint32_t height)
     m_camera.SetProjection(45.0f, aspectRatio, 0.1f, 1000.0f);
 
     // The HDR color and depth buffers are render graph textures, created at the size RecordRenderGraph asks for.
-    m_viewportRenderTarget.Resize(m_viewportWidth, m_viewportHeight);
+    m_viewportTexture->Resize(m_viewportWidth, m_viewportHeight);
 }
 
 void Ocean::CreateBRDFLUT()
@@ -485,7 +485,6 @@ bool Ocean::LoadContent()
         D3D12_RESOURCE_FLAG_ALLOW_RENDER_TARGET);
     m_viewportTexture = Application::Get().CreateTexture(viewportDesc);
     m_viewportTexture->SetName(L"Scene Viewport (LDR)");
-    m_viewportRenderTarget.AttachTexture(AttachmentPoint::Color0, m_viewportTexture);
     ResizeViewport(m_editor->GetViewportWidth(), m_editor->GetViewportHeight());
 
     auto convolutionFence = computeQueue.ExecuteCommandList(computeCommandList);

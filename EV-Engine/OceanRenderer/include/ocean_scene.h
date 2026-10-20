@@ -207,7 +207,6 @@ private:
 
 	// The tonemapped scene shown in the editor's Scene panel, sized to that panel.
 	std::shared_ptr<EV::Texture> m_viewportTexture;
-	EV::RenderTarget m_viewportRenderTarget = {};
 	uint32_t m_viewportWidth = 1;
 	uint32_t m_viewportHeight = 1;
 
