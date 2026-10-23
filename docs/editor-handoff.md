@@ -1,5 +1,17 @@
 # ImGui editor – handoff notes
 
+## Branch order
+Each branch was started from the previous one, so every branch contains all the work above it.
+
+| # | Branch | Started from | Dates | Commits | What it added |
+|---|--------|--------------|-------|---------|---------------|
+| 1 | `imgui-editor` | `main` (4a25900, "base setup, renders uv to a screensize triangle") | 2026-10-18 | 44 | Windows CI build (assimp v6.0.2, WARP smoke test, screenshots on `ci-screenshots`), ImGui docking scene editor (viewport, gizmo, hierarchy, inspector, assets, texture viewer), crash/DRED reports, model thumbnails and preview, HDR drops for the skybox, borderless full screen, app icon |
+| 2 | `shader-hot-reload` | `imgui-editor` | 2026-10-19 | 8 | Runtime HLSL compiling with DXC, shaders reload when saved, PSOs rebuilt, Shaders panel |
+| 3 | `render-graph` | `shader-hot-reload` | 2026-10-19 – 2026-10-20 | 16 | RenderGraph (passes, textures, buffers, barriers), GpuTimer, Render Graph panel and buffer viewer, OceanRenderer renders through the graph |
+| 4 | `scene-save-load` | `render-graph` | 2026-10-23 | 7 | Scene files (.evscene: New/Open/Save), play mode (F5, `--play <file>`), these branch notes |
+
+The `claude/...` branches (`claude/shader-hot-reload-26017u`, `claude/scene-save-load-wigmdt`) were the session branches the work started on; the branches above are the ones to use.
+
 Branch: `imgui-editor`. Goal: make EV look and work like a full scene editor (reference: BredaUniversityGames/2425-Y2C-PR-Kudzu, `src/shell/kudzu/editor/`), usable by every app in the EV-Engine library, with strong texture/data inspection for debugging.
 
 ## Done
