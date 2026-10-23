@@ -160,6 +160,7 @@ void BirthdayGame::UnloadContent()
     m_promenade.reset();
     m_pedestal.reset();
     m_ship.reset();
+    m_bridgeLights.clear();
     m_balloons.clear();
     m_balloonMesh.reset();
     m_stringMesh.reset();
@@ -295,6 +296,7 @@ void BirthdayGame::BuildScene(CommandList& commandList)
 
     BuildProps(commandList);
     BuildCuracao(commandList);
+    BuildBridge(commandList);
 
     // The rifle is drawn in front of the camera while playing; it is not part of the editable scene.
     m_rifle = LoadModel(commandList, g_rifleFile);
@@ -612,6 +614,8 @@ void BirthdayGame::UpdateScene(float deltaTime)
         const float swayZ = 0.09f * std::sin(m_time * 1.05f + balloon.phase * 1.7f);
         balloon.pivot->SetLocalTransform(XMMatrixRotationX(swayX) * XMMatrixRotationZ(swayZ) * XMLoadFloat4x4(&balloon.rest));
     }
+
+    UpdateBridgeLights();
 
     // The ship rocks on the waves.
     if (m_ship)

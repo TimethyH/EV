@@ -921,7 +921,14 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
                 m_lookYaw = 215.0f;
                 m_lookPitch = -4.0f;
             }, always },
-        { "16_editor",[this]() { m_editor->StopPlaying(); }, always },
+        { "16_bridge", [&]()
+            {
+                // The Queen Emma bridge, on the right of the beach.
+                m_playerPosition = XMFLOAT3(borderMaxX, 0.0f, 3.0f);
+                m_lookYaw = 55.0f;
+                m_lookPitch = 2.0f;
+            }, always },
+        { "17_editor", [this]() { m_editor->StopPlaying(); }, always },
     };
     constexpr size_t stepCount = sizeof(steps) / sizeof(steps[0]);
 
