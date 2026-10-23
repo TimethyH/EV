@@ -498,16 +498,16 @@ std::shared_ptr<SwapChain> Application::CreateSwapchain(HWND hWnd, DXGI_FORMAT b
 static void CALLBACK OnDebugLayerMessage(D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_SEVERITY, D3D12_MESSAGE_ID, LPCSTR, void*);
 #endif
 
-Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter)
+Microsoft::WRL::ComPtr<ID3D12Device2> Application::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter)
 {
-    ComPtr<ID3D12Device13> d3d12Device13;
-    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device13)));
+    ComPtr<ID3D12Device2> d3d12Device2;
+    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device2)));
     //    NAME_D3D12_OBJECT(d3d12Device2);
 
         // Enable debug messages in debug mode.
 #if defined(_DEBUG)
     ComPtr<ID3D12InfoQueue> pInfoQueue;
-    if (SUCCEEDED(d3d12Device13.As(&pInfoQueue)))
+    if (SUCCEEDED(d3d12Device2.As(&pInfoQueue)))
     {
         // TODO: Readd these
 		// Currently removed because it breaks when copying textures.
@@ -558,7 +558,7 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
     }
 #endif
 
-    return d3d12Device13;
+    return d3d12Device2;
 }
 
 bool Application::CheckTearingSupport()
@@ -695,7 +695,7 @@ void Application::Quit(int exitCode)
     PostQuitMessage(exitCode);
 }
 
-Microsoft::WRL::ComPtr<ID3D12Device13> Application::GetDevice() const
+Microsoft::WRL::ComPtr<ID3D12Device2> Application::GetDevice() const
 {
     return m_device;
 }
