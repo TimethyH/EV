@@ -2,7 +2,7 @@ name: Windows build
 
 on:
   push:
-    branches: [ imgui-editor, main ]
+    branches: [ imgui-editor, main, Dads-Birthday ]
   pull_request:
   workflow_dispatch:
 
@@ -64,6 +64,9 @@ jobs:
       - name: Build ShaderArt (Debug x64)
         run: msbuild EV-Engine/ShaderArt/ShaderArt.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
 
+      - name: Build DadsBirthday (Debug x64)
+        run: msbuild EV-Engine/DadsBirthday/DadsBirthday.vcxproj /m /p:Configuration=Debug /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+
       # Run the editor on the WARP software rasterizer and take screenshots, so UI changes can be checked without a GPU.
       - name: Smoke test (WARP)
         timeout-minutes: 20
@@ -117,6 +120,50 @@ jobs:
             if ($existing) { $body.sha = $existing }
             $body | ConvertTo-Json | gh api -X PUT "repos/${{ github.repository }}/contents/editor.png" --input - --jq .commit.sha
             if ($LASTEXITCODE -ne 0) { Write-Host "::warning::Could not publish the screenshot" }
+          }
+          exit 0
+
+      # The birthday game plays a fixed tour (--autopilot) and saves a screenshot after every step. They are published
+      # to the ci-screenshots branch under birthday/.
+      - name: Birthday game autopilot (WARP)
+        timeout-minutes: 30
+        working-directory: EV-Engine
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EV_USE_WARP: "1"
+        run: |
+          gh release download birthday-assets -p birthday-assets.zip -R ${{ github.repository }} --clobber
+          Expand-Archive birthday-assets.zip -DestinationPath . -Force
+          Remove-Item -ErrorAction SilentlyContinue ev_crash.log
+
+          $exe = Get-ChildItem -Recurse -Filter DadsBirthday.exe | Select-Object -First 1
+          $out = Join-Path (Resolve-Path ..) "screenshots/birthday"
+          New-Item -ItemType Directory -Force $out | Out-Null
+          Write-Host "Running $($exe.FullName)"
+          $process = Start-Process -FilePath $exe.FullName -ArgumentList "--autopilot", "`"$out`"" -WorkingDirectory (Get-Location) -PassThru
+          if ($process.WaitForExit(1500000)) { Write-Host "Exited with code $($process.ExitCode)" }
+          else { Write-Host "::warning::The autopilot did not finish"; Stop-Process -Id $process.Id -Force }
+          if (Test-Path ev_crash.log) { Write-Host "::error::$(Get-Content ev_crash.log -Raw)" }
+
+          Add-Type -AssemblyName System.Drawing
+          Get-ChildItem $out -Filter *.bmp | ForEach-Object {
+            $png = [IO.Path]::ChangeExtension($_.FullName, ".png")
+            $image = [System.Drawing.Image]::FromFile($_.FullName)
+            $image.Save($png, [System.Drawing.Imaging.ImageFormat]::Png)
+            $image.Dispose()
+            Remove-Item $_.FullName
+          }
+          Get-ChildItem $out | ForEach-Object { Write-Host "$($_.Name) $($_.Length)" }
+          if ((Get-ChildItem $out -Filter *.png).Count -eq 0) { Write-Host "::error::The autopilot took no screenshots" }
+
+          if ("${{ github.event_name }}" -ne "pull_request") {
+            Get-ChildItem $out -Filter *.png | ForEach-Object {
+              $path = "birthday/$($_.Name)"
+              $existing = gh api "repos/${{ github.repository }}/contents/$($path)?ref=ci-screenshots" --jq .sha 2>$null
+              $body = @{ message = "Birthday screenshot $($_.Name) for ${{ github.sha }}"; content = [Convert]::ToBase64String([IO.File]::ReadAllBytes($_.FullName)); branch = "ci-screenshots" }
+              if ($existing) { $body.sha = $existing }
+              $body | ConvertTo-Json | gh api -X PUT "repos/${{ github.repository }}/contents/$path" --input - --jq .commit.sha
+            }
           }
           exit 0
 
