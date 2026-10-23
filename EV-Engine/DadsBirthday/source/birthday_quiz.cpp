@@ -69,6 +69,8 @@ void BirthdayGame::LoadQuiz(CommandList& commandList)
     {
         paths.push_back(question.correctImage);
         paths.push_back(question.wrongImage);
+        paths.push_back(question.correctImage2);
+        paths.push_back(question.wrongImage2);
     }
     paths.insert(paths.end(), m_quiz.finaleImages.begin(), m_quiz.finaleImages.end());
 
@@ -112,6 +114,7 @@ void BirthdayGame::ResetQuiz()
     m_state = QuizState::Intro;
     m_questionIndex = 0;
     m_correctAnswers = 0;
+    m_lastAnswerCorrect = false;
     m_banner.clear();
     m_confetti.clear();
     ShowIdleScreens();
@@ -170,6 +173,29 @@ void BirthdayGame::OnCakeShot()
     }
 }
 
+void BirthdayGame::OnRedoShot()
+{
+    switch (m_state)
+    {
+    case QuizState::Answered:
+        // Only the question just answered; once the cake moves the quiz on, that answer stays.
+        if (m_lastAnswerCorrect)
+        {
+            --m_correctAnswers;
+        }
+        m_lastAnswerCorrect = false;
+        StartQuestion(m_questionIndex);
+        break;
+    case QuizState::Question:
+        ShowMessage("Bo no a kontesta ainda: tira e patu riba e antwoord ku bo ta kere ta korekto!");
+        break;
+    default:
+        // Before the first question and after the last one the pedestal is just part of the cake.
+        OnCakeShot();
+        break;
+    }
+}
+
 void BirthdayGame::OnBirdShot(Side side)
 {
     if (m_state == QuizState::Question)
@@ -205,18 +231,26 @@ void BirthdayGame::Answer(Side side)
     {
         ++m_correctAnswers;
     }
+    m_lastAnswerCorrect = correct;
     m_state = QuizState::Answered;
     m_banner.clear();
 
-    // The screen under the bird that was shot shows the picture; the other one keeps its answer.
+    // The screen under the bird that was shot shows the picture, the other screen the second picture (the same
+    // one when there is no second picture). A screen without a picture keeps its answer.
+    const Side other = side == Side::Left ? Side::Right : Side::Left;
     if (auto picture = GetPicture(correct ? question.correctImage : question.wrongImage))
     {
         ShowOnScreen(side, { picture });
     }
+    if (auto picture = GetPicture(correct ? question.correctImage2 : question.wrongImage2))
+    {
+        ShowOnScreen(other, { picture });
+    }
 
     const bool last = m_questionIndex + 1 >= m_quiz.questions.size();
     ShowMessage((correct ? question.correctMessage : question.wrongMessage) + "\n" +
-        (last ? "Tira e bolo un lastu bia." : "Tira e bolo pa e volgende vraag"));
+        (last ? "Tira e bolo un lastu bia." : "Tira e bolo pa e volgende vraag") +
+        "\n(Tira e base di e bolo pa purba e pregunta aki atrobe)");
 }
 
 void BirthdayGame::StartFinale()
@@ -235,8 +269,8 @@ void BirthdayGame::StartFinale()
     }
     ShowScrolling(Side::Right, pictures);
 
-    ShowMessage(m_quiz.finaleMessage + "\nYou got " + std::to_string(m_correctAnswers) + " of " +
-        std::to_string(m_quiz.questions.size()) + " right!");
+    ShowMessage(m_quiz.finaleMessage + "\nBo tatin " + std::to_string(m_correctAnswers) + " di e " +
+        std::to_string(m_quiz.questions.size()) + " bon :)");
 
     // Confetti from the top of the screen.
     std::mt19937 random(static_cast<uint32_t>(m_time * 1000.0f) + 7u);

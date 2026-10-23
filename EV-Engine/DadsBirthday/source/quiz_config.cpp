@@ -1,5 +1,7 @@
 #include "quiz_config.h"
 
+#include <algorithm>
+#include <cwctype>
 #include <fstream>
 
 #include "nlohmann/json.hpp"
@@ -25,6 +27,39 @@ namespace Birthday
         std::filesystem::path PathFromUTF8(const std::string& utf8)
         {
             return std::filesystem::path(std::u8string(utf8.begin(), utf8.end()));
+        }
+
+        // Every picture in a folder, numbered names in number order (2.jpg before 10.jpg), then the rest by name.
+        std::vector<std::filesystem::path> PicturesInFolder(const std::filesystem::path& folder)
+        {
+            std::vector<std::filesystem::path> pictures;
+            std::error_code error;
+            for (const auto& entry : std::filesystem::directory_iterator(folder, error))
+            {
+                std::wstring extension = entry.path().extension().wstring();
+                for (auto& c : extension)
+                {
+                    c = static_cast<wchar_t>(towlower(c));
+                }
+                if (entry.is_regular_file() &&
+                    (extension == L".jpg" || extension == L".jpeg" || extension == L".png" || extension == L".webp"))
+                {
+                    pictures.push_back(entry.path());
+                }
+            }
+            auto number = [](const std::filesystem::path& path)
+            {
+                const std::wstring stem = path.stem().wstring();
+                const bool numbered = !stem.empty() && stem.find_first_not_of(L"0123456789") == std::wstring::npos;
+                return numbered ? std::stoull(stem) : ~0ull;
+            };
+            std::sort(pictures.begin(), pictures.end(), [&number](const auto& a, const auto& b)
+            {
+                const auto numberA = number(a);
+                const auto numberB = number(b);
+                return numberA != numberB ? numberA < numberB : a.filename() < b.filename();
+            });
+            return pictures;
         }
     }
 
@@ -80,15 +115,22 @@ namespace Birthday
                 }
                 question.correctSide = correct == "right" ? Side::Right : Side::Left;
 
-                const std::string correctImage = Text(entry, "correctImage");
-                const std::string wrongImage = Text(entry, "wrongImage");
-                if (!correctImage.empty())
+                auto image = [&](const char* key)
                 {
-                    question.correctImage = folder / PathFromUTF8(correctImage);
+                    const std::string path = Text(entry, key);
+                    return path.empty() ? std::filesystem::path() : folder / PathFromUTF8(path);
+                };
+                question.correctImage = image("correctImage");
+                question.wrongImage = image("wrongImage");
+                question.correctImage2 = image("correctImage2");
+                question.wrongImage2 = image("wrongImage2");
+                if (question.correctImage2.empty())
+                {
+                    question.correctImage2 = question.correctImage;
                 }
-                if (!wrongImage.empty())
+                if (question.wrongImage2.empty())
                 {
-                    question.wrongImage = folder / PathFromUTF8(wrongImage);
+                    question.wrongImage2 = question.wrongImage;
                 }
                 question.correctMessage = Text(entry, "correctMessage", g_defaultCorrect);
                 question.wrongMessage = Text(entry, "wrongMessage", g_defaultWrong);
@@ -115,9 +157,23 @@ namespace Birthday
             {
                 for (const auto& image : *images)
                 {
-                    if (image.is_string())
+                    if (!image.is_string())
                     {
-                        config.finaleImages.push_back(folder / PathFromUTF8(image.get<std::string>()));
+                        continue;
+                    }
+                    const std::filesystem::path path = folder / PathFromUTF8(image.get<std::string>());
+                    if (std::filesystem::is_directory(path))
+                    {
+                        const auto pictures = PicturesInFolder(path);
+                        if (pictures.empty())
+                        {
+                            config.warnings.push_back("finale: no pictures in " + image.get<std::string>());
+                        }
+                        config.finaleImages.insert(config.finaleImages.end(), pictures.begin(), pictures.end());
+                    }
+                    else
+                    {
+                        config.finaleImages.push_back(path);
                     }
                 }
             }

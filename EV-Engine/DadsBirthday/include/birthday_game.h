@@ -243,6 +243,7 @@ private:
     void ResetQuiz(); // Back to the start: idle screens and the welcome message.
     std::shared_ptr<EV::Texture> GetPicture(const std::filesystem::path& path) const;
     void OnCakeShot();
+    void OnRedoShot(); // The pedestal under the cake: answer the current question again.
     void OnBirdShot(Birthday::Side side);
     void StartQuestion(size_t index);
     void Answer(Birthday::Side side);
@@ -267,6 +268,7 @@ private:
     std::shared_ptr<EV::Scene>                m_rifle;
     std::shared_ptr<EV::SceneNode>            m_cake;       // The part that spins.
     std::shared_ptr<EV::SceneNode>            m_cakeRoot;   // Moved in the editor.
+    std::shared_ptr<EV::Scene>                m_redoSigns;  // "Try again" on the pedestal's sides, unlit like the screens.
     Screen                                    m_screens[2];
     Bird                                      m_birds[2];
     DirectX::XMFLOAT3                         m_rifleMuzzle = {}; // In the rifle's space.
@@ -292,6 +294,7 @@ private:
     bool              m_scoped = false;      // Right mouse button toggles the scope.
     float             m_scope = 0.0f;        // 0 = rifle at the hip, 1 = looking through the scope.
     bool              m_rightButtonWasDown = true;
+    bool              m_spaceWasDown = true;   // Space closes the message.
     float             m_eyeDrop = 0.0f;      // How far below standing height the eye is (lying down while waking up).
     float             m_pitchOverride = 0.0f; // Waking up: how much the view is still turned to the sky (0..1).
     IntroState        m_intro = IntroState::Playing;
@@ -302,6 +305,7 @@ private:
     QuizState                                                m_state = QuizState::Intro;
     size_t                                                   m_questionIndex = 0;
     int                                                      m_correctAnswers = 0;
+    bool                                                     m_lastAnswerCorrect = false; // Taken back by a redo.
     std::vector<std::shared_ptr<EV::Texture>>                m_answerCards; // Left and right card per question.
     std::shared_ptr<EV::Texture>                             m_idleCards[2];
     std::shared_ptr<EV::Texture>                             m_finaleCard;

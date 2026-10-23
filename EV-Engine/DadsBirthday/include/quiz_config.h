@@ -25,8 +25,10 @@ namespace Birthday
         std::string           leftAnswer;
         std::string           rightAnswer;
         Side                  correctSide = Side::Left;
-        std::filesystem::path correctImage; // Shown when the right bird is shot.
-        std::filesystem::path wrongImage;   // Shown when the wrong bird is shot.
+        std::filesystem::path correctImage;  // Shown when the right bird is shot, under that bird.
+        std::filesystem::path wrongImage;    // Shown when the wrong bird is shot, under that bird.
+        std::filesystem::path correctImage2; // On the other screen after a right answer; empty = correctImage again.
+        std::filesystem::path wrongImage2;   // On the other screen after a wrong answer; empty = wrongImage again.
         std::string           correctMessage;
         std::string           wrongMessage;
     };
