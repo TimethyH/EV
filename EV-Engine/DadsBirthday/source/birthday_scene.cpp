@@ -43,6 +43,13 @@ namespace
         return angle;
     }
 
+    // Width / height of a picture.
+    float AspectOf(const std::shared_ptr<Texture>& texture)
+    {
+        const auto desc = texture->GetD3D12ResourceDesc();
+        return desc.Height > 0 ? static_cast<float>(desc.Width) / desc.Height : 1.0f;
+    }
+
     std::shared_ptr<Material> CreateColorMaterial(const XMFLOAT4& color, float roughness, float metallic)
     {
         auto material = std::make_shared<Material>();
@@ -621,6 +628,7 @@ void BirthdayGame::UpdateScene(float deltaTime)
     }
 
     UpdateBridgeLights();
+    UpdateScrolling(deltaTime);
 
     // The ship rocks on the waves.
     if (m_ship)
@@ -709,6 +717,10 @@ void BirthdayGame::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
 void BirthdayGame::ShowOnScreen(Side side, const std::vector<std::shared_ptr<Texture>>& textures)
 {
     Screen& screen = m_screens[static_cast<int>(side)];
+    if (side == m_scrollingSide)
+    {
+        m_scrolling.clear();
+    }
     while (!screen.display->GetChildren().empty())
     {
         const auto child = screen.display->GetChildren().back();
@@ -734,12 +746,6 @@ void BirthdayGame::ShowOnScreen(Side side, const std::vector<std::shared_ptr<Tex
         return;
     }
 
-    auto aspectOf = [](const std::shared_ptr<Texture>& texture)
-    {
-        const auto desc = texture->GetD3D12ResourceDesc();
-        return desc.Height > 0 ? static_cast<float>(desc.Width) / desc.Height : 1.0f;
-    };
-
     // The grid that shows the pictures biggest: try every number of columns.
     const size_t count = textures.size();
     const float gap = count > 1 ? 0.12f : 0.0f;
@@ -753,7 +759,7 @@ void BirthdayGame::ShowOnScreen(Side side, const std::vector<std::shared_ptr<Tex
         float area = 0.0f;
         for (const auto& texture : textures)
         {
-            const float aspect = aspectOf(texture);
+            const float aspect = AspectOf(texture);
             const float width = std::min(cellWidth, cellHeight * aspect);
             area += width * (width / aspect);
         }
@@ -779,8 +785,102 @@ void BirthdayGame::ShowOnScreen(Side side, const std::vector<std::shared_ptr<Tex
         const float x = rowWidth * 0.5f - cellWidth * 0.5f - column * (cellWidth + gap);
         const float y = screenHeight * 0.5f - cellHeight * 0.5f - row * (cellHeight + gap);
 
-        const float aspect = aspectOf(textures[i]);
+        const float aspect = AspectOf(textures[i]);
         const float width = std::min(cellWidth, cellHeight * aspect);
         addQuad(textures[i], x, y, width, width / aspect, 0.01f);
+    }
+}
+
+void BirthdayGame::ShowScrolling(Side side, const std::vector<std::shared_ptr<Texture>>& textures)
+{
+    // One picture does not need to move.
+    if (textures.size() < 2)
+    {
+        ShowOnScreen(side, textures);
+        return;
+    }
+    ShowOnScreen(side, {}); // Black behind the pictures.
+
+    Screen& screen = m_screens[static_cast<int>(side)];
+    m_scrollingSide = side;
+    m_scrollTime = 0.0f;
+    for (const auto& texture : textures)
+    {
+        ScrollingPicture picture;
+        const float aspect = AspectOf(texture);
+        picture.width = std::min(screenWidth, screenHeight * aspect);
+        picture.height = picture.width / aspect;
+        for (int i = 0; i < 2; ++i)
+        {
+            auto material = std::make_shared<Material>();
+            material->SetEmissiveColor(XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
+            material->SetTexture(Material::TextureType::Emissive, texture);
+            picture.materials[i] = material;
+            picture.quads[i] = CreateNode("Picture", screen.display, XMMatrixScaling(0.0f, 0.0f, 0.0f));
+            picture.quads[i]->AddMesh(CloneMesh(*screen.quad, material));
+        }
+        m_scrolling.push_back(picture);
+    }
+    UpdateScrolling(0.0f);
+}
+
+void BirthdayGame::UpdateScrolling(float deltaTime)
+{
+    if (m_scrolling.empty())
+    {
+        return;
+    }
+    m_scrollTime += deltaTime;
+    constexpr float hold = 1.5f; // Seconds a picture stays in the middle of the screen.
+    constexpr float move = 1.5f; // Seconds to scroll to the next one.
+    constexpr float gap = 0.2f;  // Meters between the pictures.
+
+    // The pictures are a list going down (in meters from the top of the first one), repeated after the last one.
+    std::vector<float> tops;
+    float length = 0.0f;
+    for (const ScrollingPicture& picture : m_scrolling)
+    {
+        tops.push_back(length);
+        length += picture.height + gap;
+    }
+    const size_t count = m_scrolling.size();
+    auto middleOf = [&](size_t step)
+    {
+        const size_t i = step % count;
+        return static_cast<float>(step / count) * length + tops[i] + m_scrolling[i].height * 0.5f;
+    };
+
+    // The point of the list in the middle of the screen: on a picture, then on its way to the next one.
+    const size_t step = static_cast<size_t>(m_scrollTime / (hold + move));
+    const float t = m_scrollTime - step * (hold + move);
+    const float middle = middleOf(step) + (middleOf(step + 1) - middleOf(step)) * SmoothStep(hold, hold + move, t);
+    const float viewTop = middle - screenHeight * 0.5f;
+    const float viewBottom = middle + screenHeight * 0.5f;
+
+    // Each picture's quads cover only the part of it on the screen (the screen shader shows that part of the image).
+    const float cycle = std::floor(middle / length);
+    for (size_t i = 0; i < count; ++i)
+    {
+        ScrollingPicture& picture = m_scrolling[i];
+        int used = 0;
+        for (float repeat : { cycle - 1.0f, cycle, cycle + 1.0f })
+        {
+            const float top = repeat * length + tops[i];
+            const float from = std::max(top, viewTop);
+            const float to = std::min(top + picture.height, viewBottom);
+            if (to <= from || used == 2)
+            {
+                continue;
+            }
+            picture.materials[used]->SetReflectance(XMFLOAT4((from - top) / picture.height, (to - top) / picture.height, 1.0f, 0.0f));
+            // Going down the list is going down the screen: the middle of the list is at the screen's middle.
+            picture.quads[used]->SetLocalTransform(XMMatrixScaling(picture.width, to - from, 1.0f) *
+                XMMatrixTranslation(0.0f, middle - (from + to) * 0.5f, 0.01f));
+            ++used;
+        }
+        for (; used < 2; ++used)
+        {
+            picture.quads[used]->SetLocalTransform(XMMatrixScaling(0.0f, 0.0f, 0.0f));
+        }
     }
 }

@@ -13,8 +13,8 @@ namespace Birthday
         const char* g_defaultIntro =
             "Happy birthday! Walk with W A S D, look around with the mouse and shoot with the left mouse button. "
             "Turn around and shoot the birthday cake to start the quiz!";
-        const char* g_defaultCorrect = "Correct! Well done.";
-        const char* g_defaultWrong = "Oops, that was not the right one!";
+        const char* g_defaultCorrect = "Goedzo Meneer Hyman!.";
+        const char* g_defaultWrong = "Hmm.. volgends mij weet je beter...";
 
         std::string Text(const json& object, const char* key, const std::string& fallback = {})
         {
