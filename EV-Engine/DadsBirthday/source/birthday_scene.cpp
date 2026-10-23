@@ -264,12 +264,11 @@ void BirthdayGame::BuildScene(CommandList& commandList)
     m_pedestal = CreateNode("Pedestal", m_cakeRoot, XMMatrixTranslation(0.0f, 0.5f, 0.0f));
     m_pedestal->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(1.3f, 1.0f, 1.3f), 0.0f),
         CreateColorMaterial(XMFLOAT4(0.92f, 0.9f, 0.86f, 1.0f), 0.35f, 0.0f)));
-    // Two balloons at each corner of the pedestal.
-    for (int corner = 0; corner < 4; ++corner)
+    // Balloons at the two corners on the sea side, leaning out to the sides (the start menu looks at the cake
+    // from the other side).
+    for (float x : { -0.6f, 0.6f })
     {
-        const float x = (corner & 1) ? 0.6f : -0.6f;
-        const float z = (corner & 2) ? 0.6f : -0.6f;
-        AddBalloons(m_cakeRoot, XMVectorSet(x, 1.0f, z, 1.0f), std::atan2(x, z), 2);
+        AddBalloons(m_cakeRoot, XMVectorSet(x, 1.0f, 0.6f, 1.0f), x > 0.0f ? XM_PIDIV2 - 0.3f : -XM_PIDIV2 + 0.3f, 3);
     }
     m_cake = CreateNode("Cake", m_cakeRoot, XMMatrixScaling(g_cakeScale, g_cakeScale, g_cakeScale) * XMMatrixTranslation(0.0f, 1.0f, 0.0f));
     CopyNodes(LoadModel(commandList, g_cakeFile)->GetRootNode(), m_cake);
@@ -438,7 +437,8 @@ void BirthdayGame::BuildProps(CommandList& commandList)
     }
     m_litScenes.push_back(AddEditorScene("Beach Props", beach));
 
-    // On the promenade: benches looking at the sea, lanterns with string lights, flags at the corners.
+    // On the promenade: benches looking at the sea, lanterns along the front, lanterns with string lights along
+    // both sides (not in front of the screens), flags at the corners.
     auto promenade = CreateNode("Promenade Props", nullptr);
     auto bench = model(L"holiday/bench.glb");
     for (float x : { -18.5f, -9.5f, 9.5f, 18.5f })
@@ -447,25 +447,33 @@ void BirthdayGame::BuildProps(CommandList& commandList)
     }
     auto lantern = model(L"holiday/lantern.glb");
     auto lights = model(L"holiday/lights-colored.glb");
-    const float lanternX[] = { -23.0f, -14.0f, -5.0f, 5.0f, 14.0f, 23.0f };
-    const float lanternZ = floorFront - 0.7f;
     const float lanternHeight = 3.2f;
-    for (float x : lanternX)
+    for (float x : { -14.0f, -5.0f, 5.0f, 14.0f })
     {
-        PlaceModel(lantern, promenade, "Lantern", x, lanternZ, 0.0f, lanternHeight, Fit::Height);
+        PlaceModel(lantern, promenade, "Lantern", x, floorFront - 0.7f, 0.0f, lanternHeight, Fit::Height);
     }
     BoundingBox lightsBounds;
     ComputeModelBounds(lights->GetRootNode(), lightsBounds);
-    for (size_t i = 0; i + 1 < _countof(lanternX); ++i)
+    const float sideZ[] = { floorFront - 0.7f, -16.5f, -24.5f, floorBack + 0.7f };
+    for (float x : { -24.3f, 24.3f })
     {
-        // Stretched from lantern to lantern, hanging a little.
-        const float span = lanternX[i + 1] - lanternX[i];
-        const float sag = 0.8f;
-        auto node = CreateNode("String Lights", promenade,
-            XMMatrixScaling(span / (lightsBounds.Extents.x * 2.0f), sag / (lightsBounds.Extents.y * 2.0f), 1.0f) *
-            XMMatrixTranslation((lanternX[i] + lanternX[i + 1]) * 0.5f - lightsBounds.Center.x * span / (lightsBounds.Extents.x * 2.0f),
-                floorTop + lanternHeight - 0.25f - sag, lanternZ));
-        CopyNodes(lights->GetRootNode(), node);
+        for (size_t i = 0; i < _countof(sideZ); ++i)
+        {
+            PlaceModel(lantern, promenade, "Lantern", x, sideZ[i], 90.0f, lanternHeight, Fit::Height);
+            if (i + 1 == _countof(sideZ))
+            {
+                continue;
+            }
+            // Stretched from lantern to lantern (the model runs along x, so it is turned to run along z), hanging a little.
+            const float span = std::abs(sideZ[i + 1] - sideZ[i]);
+            const float sag = 0.8f;
+            auto node = CreateNode("String Lights", promenade,
+                XMMatrixTranslation(-lightsBounds.Center.x, -(lightsBounds.Center.y - lightsBounds.Extents.y), 0.0f) *
+                XMMatrixScaling(span / (lightsBounds.Extents.x * 2.0f), sag / (lightsBounds.Extents.y * 2.0f), 1.0f) *
+                XMMatrixRotationY(XM_PIDIV2) *
+                XMMatrixTranslation(x, floorTop + lanternHeight - 0.25f - sag, (sideZ[i] + sideZ[i + 1]) * 0.5f));
+            CopyNodes(lights->GetRootNode(), node);
+        }
     }
     auto flag = model(L"pirate/flag-pennant.glb");
     for (const XMFLOAT2& corner : { XMFLOAT2(-25.0f, floorFront - 0.6f), XMFLOAT2(25.0f, floorFront - 0.6f), XMFLOAT2(-25.0f, floorBack + 0.6f),

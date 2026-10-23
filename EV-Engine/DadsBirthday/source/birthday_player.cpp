@@ -34,8 +34,8 @@ namespace
     constexpr float g_wakeTime = 5.0f;     // Waking up on the beach.
     constexpr float g_wakeControl = 4.0f;  // The player can look and walk from here.
     // The menu camera looks at the cake from behind it, with the beach and the sea behind the cake.
-    const XMFLOAT3 g_menuCamera = { 0.0f, floorTop + 1.95f, cakeZ - 3.1f };
-    constexpr float g_menuPitch = 11.0f;
+    const XMFLOAT3 g_menuCamera = { 0.0f, floorTop + 2.2f, cakeZ - 3.8f };
+    constexpr float g_menuPitch = 13.0f;
 
     bool IsKeyDown(int key)
     {
@@ -893,7 +893,20 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
                 m_lookYaw = 60.0f;
                 m_lookPitch = 2.0f;
             }, always },
-        { "12_editor", [this]() { m_editor->StopPlaying(); }, always },
+        { "12_shadows", [&]()
+            {
+                // Standing on the promenade with the sun behind: the shadows fall away from the camera.
+                m_playerPosition = XMFLOAT3(5.0f, 0.0f, cakeZ + 4.5f);
+                m_lookYaw = 228.0f;
+                m_lookPitch = 22.0f;
+            }, always },
+        { "13_promenade", [&]()
+            {
+                m_playerPosition = XMFLOAT3(13.0f, 0.0f, -3.0f);
+                m_lookYaw = 235.0f;
+                m_lookPitch = 8.0f;
+            }, always },
+        { "14_editor", [this]() { m_editor->StopPlaying(); }, always },
     };
     constexpr size_t stepCount = sizeof(steps) / sizeof(steps[0]);
 
