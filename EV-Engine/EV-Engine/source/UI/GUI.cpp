@@ -76,7 +76,7 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
     {
         ImFontConfig largeConfig;
         largeConfig.OversampleH = 2;
-        m_largeFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeuib.ttf", 34.0f * m_fontDPIScale, &largeConfig);
+        m_largeFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeuib.ttf", 56.0f * m_fontDPIScale, &largeConfig);
     }
     ImGui::GetStyle().ScaleAllSizes(m_fontDPIScale);
 
