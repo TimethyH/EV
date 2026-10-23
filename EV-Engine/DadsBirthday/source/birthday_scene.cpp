@@ -91,6 +91,11 @@ bool BirthdayGame::LoadContent()
     m_directionalLights[0].color = XMFLOAT4(5.4f, 5.05f, 4.45f, 1.0f);
     m_unlitPSO->SetIBLIntensity(0.35f);
 
+    // This beach's waves. A scene file with ocean settings (game/scene.evscene, loaded below) replaces them.
+    m_jonswapParams.windDirection = 75.0f;
+    m_jonswapParams.swell = 0.65f;
+    ApplySpectrumParameters();
+
     m_editor->SetPlayModeCallback([this](bool playing)
     {
         m_paused = false;

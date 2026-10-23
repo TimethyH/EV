@@ -512,6 +512,8 @@ bool Ocean::LoadContent()
     // Skybox cubemap and image based lighting (also when an HDR file is dropped into the editor).
     SetEnvironment(skyPanorama);
     m_editor->SetEnvironmentCallback([this](const std::shared_ptr<Texture>& panorama) { SetEnvironment(panorama); });
+    m_editor->SetSceneSettingsCallbacks([this](std::map<std::string, float>& settings) { SaveSettings(settings); },
+        [this](const std::map<std::string, float>& settings) { LoadSettings(settings); });
     m_editor->SetRenderGraph(&m_renderGraph);
 
     m_pWindow->RegisterCallbacks(shared_from_this());
@@ -1062,14 +1064,92 @@ void Ocean::DrawOceanParameters()
 
     if (paramsChanged)
     {
-        m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
-        m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
-        m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
-        auto& cq = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-        auto cl = cq.GetCommandList();
-        for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
-            GenerateH0(cl, i);
-        cq.ExecuteCommandList(cl);
+        ApplySpectrumParameters();
+    }
+}
+
+void Ocean::ApplySpectrumParameters()
+{
+    m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
+    m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+    m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+    auto& cq = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto cl = cq.GetCommandList();
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+        GenerateH0(cl, i);
+    cq.ExecuteCommandList(cl);
+}
+
+void Ocean::ForEachSetting(const std::function<void(const char* name, float& value)>& visit)
+{
+    JonswapParameters& spectrum = m_jonswapParams;
+    visit("wind.speed", spectrum.windSpeed);
+    visit("wind.direction", spectrum.windDirection);
+    visit("wind.fetch", spectrum.fetch);
+    visit("spectrum.scale", spectrum.scale);
+    visit("spectrum.gamma", spectrum.gamma);
+    visit("spectrum.swell", spectrum.swell);
+    visit("spectrum.spreadBlend", spectrum.spreadBlend);
+    visit("spectrum.shortWavesFade", spectrum.shortWavesFade);
+
+    auto& render = m_displacementPSO->m_oceanRenderParams;
+    visit("lighting.oceanColor.r", render.oceanrColor.x);
+    visit("lighting.oceanColor.g", render.oceanrColor.y);
+    visit("lighting.oceanColor.b", render.oceanrColor.z);
+    visit("lighting.oceanColor.a", render.oceanrColor.w);
+    visit("lighting.scatterColor.r", render.scatterColor.x);
+    visit("lighting.scatterColor.g", render.scatterColor.y);
+    visit("lighting.scatterColor.b", render.scatterColor.z);
+    visit("lighting.scatterColor.a", render.scatterColor.w);
+    visit("lighting.heightModifier", render.heightMod);
+    visit("lighting.peakScatter", render.peakScatterIntensity);
+    visit("lighting.iblIntensity", render.IBLIntensity);
+    visit("lighting.shadowStrength", m_shadowStrength);
+    visit("lighting.shadowArea", m_shadowRadius);
+
+    visit("fog.density", m_fogDensity);
+    visit("fog.start", m_fogStart);
+    visit("fog.color.r", m_fogColor.x);
+    visit("fog.color.g", m_fogColor.y);
+    visit("fog.color.b", m_fogColor.z);
+
+    const char* foamNames[] = { "foam.decay", "foam.bias", "foam.intensity", "foam.threshold" };
+    for (size_t i = 0; i < _countof(foamNames) && i < m_foamParameters.size(); ++i)
+    {
+        visit(foamNames[i], m_foamParameters[i]);
+    }
+}
+
+void Ocean::SaveSettings(std::map<std::string, float>& settings)
+{
+    ForEachSetting([&](const char* name, float& value) { settings[name] = value; });
+    settings["lighting.shadows"] = m_shadowsEnabled ? 1.0f : 0.0f;
+    settings["lighting.objectIBL"] = m_unlitPSO->GetIBLIntensity();
+}
+
+void Ocean::LoadSettings(const std::map<std::string, float>& settings)
+{
+    bool spectrumChanged = false;
+    ForEachSetting([&](const char* name, float& value)
+    {
+        if (const auto saved = settings.find(name); saved != settings.end())
+        {
+            value = saved->second;
+            const std::string key = name;
+            spectrumChanged |= key.rfind("wind.", 0) == 0 || key.rfind("spectrum.", 0) == 0;
+        }
+    });
+    if (const auto shadows = settings.find("lighting.shadows"); shadows != settings.end())
+    {
+        m_shadowsEnabled = shadows->second > 0.5f;
+    }
+    if (const auto objectIBL = settings.find("lighting.objectIBL"); objectIBL != settings.end())
+    {
+        m_unlitPSO->SetIBLIntensity(objectIBL->second);
+    }
+    if (spectrumChanged)
+    {
+        ApplySpectrumParameters();
     }
 }
 

@@ -1,5 +1,8 @@
 #pragma once
+#include <functional>
 #include <future>
+#include <map>
+#include <string>
 
 
 #include "DirectXMath.h"
@@ -95,6 +98,12 @@ protected:
 	void DrawMenu();
 	void DrawOceanParameters();
 	void DrawLightParameters();
+	// Compute the spectrum's derived values and the waves' starting spectrum (H0) again after m_jonswapParams changed.
+	void ApplySpectrumParameters();
+	// The Ocean Parameters panel's values, saved in scene files (Editor::SetSceneSettingsCallbacks).
+	void ForEachSetting(const std::function<void(const char* name, float& value)>& visit);
+	void SaveSettings(std::map<std::string, float>& settings);
+	void LoadSettings(const std::map<std::string, float>& settings);
 	void ResizeViewport(uint32_t width, uint32_t height);
 	void OnKeyPress(KeyEventArgs& e) override;
 	void OnKeyRelease(KeyEventArgs& e) override;

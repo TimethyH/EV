@@ -23,6 +23,7 @@
 #include <filesystem>
 #include <functional>
 #include <future>
+#include <map>
 #include <memory>
 #include <set>
 #include <string>
@@ -133,6 +134,16 @@ namespace EV
         void SetEnvironmentCallback(std::function<void(const std::shared_ptr<Texture>& panorama)> callback)
         {
             m_environmentCallback = std::move(callback);
+        }
+
+        // Values of the application that are saved with the scene ("settings" in scene files), e.g. the ocean's
+        // parameters. save fills in the values to store; load gets the values of an opened scene file (only the ones
+        // the file has, so older files keep the current values).
+        void SetSceneSettingsCallbacks(std::function<void(std::map<std::string, float>& settings)> save,
+            std::function<void(const std::map<std::string, float>& settings)> load)
+        {
+            m_saveSettingsCallback = std::move(save);
+            m_loadSettingsCallback = std::move(load);
         }
 
         // Folder shown in the Assets panel (relative to the working directory). Default: "assets".
@@ -299,6 +310,7 @@ namespace EV
             DirectX::XMFLOAT4             cameraRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
             float                         cameraFov = 45.0f;
             std::filesystem::path         environment;
+            std::map<std::string, float>  settings; // The application's (SetSceneSettingsCallbacks).
         };
 
         // Open and save dialogs run on their own thread, so the window keeps rendering while one is open.
@@ -493,6 +505,8 @@ namespace EV
         bool                         m_showModelPreview = true;
         bool                         m_focusModelPreview = false;
         std::function<void(const std::shared_ptr<Texture>&)> m_environmentCallback;
+        std::function<void(std::map<std::string, float>&)>       m_saveSettingsCallback;
+        std::function<void(const std::map<std::string, float>&)> m_loadSettingsCallback;
         std::unique_ptr<EnvironmentLoad> m_environmentLoad;
         std::unique_ptr<ModelDrag>   m_modelDrag;
         std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
