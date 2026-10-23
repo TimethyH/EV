@@ -40,6 +40,8 @@ namespace EV
 	class RootSignature;
 	class Editor;
 	class Texture;
+	class SceneVisitor;
+	class RGPassContext;
 }
 
 // struct DirectionalLight;
@@ -99,7 +101,26 @@ protected:
 	void OnMouseWheel(MouseWheelEventArgs& e) override;
 	void OnResize(ResizeEventArgs& e) override;
 
-private:
+	// Hooks for games built on the ocean (see DadsBirthday). The defaults are OceanRenderer's own behaviour.
+
+	// Load the game's content. Called once from LoadContent with its copy command list, after the ocean was created.
+	virtual void LoadGameContent(const std::shared_ptr<EV::CommandList>& commandList) {}
+	// Called every frame from OnUpdate before the camera rotation is rebuilt from m_pitch and m_yaw.
+	virtual void UpdateGame(UpdateEventArgs& e) {}
+	// Fill m_pointLights for this frame. OceanRenderer animates one blue light.
+	virtual void UpdatePointLights(float time, DirectX::FXMMATRIX viewMatrix);
+	// Draw the objects into the HDR color and depth targets (render graph pass "Objects"). OceanRenderer draws
+	// the helmet, the models placed in the editor and a sphere per point light.
+	virtual void DrawObjects(EV::RGPassContext& context, EV::SceneVisitor& visitor);
+	// ImGui drawn by the game itself, between Editor::BeginFrame and EndFrame (also in play mode).
+	virtual void DrawGameGUI() {}
+
+	// Load the helmet, chessboard and boat. A game turns this off in its constructor.
+	bool m_loadDemoContent = true;
+	// The HDR panorama the skybox and image based lighting are made from.
+	std::wstring m_skyPanoramaFile = L"assets/sky4k.hdr";
+
+protected:
 	/// <summary>
 	/// Gets the file path of the currently running executable.
 	/// </summary>
