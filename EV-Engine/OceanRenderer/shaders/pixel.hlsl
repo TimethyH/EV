@@ -134,6 +134,10 @@ struct Camera
     float3 FogColor;
     float FogDensity;   // 0 = no fog.
     float FogStart;     // Distance where the fog starts.
+    float ShadowStrength;  // 0 = no shadow map (EffectPSO::SetShadowMap).
+    float ShadowTexelSize; // 1 / shadow map size.
+    float Padding;
+    matrix ShadowMatrix;   // World space to shadow map (u, v, depth).
 };
 
 cbuffer CameraCB : register(b1, space0)
@@ -237,6 +241,35 @@ Texture2D<float2> brdfLUT : register(t14);
 SamplerState anisotropicSampler : register(s0); // for material textures
 SamplerState linearClampSampler : register(s1); // for IBL
 
+// Shadows of the first directional light.
+Texture2D<float> ShadowMap : register(t15);
+SamplerComparisonState shadowSampler : register(s2);
+
+// 1 = lit, 0 = in shadow. Soft edges from 3x3 filtered lookups.
+float ShadowFactor(float3 positionWS, float3 normalWS)
+{
+    if (camera.ShadowStrength <= 0.0f)
+    {
+        return 1.0f;
+    }
+    // Pushing the position out along the normal a little keeps surfaces from shadowing themselves.
+    const float4 shadowPosition = mul(camera.ShadowMatrix, float4(positionWS + normalWS * 0.04f, 1.0f));
+    const float3 uvz = shadowPosition.xyz / shadowPosition.w;
+    if (any(uvz.xy < 0.0f) || any(uvz.xy > 1.0f) || uvz.z > 1.0f)
+    {
+        return 1.0f;
+    }
+    float lit = 0.0f;
+    [unroll] for (int y = -1; y <= 1; ++y)
+    {
+        [unroll] for (int x = -1; x <= 1; ++x)
+        {
+            lit += ShadowMap.SampleCmpLevelZero(shadowSampler, uvz.xy + float2(x, y) * camera.ShadowTexelSize, uvz.z);
+        }
+    }
+    return lerp(1.0f, lit / 9.0f, camera.ShadowStrength);
+}
+
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
@@ -331,6 +364,9 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 kd_ibl = (float3(1.0f, 1.0f, 1.0f) - fresnelIBL) * (1.0f - metallic);
     float3 specular = specularColor * (fresnelIBL * envBRDF.x + envBRDF.y);
     float3 ambient = (kd_ibl * diffuse + specular) * ao * camera.IBLIntensity;
+
+    // The sun's light is blocked by shadow casters.
+    directionalLightBRDF *= ShadowFactor(IN.PositionWS.xyz, normalize(IN.NormalWS));
 
      // Combine ambient, point light, and directional light contributions
     BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;

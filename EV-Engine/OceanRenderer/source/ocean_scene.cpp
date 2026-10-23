@@ -15,6 +15,7 @@
 #include "DX12/skybox_pso.h"
 #include "DX12/root_signature.h"
 #include "DX12/sdr_pso.h"
+#include "DX12/shadow_pso.h"
 #include "DX12/skybox_pso.h"
 
 #define PI 3.14159265359f
@@ -456,6 +457,7 @@ bool Ocean::LoadContent()
     m_brdfLutPSO = std::make_shared<ConvolutionCompute>(L"/brdf_lut.cso", brdfLutRootParameters, _countof(brdfLutRootParameters));
     m_skyboxPSO = std::make_shared<SkyboxPSO>(L"/skybox_VS.cso", L"/skybox_PS.cso");
     m_sdrPSO = std::make_shared<SDRPSO>(L"/HDR_to_SDR_VS.cso", L"/HDR_to_SDR_PS.cso");
+    m_shadowPSO = std::make_shared<ShadowPSO>(L"/shadow_VS.cso", L"/shadow_PS.cso");
     // m_permuteSlopePSO = std::make_shared<OceanCompute>(L"/permute_slopemap.cso", FFTRootParameters, _countof(FFTRootParameters));
 
 
@@ -672,6 +674,18 @@ void Ocean::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
     }
 }
 
+void Ocean::DrawShadowCasters(SceneVisitor& visitor)
+{
+    if (m_helmet)
+    {
+        m_helmet->Accept(visitor);
+    }
+    for (const auto& scene : m_editor->GetSpawnedScenes())
+    {
+        scene->Accept(visitor);
+    }
+}
+
 void Ocean::OnRender()
 {
     // Full screen toggles requested by the menu or F11 are applied here, before the frame is recorded:
@@ -832,14 +846,49 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
             m_oceanPlane->Accept(oceanVisitor);
         });
 
-    rg.AddPass("Objects")
+    // Shadows of the sun: the depth of the shadow casters seen from the sun, over a square around m_shadowCenter.
+    RGTexture shadowMap;
+    XMFLOAT4X4 shadowMatrix;
+    XMStoreFloat4x4(&shadowMatrix, XMMatrixIdentity());
+    if (m_shadowsEnabled && !m_directionalLights.empty())
+    {
+        const XMVECTOR toSun = XMVector3Normalize(-XMLoadFloat4(&m_directionalLights[0].directionWS));
+        const XMVECTOR center = XMLoadFloat3(&m_shadowCenter);
+        const XMVECTOR up = std::abs(XMVectorGetY(toSun)) > 0.99f ? XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f) : XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f);
+        const float radius = m_shadowRadius;
+        const XMMATRIX lightView = XMMatrixLookAtLH(center + toSun * radius * 3.0f, center, up);
+        const XMMATRIX lightProjection = XMMatrixOrthographicLH(radius * 2.0f, radius * 2.0f, 0.5f, radius * 6.0f);
+        XMFLOAT4X4 lightViewProjection;
+        XMStoreFloat4x4(&lightViewProjection, lightView * lightProjection);
+        // Clip space to texture coordinates (v points down).
+        XMStoreFloat4x4(&shadowMatrix, lightView * lightProjection * XMMatrixScaling(0.5f, -0.5f, 1.0f) * XMMatrixTranslation(0.5f, 0.5f, 0.0f));
+
+        shadowMap = rg.Create("Shadow Map", RGTextureDesc::Tex2D(DXGI_FORMAT_D32_FLOAT, m_shadowMapSize, m_shadowMapSize));
+        rg.AddPass("Shadows")
+            .DepthStencil(shadowMap, RGClear::Depth(1.0f))
+            .Execute([this, lightViewProjection](RGPassContext& context)
+            {
+                m_shadowPSO->SetLightViewProjection(XMLoadFloat4x4(&lightViewProjection));
+                SceneVisitor visitor(context.GetCommandList(), m_camera, *m_shadowPSO, false);
+                DrawShadowCasters(visitor);
+            });
+    }
+
+    auto objectsPass = rg.AddPass("Objects");
+    if (shadowMap.IsValid())
+    {
+        objectsPass.Read(shadowMap, RGAccess::PixelShaderRead);
+    }
+    objectsPass
         .Read(diffuseIrradiance, RGAccess::PixelShaderRead)
         .Read(specularIrradiance, RGAccess::PixelShaderRead)
         .Read(brdfLUT, RGAccess::PixelShaderRead)
         .RenderTarget(hdrColor)
         .DepthStencil(depth)
-        .Execute([this](RGPassContext& context)
+        .Execute([this, shadowMap, shadowMatrix](RGPassContext& context)
         {
+            m_unlitPSO->SetShadowMap(shadowMap.IsValid() ? context.GetTexture(shadowMap) : nullptr, XMLoadFloat4x4(&shadowMatrix),
+                m_shadowStrength);
             SceneVisitor visitor(context.GetCommandList(), m_camera, *m_unlitPSO, false);
             DrawObjects(context, visitor);
         });
@@ -962,6 +1011,12 @@ void Ocean::DrawOceanParameters()
         Slider("Height Modifier", &m_displacementPSO->m_oceanRenderParams.heightMod, 0.0f, 5.0f, "Vertical scale of SSS wave height proxy");
         Slider("Peak Scatter", &m_displacementPSO->m_oceanRenderParams.peakScatterIntensity, 0.0f, 1.0f, "Subsurface scatter intensity at wave crests");
         Slider("IBL Intensity", &m_displacementPSO->m_oceanRenderParams.IBLIntensity, 0.0f, 1.0f, "Image-based lighting contribution");
+
+        ImGui::Checkbox("Shadows", &m_shadowsEnabled);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Shadows of the sun on the objects");
+        ImGui::SliderFloat("Shadow Strength", &m_shadowStrength, 0.0f, 1.0f);
+        ImGui::SliderFloat("Shadow Area (m)", &m_shadowRadius, 5.0f, 200.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Meters to each side of the shadow center that get shadows");
 
         float objectIBL = m_unlitPSO->GetIBLIntensity();
         if (ImGui::SliderFloat("Object IBL", &objectIBL, 0.0f, 2.0f))
