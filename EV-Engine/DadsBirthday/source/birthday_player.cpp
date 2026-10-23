@@ -377,8 +377,8 @@ XMMATRIX BirthdayGame::GetRifleTransform() const
     // crosshair. Firing kicks it back and up; scoping in brings it to the middle, the scope in front of the eye.
     const float aim = SmoothStep(0.0f, 1.0f, m_scope);
     const float sway = std::sin(m_walkCycle * 0.55f) * 0.012f * (1.0f - aim);
-    const float x = 0.2f + (0.045f - 0.2f) * aim + sway;
-    const float y = -0.19f + (-0.14f + 0.19f) * aim + std::abs(sway);
+    const float x = 0.25f + (0.045f - 0.25f) * aim + sway;
+    const float y = -0.23f + (-0.14f + 0.23f) * aim + std::abs(sway);
     const XMMATRIX inView = XMMatrixRotationX(-0.15f * m_recoil) * XMMatrixRotationY(-0.045f * (1.0f - aim)) *
         XMMatrixTranslation(x, y, 0.95f - 0.1f * m_recoil);
     return inView * XMMatrixInverse(nullptr, m_camera.GetViewMatrix());
@@ -674,12 +674,13 @@ void BirthdayGame::DrawWakeUp(ImDrawList* drawList, const ImVec2& position, cons
     const float gap = openness * size.y * 0.85f;
     const float soft = size.y * 0.09f; // The blurry edge of the lids.
 
+    // Vertical slices on whole pixels, side by side: overlapping half transparent edges would show as stripes.
     const int slices = 64;
     const float sliceWidth = size.x / slices;
     for (int i = 0; i < slices; ++i)
     {
-        const float x0 = position.x + i * sliceWidth;
-        const float x1 = x0 + sliceWidth + 1.0f;
+        const float x0 = std::floor(position.x + i * sliceWidth);
+        const float x1 = i + 1 == slices ? position.x + size.x : std::floor(position.x + (i + 1) * sliceWidth);
         const float u = ((x0 + sliceWidth * 0.5f) - centerX) / (size.x * 0.5f);
         const float halfGap = gap * 0.5f * (1.0f - 0.35f * u * u); // Curved like an eye.
         const float topEdge = centerY - halfGap;
