@@ -335,6 +335,15 @@ bool Ocean::LoadContent()
     m_editor = std::make_unique<Editor>(m_GUI);
     m_editor->SetCamera(&m_camera);
     m_editor->SetCameraClipPlanes(0.1f, 1000.0f);
+    // OnUpdate rebuilds the camera rotation from pitch and yaw, so follow the editor when it moves the camera
+    // (a scene file was opened or play mode stopped).
+    m_editor->SetCameraChangedCallback([this]()
+    {
+        XMFLOAT3 forward;
+        XMStoreFloat3(&forward, XMVector3Rotate(XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f), m_camera.GetRotation()));
+        m_pitch = XMConvertToDegrees(std::asin(std::clamp(-forward.y, -1.0f, 1.0f)));
+        m_yaw = XMConvertToDegrees(std::atan2(forward.x, forward.z));
+    });
     m_editor->AddMenuCallback([this]() { DrawMenu(); });
     m_editor->AddPanel("Ocean Parameters", [this]() { DrawOceanParameters(); }, Editor::DockSlot::Right, m_showOceanParams);
     m_editor->AddPanel("Light Parameters", [this]() { DrawLightParameters(); }, Editor::DockSlot::Right, m_showLightParams);
@@ -851,9 +860,6 @@ void Ocean::DrawMenu()
 {
     if (ImGui::BeginMenu("File"))
     {
-        if (ImGui::MenuItem("Open file...", "Ctrl+O", nullptr, !m_isLoading))
-            m_showFileOpenDialog = true;
-        ImGui::Separator();
         if (ImGui::MenuItem("Exit", "Esc"))
             Application::Get().Stop();
         ImGui::EndMenu();
@@ -1286,7 +1292,11 @@ void Ocean::OnKeyPress(KeyEventArgs& e)
     switch (e.key)
     {
     case KeyCode::Escape:
-        Application::Get().Stop();
+        // While playing, Esc goes back to the editor (or quits a game started with --play); the editor handles it.
+        if (!m_editor || !m_editor->IsPlaying())
+        {
+            Application::Get().Stop();
+        }
         break;
     case KeyCode::Enter:
         if (e.alt)
