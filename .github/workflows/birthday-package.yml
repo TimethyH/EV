@@ -1,0 +1,130 @@
+name: Birthday game package
+
+# Builds the DadsBirthday game in Release and publishes "Happy Birthday.zip" (the game, its assets, the quiz in
+# DadsBirthday/game and the Visual C++ runtime) to the "happy-birthday" release:
+#   https://github.com/TimethyH/EV/releases/download/happy-birthday/HappyBirthday.zip
+# Unzip it anywhere and double click "Happy Birthday.exe"; nothing has to be installed.
+on:
+  push:
+    branches: [ Dads-Birthday ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: birthday-package
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-2025-vs2026
+    defaults:
+      run:
+        shell: pwsh
+    env:
+      GH_TOKEN: ${{ github.token }}
+      ASSIMP_SRC: EV-Engine/EV-Engine/thirdparty/assimp
+      LIB_DIR: EV-Engine/EV-Engine/lib
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: microsoft/setup-msbuild@v2
+        with:
+          vs-prerelease: true
+
+      # assimp is not committed (see windows-build.yml); the Release game needs its Release build.
+      - name: Cache assimp
+        id: cache-assimp
+        uses: actions/cache@v4
+        with:
+          path: assimp-out
+          key: assimp-${{ runner.os }}-v6.0.2-release-v1
+
+      - name: Build assimp
+        if: steps.cache-assimp.outputs.cache-hit != 'true'
+        run: |
+          git clone --depth 1 -b v6.0.2 https://github.com/assimp/assimp.git assimp-src
+          cmake -S assimp-src -B assimp-build -A x64 `
+            -DBUILD_SHARED_LIBS=OFF -DASSIMP_BUILD_TESTS=OFF -DASSIMP_BUILD_ASSIMP_TOOLS=OFF `
+            -DASSIMP_BUILD_SAMPLES=OFF -DASSIMP_INSTALL=OFF -DASSIMP_BUILD_ZLIB=ON -DASSIMP_WARNINGS_AS_ERRORS=OFF
+          cmake --build assimp-build --config Release --parallel
+          New-Item -ItemType Directory -Force assimp-out/include/assimp | Out-Null
+          Copy-Item assimp-build/include/assimp/*.h assimp-out/include/assimp/
+          Get-ChildItem assimp-build -Recurse -Filter "assimp-*.lib" | ForEach-Object { Copy-Item $_.FullName assimp-out/assimp.lib }
+
+      - name: Stage assimp
+        run: |
+          Copy-Item assimp-out/include/assimp/*.h "$env:ASSIMP_SRC/include/assimp/"
+          Copy-Item assimp-out/assimp.lib "$env:LIB_DIR/assimp-vc145-mt.lib"
+
+      - name: Build (Release x64)
+        run: |
+          msbuild EV-Engine/EV-Engine/EV-Engine.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          msbuild EV-Engine/DadsBirthday/DadsBirthday.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+
+      - name: Put the package together
+        run: |
+          $package = "package/Happy Birthday"
+          New-Item -ItemType Directory -Force $package | Out-Null
+          $build = "EV-Engine/x64/Release/DadsBirthday"
+          Copy-Item "$build/DadsBirthday.exe" "$package/Happy Birthday.exe"
+          Copy-Item "$build/*.cso" $package
+
+          # The assets and the quiz (questions and pictures).
+          gh release download birthday-assets -p birthday-assets.zip -R ${{ github.repository }} --clobber
+          Expand-Archive birthday-assets.zip -DestinationPath $package -Force
+          Copy-Item -Recurse EV-Engine/DadsBirthday/game "$package/game"
+
+          # The Visual C++ runtime next to the .exe, so nothing has to be installed.
+          $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -property installationPath
+          $redist = Get-ChildItem "$vs\VC\Redist\MSVC" -Directory | Sort-Object Name -Descending |
+            ForEach-Object { Get-ChildItem "$($_.FullName)\x64" -Directory -Filter "Microsoft.VC*.CRT" -ErrorAction SilentlyContinue } |
+            Select-Object -First 1
+          Write-Host "Runtime: $($redist.FullName)"
+          Copy-Item "$($redist.FullName)\*.dll" $package
+
+          Set-Content "$package/README.txt" -Value @(
+            "Happy Birthday!",
+            "",
+            "Double click 'Happy Birthday.exe' to play.",
+            "",
+            "Walk with W A S D (Shift to run), look around with the mouse, shoot with the left mouse button.",
+            "Esc pauses the game; Esc again quits. F11 switches between full screen and a window.",
+            "",
+            "The questions and pictures are in the 'game' folder (questions.json and images)."
+          )
+          Get-ChildItem -Recurse $package | Select-Object -ExpandProperty FullName
+
+      # Play the packaged game on WARP like the CI does, started from the package folder like it will be.
+      - name: Test the package (WARP)
+        timeout-minutes: 30
+        env:
+          EV_USE_WARP: "1"
+        run: |
+          reg add "HKLM\SOFTWARE\Microsoft\Windows\Windows Error Reporting" /v DontShowUI /t REG_DWORD /d 1 /f | Out-Null
+          $package = Resolve-Path "package/Happy Birthday"
+          $shots = Join-Path (Get-Location) "package-test"
+          New-Item -ItemType Directory -Force $shots | Out-Null
+          $process = Start-Process -FilePath "$package\Happy Birthday.exe" -ArgumentList "--autopilot", "`"$shots`"" -WorkingDirectory $package -PassThru
+          if (-not $process.WaitForExit(1500000)) { Stop-Process -Id $process.Id -Force; Write-Host "::error::The packaged game did not finish"; exit 1 }
+          if (Test-Path "$package\ev_crash.log") { Write-Host "::error::$(Get-Content "$package\ev_crash.log" -Raw)"; exit 1 }
+          $count = (Get-ChildItem $shots -Filter *.bmp).Count
+          Write-Host "Exit code $($process.ExitCode), $count screenshots"
+          if ($count -lt 9) { exit 1 }
+          # The editor layout of the test run is not needed. The .assbin files (preprocessed models) stay: they make
+          # the first start faster.
+          Remove-Item -Force -ErrorAction SilentlyContinue "$package\imgui.ini", "$package\ev_crash*.log"
+
+      - name: Publish
+        run: |
+          Compress-Archive -Path "package/Happy Birthday" -DestinationPath HappyBirthday.zip -Force
+          Get-Item HappyBirthday.zip | Select-Object Name, Length
+          gh release view happy-birthday -R ${{ github.repository }} *> $null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create happy-birthday -R ${{ github.repository }} --target ${{ github.sha }} --title "Happy Birthday!" `
+              --notes "The birthday game. Download HappyBirthday.zip, unzip it and double click 'Happy Birthday.exe'."
+          }
+          gh release upload happy-birthday -R ${{ github.repository }} --clobber HappyBirthday.zip
