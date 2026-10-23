@@ -14,6 +14,7 @@
 #include <DirectXCollision.h>
 #include <DirectXMath.h>
 
+#include <cmath>
 #include <filesystem>
 #include <map>
 #include <memory>
@@ -91,6 +92,7 @@ protected:
     void UpdatePointLights(float time, DirectX::FXMMATRIX viewMatrix) override;
     void DrawObjects(EV::RGPassContext& context, EV::SceneVisitor& visitor) override;
     void DrawGameGUI() override;
+    void DrawShadowCasters(EV::SceneVisitor& visitor) override;
 
     // In the editor the ocean's fly camera gets the input; while playing the player controller reads it itself.
     void OnKeyPress(KeyEventArgs& e) override;
@@ -116,6 +118,21 @@ private:
         float phase = 0.0f;
         float heading = 0.0f;   // Radians, the direction it flies.
         float hitTime = -1.0f;  // Seconds since it was shot; < 0 when it was not.
+    };
+
+    // A balloon on a string, swaying around where the string is tied.
+    struct Balloon
+    {
+        std::shared_ptr<EV::SceneNode> pivot;
+        DirectX::XMFLOAT4X4            rest;  // The pivot's transform without swaying.
+        float                          phase = 0.0f;
+    };
+
+    // How PlaceModel sizes a model: by its height or by its largest side.
+    enum class Fit
+    {
+        Height,
+        Size,
     };
 
     struct Particle
@@ -153,6 +170,13 @@ private:
         const std::wstring& ambientRoughnessMetal);
     std::shared_ptr<EV::Scene> LoadModel(EV::CommandList& commandList, const std::wstring& file);
     Screen CreateScreen(EV::CommandList& commandList, const std::string& name, float x, float turnDegrees);
+    void BuildProps(EV::CommandList& commandList);
+    // A copy of a model below parent, made size meters high (or long), turned and standing on the ground at (x, z)
+    // (or with its bottom at height y when y is given).
+    std::shared_ptr<EV::SceneNode> PlaceModel(const std::shared_ptr<EV::Scene>& model, const std::shared_ptr<EV::SceneNode>& parent,
+        const std::string& name, float x, float z, float turnDegrees, float size, Fit fit, float y = NAN);
+    // Balloons tied at a point (in parent's space), leaning outwards in the given direction (radians around y).
+    void AddBalloons(const std::shared_ptr<EV::SceneNode>& parent, DirectX::FXMVECTOR tiedAt, float lean, int count);
     // Shows a node tree in the editor's hierarchy (so it can be moved and saved in scene files).
     std::shared_ptr<EV::Scene> AddEditorScene(const std::string& name, const std::shared_ptr<EV::SceneNode>& root);
     void UpdateScene(float deltaTime);
@@ -198,6 +222,13 @@ private:
     std::shared_ptr<EV::EffectPSO>            m_screenPSO;  // Unlit pictures that come out of the tonemapper unchanged.
     std::vector<std::shared_ptr<EV::Scene>>   m_litScenes;  // Everything drawn with the lighting shader.
     std::shared_ptr<EV::Scene>                m_beach;
+    std::shared_ptr<EV::Scene>                m_promenade;
+    std::shared_ptr<EV::SceneNode>            m_pedestal;
+    std::shared_ptr<EV::SceneNode>            m_ship;
+    DirectX::XMFLOAT4X4                       m_shipRest = {};
+    std::vector<Balloon>                      m_balloons;
+    std::shared_ptr<EV::Mesh>                 m_balloonMesh;
+    std::shared_ptr<EV::Mesh>                 m_stringMesh;
     std::shared_ptr<EV::Scene>                m_rifle;
     std::shared_ptr<EV::SceneNode>            m_cake;       // The part that spins.
     std::shared_ptr<EV::SceneNode>            m_cakeRoot;   // Moved in the editor.

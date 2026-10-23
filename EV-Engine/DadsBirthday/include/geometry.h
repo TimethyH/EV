@@ -73,4 +73,7 @@ namespace Birthday
 
     // Bounds of every mesh below a node in the node's own space (its parents and its own transform ignored).
     bool ComputeLocalBounds(const std::shared_ptr<EV::SceneNode>& root, DirectX::BoundingBox& bounds);
+
+    // Bounds of a loaded model as CopyNodes places it: in its parent's space (the root's own transform included).
+    bool ComputeModelBounds(const std::shared_ptr<EV::SceneNode>& root, DirectX::BoundingBox& bounds);
 }

@@ -227,4 +227,14 @@ namespace Birthday
         }
         return any;
     }
+
+    bool ComputeModelBounds(const std::shared_ptr<SceneNode>& root, BoundingBox& bounds)
+    {
+        bool any = false;
+        if (root)
+        {
+            MergeBounds(root, root->GetLocalTransform(), bounds, any);
+        }
+        return any;
+    }
 }
