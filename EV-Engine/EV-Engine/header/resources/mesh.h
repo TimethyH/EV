@@ -36,6 +36,7 @@
 
 #include <map>     // For std::map
 #include <memory>  // For std::shared_ptr
+#include <string>  // For std::wstring
 
 namespace EV
 {
@@ -50,6 +51,14 @@ namespace EV
     {
     public:
         using BufferMap = std::map<uint32_t, std::shared_ptr<VertexBuffer>>;
+
+        // The model file a mesh was imported from. Scene files refer to meshes this way.
+        struct Source
+        {
+            std::wstring file;      // Empty for meshes created in code (cubes, planes...).
+            uint64_t     loadID = 0; // Every load of a file gets its own ID, so two copies of a model can be told apart.
+            uint32_t     index = 0;  // Index of the mesh in the file.
+        };
 
         Mesh();
         ~Mesh() = default;
@@ -88,6 +97,9 @@ namespace EV
         void                        SetAABB(const DirectX::BoundingBox& aabb);
         const DirectX::BoundingBox& GetAABB() const;
 
+        void          SetSource(const Source& source) { m_source = source; }
+        const Source& GetSource() const { return m_source; }
+
         /**
          * Draw the mesh to a CommandList.
          *
@@ -108,5 +120,6 @@ namespace EV
         std::shared_ptr<Material>    m_material;
         D3D12_PRIMITIVE_TOPOLOGY     m_primitiveTopology;
         DirectX::BoundingBox         m_AABB;
+        Source                       m_source;
     };
 }  // namespace EV
