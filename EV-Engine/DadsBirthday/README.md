@@ -7,7 +7,7 @@ as if from a dream: the eyes open, blink, and you sit up looking at the sea. Beh
 flying above each of them and a birthday cake on a pedestal in the middle. Shoot the cake to get a question: the
 left and right screen each show an answer. Shoot the bird above the answer you think is right. That screen then
 shows a picture: a nice one for the right answer, something else for the wrong one. Shoot the cake again for the
-next question. After the last question the cake brings the finale: "Happy Birthday" on the left screen and all the
+next question. Behind the screens are the big CURACAO letters and a row of colorful Willemstad houses. After the last question the cake brings the finale: "Happy Birthday" on the left screen and all the
 pictures together on the right one.
 
 ## Controls

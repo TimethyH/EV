@@ -186,6 +186,79 @@ namespace Birthday
         return image;
     }
 
+    ShapeMask RenderLetterMask(wchar_t letter, uint32_t pixelHeight, uint32_t margin)
+    {
+        // Capitals are about 0.7 of the font size high. The bitmap has room for any letter.
+        const int fontSize = static_cast<int>(pixelHeight * 1.4f);
+        const int size = fontSize * 2;
+
+        HDC screen = GetDC(nullptr);
+        HDC dc = CreateCompatibleDC(screen);
+        ReleaseDC(nullptr, screen);
+        BITMAPINFO info = {};
+        info.bmiHeader.biSize = sizeof(BITMAPINFOHEADER);
+        info.bmiHeader.biWidth = size;
+        info.bmiHeader.biHeight = -size; // Top-down rows.
+        info.bmiHeader.biPlanes = 1;
+        info.bmiHeader.biBitCount = 32;
+        info.bmiHeader.biCompression = BI_RGB;
+        void* bits = nullptr;
+        HBITMAP bitmap = CreateDIBSection(dc, &info, DIB_RGB_COLORS, &bits, nullptr, 0);
+        if (!bitmap || !bits)
+        {
+            DeleteDC(dc);
+            throw std::runtime_error("Could not create a bitmap for a letter");
+        }
+        HGDIOBJ previousBitmap = SelectObject(dc, bitmap);
+        const uint32_t* pixels = static_cast<const uint32_t*>(bits);
+        std::fill(static_cast<uint32_t*>(bits), static_cast<uint32_t*>(bits) + size * size, 0u);
+
+        HFONT font = CreateFontW(-fontSize, 0, 0, 0, FW_BLACK, FALSE, FALSE, FALSE, DEFAULT_CHARSET, OUT_TT_PRECIS,
+            CLIP_DEFAULT_PRECIS, ANTIALIASED_QUALITY, DEFAULT_PITCH | FF_SWISS, L"Segoe UI");
+        HGDIOBJ previousFont = SelectObject(dc, font);
+        SetBkMode(dc, TRANSPARENT);
+        SetTextColor(dc, RGB(255, 255, 255));
+        TextOutW(dc, fontSize / 2, fontSize / 4, &letter, 1);
+        GdiFlush();
+
+        // Crop to the ink.
+        int minX = size, minY = size, maxX = -1, maxY = -1;
+        for (int y = 0; y < size; ++y)
+        {
+            for (int x = 0; x < size; ++x)
+            {
+                if ((pixels[y * size + x] & 0xFFu) >= 128u)
+                {
+                    minX = std::min(minX, x);
+                    maxX = std::max(maxX, x);
+                    minY = std::min(minY, y);
+                    maxY = std::max(maxY, y);
+                }
+            }
+        }
+        ShapeMask mask;
+        if (maxX >= minX)
+        {
+            mask.width = static_cast<uint32_t>(maxX - minX + 1) + margin * 2;
+            mask.height = static_cast<uint32_t>(maxY - minY + 1) + margin * 2;
+            mask.inside.assign(static_cast<size_t>(mask.width) * mask.height, 0);
+            for (int y = minY; y <= maxY; ++y)
+            {
+                for (int x = minX; x <= maxX; ++x)
+                {
+                    mask.inside[(y - minY + margin) * mask.width + (x - minX + margin)] = (pixels[y * size + x] & 0xFFu) >= 128u;
+                }
+            }
+        }
+
+        SelectObject(dc, previousFont);
+        SelectObject(dc, previousBitmap);
+        DeleteObject(font);
+        DeleteObject(bitmap);
+        DeleteDC(dc);
+        return mask;
+    }
+
     Image LoadPicture(const std::filesystem::path& path, uint32_t maxSize)
     {
         // WIC needs COM on the calling thread (pictures are decoded on worker threads).

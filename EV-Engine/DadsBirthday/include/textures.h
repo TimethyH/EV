@@ -14,6 +14,8 @@
 #include <string>
 #include <vector>
 
+#include "geometry.h"
+
 namespace EV
 {
     class CommandList;
@@ -45,6 +47,10 @@ namespace Birthday
     };
 
     Image RenderTextCard(const TextCard& card);
+
+    // One letter in a heavy font as a mask, cropped to the letter with a margin (pixels) around it. The letter is
+    // about pixelHeight pixels high.
+    ShapeMask RenderLetterMask(wchar_t letter, uint32_t pixelHeight, uint32_t margin);
 
     // Loads a picture (jpg, png, bmp, gif, tiff...) and makes it at most maxSize pixels wide and high. The rotation
     // stored by phone cameras (EXIF orientation) is applied. Throws std::runtime_error when it cannot be read.

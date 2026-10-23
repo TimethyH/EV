@@ -294,6 +294,7 @@ void BirthdayGame::BuildScene(CommandList& commandList)
     m_litScenes.push_back(AddEditorScene("Palm Trees", palms));
 
     BuildProps(commandList);
+    BuildCuracao(commandList);
 
     // The rifle is drawn in front of the camera while playing; it is not part of the editable scene.
     m_rifle = LoadModel(commandList, g_rifleFile);
@@ -527,6 +528,11 @@ float BirthdayGame::BeachHeight(float x, float z)
         const float distance = floorBack - z;
         height += std::pow(distance / 40.0f, 1.5f) * 9.0f * SmoothStep(0.0f, 6.0f, distance);
         height += 0.8f * std::sin(x * 0.11f + 0.5f) * std::sin(z * 0.13f) * SmoothStep(4.0f, 20.0f, distance);
+
+        // Willemstad's terrace (curacao.cpp), with the dunes rising again behind the houses.
+        const float town = SmoothStep(floorBack - 1.0f, townFront, z) * SmoothStep(townBack - 8.0f, townBack, z) *
+            (1.0f - SmoothStep(townHalfWidth - 8.0f, townHalfWidth, std::abs(x)));
+        height += (townTop - height) * town;
     }
 
     // The land ends in the sea at the sides.

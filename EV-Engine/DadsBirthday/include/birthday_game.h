@@ -7,6 +7,7 @@
  *  bird above the right screen. Built on OceanRenderer's ocean (EV::Ocean); the editor is still there with --editor.
  *
  *  birthday_scene.cpp  the beach, promenade, screens, birds, cake and palm trees
+ *  curacao.cpp         Willemstad behind the promenade: the CURACAO letters and the colorful houses
  *  birthday_player.cpp walking, looking, the rifle, the HUD and the autopilot used by the CI
  *  birthday_quiz.cpp   questions, answers, pictures and the finale
  */
@@ -67,6 +68,15 @@ namespace Birthday::Layout
     constexpr float birdRange = 4.2f;       // How far the birds fly to each side of the middle of their screen.
 
     constexpr float cakeZ = -16.0f;
+
+    // Willemstad (Curacao) behind the promenade: a flat terrace in the dunes with the big CURACAO letters on a
+    // brick plaza and a row of colorful houses behind them.
+    constexpr float townTop = 2.2f;
+    constexpr float townFront = -38.0f;
+    constexpr float townBack = -66.0f;
+    constexpr float townHalfWidth = 56.0f;
+    constexpr float lettersZ = -42.0f;  // The front of the letters.
+    constexpr float housesZ = -52.0f;   // The houses' front walls.
 }
 
 class BirthdayGame : public EV::Ocean
@@ -171,6 +181,8 @@ private:
     std::shared_ptr<EV::Scene> LoadModel(EV::CommandList& commandList, const std::wstring& file);
     Screen CreateScreen(EV::CommandList& commandList, const std::string& name, float x, float turnDegrees);
     void BuildProps(EV::CommandList& commandList);
+    // Curacao (curacao.cpp)
+    void BuildCuracao(EV::CommandList& commandList);
     // A copy of a model below parent, made size meters high (or long), turned and standing on the ground at (x, z)
     // (or with its bottom at height y when y is given).
     std::shared_ptr<EV::SceneNode> PlaceModel(const std::shared_ptr<EV::Scene>& model, const std::shared_ptr<EV::SceneNode>& parent,

@@ -2,6 +2,9 @@
 
 #include "geometry.h"
 
+#include <algorithm>
+#include <cmath>
+
 using namespace DirectX;
 using namespace EV;
 
@@ -40,6 +43,304 @@ namespace Birthday
         }
         AddTriangle(first + 0, first + 1, first + 2);
         AddTriangle(first + 1, first + 3, first + 2);
+    }
+
+    void MeshData::AddPolygon(const std::vector<XMFLOAT3>& corners, FXMVECTOR normal)
+    {
+        const uint32_t first = static_cast<uint32_t>(vertices.size());
+        const XMVECTOR n = XMVector3Normalize(normal);
+        // Any direction in the plane works as the tangent: these meshes have no normal maps.
+        const XMVECTOR up = std::abs(XMVectorGetY(n)) < 0.9f ? XMVectorSet(0.0f, 1.0f, 0.0f, 0.0f) : XMVectorSet(1.0f, 0.0f, 0.0f, 0.0f);
+        const XMVECTOR tangent = XMVector3Normalize(XMVector3Cross(up, n));
+        const XMVECTOR bitangent = XMVector3Cross(n, tangent);
+        for (const XMFLOAT3& corner : corners)
+        {
+            const XMVECTOR position = XMLoadFloat3(&corner);
+            vertices.emplace_back(position, n, XMVectorSet(XMVectorGetX(XMVector3Dot(position, tangent)),
+                XMVectorGetX(XMVector3Dot(position, bitangent)), 0.0f, 0.0f), tangent, bitangent);
+        }
+        for (uint32_t i = 2; i < corners.size(); ++i)
+        {
+            AddTriangle(first, first + i - 1, first + i);
+        }
+    }
+
+    void MeshData::Append(const MeshData& source, FXMMATRIX transform)
+    {
+        const uint32_t first = static_cast<uint32_t>(vertices.size());
+        for (const Vertex& vertex : source.vertices)
+        {
+            Vertex moved = vertex;
+            XMStoreFloat3(&moved.position, XMVector3TransformCoord(XMLoadFloat3(&vertex.position), transform));
+            XMStoreFloat3(&moved.normal, XMVector3TransformNormal(XMLoadFloat3(&vertex.normal), transform));
+            XMStoreFloat3(&moved.tangent, XMVector3TransformNormal(XMLoadFloat3(&vertex.tangent), transform));
+            XMStoreFloat3(&moved.bitangent, XMVector3TransformNormal(XMLoadFloat3(&vertex.bitangent), transform));
+            vertices.push_back(moved);
+        }
+        for (uint32_t index : source.indices)
+        {
+            indices.push_back(first + index);
+        }
+    }
+
+    void MeshData::AddBox(const XMFLOAT3& center, const XMFLOAT3& size)
+    {
+        Append(BuildBox(size, 0.0f), XMMatrixTranslation(center.x, center.y, center.z));
+    }
+
+    ShapeMask BuildPolygonMask(uint32_t width, uint32_t height, const std::vector<std::vector<XMFLOAT2>>& polygons)
+    {
+        ShapeMask mask;
+        mask.width = width;
+        mask.height = height;
+        mask.inside.assign(static_cast<size_t>(width) * height, 0);
+        for (uint32_t y = 0; y < height; ++y)
+        {
+            const float py = y + 0.5f;
+            for (const auto& polygon : polygons)
+            {
+                // Where the polygon's edges cross this row; between pairs of crossings is inside.
+                std::vector<float> crossings;
+                for (size_t i = 0; i < polygon.size(); ++i)
+                {
+                    const XMFLOAT2& a = polygon[i];
+                    const XMFLOAT2& b = polygon[(i + 1) % polygon.size()];
+                    if ((a.y <= py) != (b.y <= py))
+                    {
+                        crossings.push_back(a.x + (py - a.y) / (b.y - a.y) * (b.x - a.x));
+                    }
+                }
+                std::sort(crossings.begin(), crossings.end());
+                for (size_t i = 0; i + 1 < crossings.size(); i += 2)
+                {
+                    const int begin = std::max(0, static_cast<int>(std::ceil(crossings[i] - 0.5f)));
+                    const int end = std::min(static_cast<int>(width) - 1, static_cast<int>(std::floor(crossings[i + 1] - 0.5f)));
+                    for (int x = begin; x <= end; ++x)
+                    {
+                        mask.inside[static_cast<size_t>(y) * width + x] ^= 1;
+                    }
+                }
+            }
+        }
+        return mask;
+    }
+
+    namespace
+    {
+        // Squared distance to the nearest feature along one line (Felzenszwalb and Huttenlocher). f: 0 at features,
+        // a large number elsewhere.
+        void DistanceTransform1D(const std::vector<float>& f, std::vector<float>& d, std::vector<int>& v, std::vector<float>& z)
+        {
+            const int n = static_cast<int>(f.size());
+            int k = 0;
+            v[0] = 0;
+            z[0] = -1e20f;
+            z[1] = 1e20f;
+            for (int q = 1; q < n; ++q)
+            {
+                float s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2.0f * (q - v[k]));
+                while (s <= z[k])
+                {
+                    --k;
+                    s = ((f[q] + q * q) - (f[v[k]] + v[k] * v[k])) / (2.0f * (q - v[k]));
+                }
+                ++k;
+                v[k] = q;
+                z[k] = s;
+                z[k + 1] = 1e20f;
+            }
+            k = 0;
+            for (int q = 0; q < n; ++q)
+            {
+                while (z[k + 1] < q)
+                {
+                    ++k;
+                }
+                d[q] = (q - v[k]) * (q - v[k]) + f[v[k]];
+            }
+        }
+
+        // Squared distance (pixels) from every pixel to the nearest pixel whose mask value is the given one.
+        std::vector<float> SquaredDistanceTo(const ShapeMask& mask, uint8_t feature)
+        {
+            const uint32_t w = mask.width;
+            const uint32_t h = mask.height;
+            std::vector<float> grid(static_cast<size_t>(w) * h);
+            for (size_t i = 0; i < grid.size(); ++i)
+            {
+                grid[i] = mask.inside[i] == feature ? 0.0f : 1e20f;
+            }
+            const uint32_t longest = std::max(w, h);
+            std::vector<float> f(longest), d(longest), z(longest + 1);
+            std::vector<int> v(longest);
+            f.resize(h); d.resize(h);
+            for (uint32_t x = 0; x < w; ++x)
+            {
+                for (uint32_t y = 0; y < h; ++y) f[y] = grid[y * w + x];
+                DistanceTransform1D(f, d, v, z);
+                for (uint32_t y = 0; y < h; ++y) grid[y * w + x] = d[y];
+            }
+            f.resize(w); d.resize(w);
+            for (uint32_t y = 0; y < h; ++y)
+            {
+                for (uint32_t x = 0; x < w; ++x) f[x] = grid[y * w + x];
+                DistanceTransform1D(f, d, v, z);
+                for (uint32_t x = 0; x < w; ++x) grid[y * w + x] = d[x];
+            }
+            return grid;
+        }
+    }
+
+    DistanceField BuildDistanceField(const ShapeMask& mask, float pixelSize, uint32_t step)
+    {
+        const std::vector<float> toOutside = SquaredDistanceTo(mask, 0);
+        const std::vector<float> toInside = SquaredDistanceTo(mask, 1);
+
+        DistanceField field;
+        field.width = (mask.width - 1) / step + 1;
+        field.height = (mask.height - 1) / step + 1;
+        field.spacing = pixelSize * step;
+        field.distance.resize(static_cast<size_t>(field.width) * field.height);
+        for (uint32_t j = 0; j < field.height; ++j)
+        {
+            for (uint32_t i = 0; i < field.width; ++i)
+            {
+                // The outline runs between pixel centers, half a pixel from the nearest pixel on the other side.
+                const size_t pixel = static_cast<size_t>(j * step) * mask.width + i * step;
+                const float pixels = mask.inside[pixel] ? std::sqrt(toOutside[pixel]) - 0.5f : 0.5f - std::sqrt(toInside[pixel]);
+                field.distance[static_cast<size_t>(j) * field.width + i] = pixels * pixelSize;
+            }
+        }
+        return field;
+    }
+
+    MeshData ExtrudeShape(const DistanceField& field, float inset, float front, float back)
+    {
+        MeshData data;
+        const bool solid = back < front;
+        const float spacing = field.spacing;
+        const uint32_t w = field.width;
+        const uint32_t h = field.height;
+        auto value = [&](int i, int j)
+        {
+            i = std::clamp(i, 0, static_cast<int>(w) - 1);
+            j = std::clamp(j, 0, static_cast<int>(h) - 1);
+            return field.distance[static_cast<size_t>(j) * w + i] - inset;
+        };
+        // Outwards (where the distance gets smaller) in world space: grid +i is world -x and +j is world -y.
+        auto outward = [&](int i, int j)
+        {
+            return XMVectorSet(value(i + 1, j) - value(i - 1, j), value(i, j + 1) - value(i, j - 1), 0.0f, 0.0f);
+        };
+
+        struct Point
+        {
+            float    i, j;
+            bool     onOutline;
+            XMVECTOR normal; // On the outline only.
+        };
+        auto addCaps = [&](const std::vector<Point>& polygon)
+        {
+            std::vector<XMFLOAT3> corners;
+            for (const Point& point : polygon)
+            {
+                corners.emplace_back(-point.i * spacing, -point.j * spacing, front);
+            }
+            data.AddPolygon(corners, XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f));
+            if (solid)
+            {
+                for (XMFLOAT3& corner : corners)
+                {
+                    corner.z = back;
+                }
+                data.AddPolygon(corners, XMVectorSet(0.0f, 0.0f, -1.0f, 0.0f));
+            }
+        };
+        auto addSide = [&](const Point& a, const Point& b)
+        {
+            const float sideBack = solid ? back : front - 0.01f;
+            const uint32_t first = static_cast<uint32_t>(data.vertices.size());
+            const XMVECTOR tangent = XMVectorSet(0.0f, 0.0f, -1.0f, 0.0f);
+            for (const Point* point : { &a, &b })
+            {
+                const XMVECTOR normal = XMVector3Normalize(point->normal);
+                const XMVECTOR bitangent = XMVector3Cross(normal, tangent);
+                for (float z : { front, sideBack })
+                {
+                    data.vertices.emplace_back(XMVectorSet(-point->i * spacing, -point->j * spacing, z, 1.0f), normal,
+                        XMVectorSet(point->i * spacing, z, 0.0f, 0.0f), tangent, bitangent);
+                }
+            }
+            data.AddTriangle(first, first + 1, first + 2);
+            data.AddTriangle(first + 1, first + 3, first + 2);
+        };
+
+        for (uint32_t j = 0; j + 1 < h; ++j)
+        {
+            // Cells that are completely inside are joined into one quad per run.
+            int runStart = -1;
+            for (uint32_t i = 0; i + 1 <= w; ++i)
+            {
+                const bool full = i + 1 < w && value(i, j) > 0.0f && value(i + 1, j) > 0.0f && value(i + 1, j + 1) > 0.0f && value(i, j + 1) > 0.0f;
+                if (full)
+                {
+                    if (runStart < 0)
+                    {
+                        runStart = static_cast<int>(i);
+                    }
+                    continue;
+                }
+                if (runStart >= 0)
+                {
+                    const float i0 = static_cast<float>(runStart);
+                    const float i1 = static_cast<float>(i);
+                    const float j0 = static_cast<float>(j);
+                    addCaps({ { i0, j0, false, {} }, { i1, j0, false, {} }, { i1, j0 + 1, false, {} }, { i0, j0 + 1, false, {} } });
+                    runStart = -1;
+                }
+                if (i + 1 >= w)
+                {
+                    continue;
+                }
+
+                // A cell on the outline: walk its corners, adding the inside ones and where the outline crosses an edge.
+                const int ci[4] = { static_cast<int>(i), static_cast<int>(i) + 1, static_cast<int>(i) + 1, static_cast<int>(i) };
+                const int cj[4] = { static_cast<int>(j), static_cast<int>(j), static_cast<int>(j) + 1, static_cast<int>(j) + 1 };
+                std::vector<Point> polygon;
+                for (int k = 0; k < 4; ++k)
+                {
+                    const int n = (k + 1) % 4;
+                    const float a = value(ci[k], cj[k]);
+                    const float b = value(ci[n], cj[n]);
+                    if (a > 0.0f)
+                    {
+                        polygon.push_back({ static_cast<float>(ci[k]), static_cast<float>(cj[k]), false, {} });
+                    }
+                    if ((a > 0.0f) != (b > 0.0f))
+                    {
+                        const float t = a / (a - b);
+                        const XMVECTOR normal = XMVectorLerp(outward(ci[k], cj[k]), outward(ci[n], cj[n]), t);
+                        polygon.push_back({ ci[k] + (ci[n] - ci[k]) * t, cj[k] + (cj[n] - cj[k]) * t, true, normal });
+                    }
+                }
+                if (polygon.size() < 3)
+                {
+                    continue;
+                }
+                addCaps(polygon);
+                // Two outline points in a row are a piece of the outline: a wall from the front to the back.
+                for (size_t k = 0; k < polygon.size(); ++k)
+                {
+                    const Point& a = polygon[k];
+                    const Point& b = polygon[(k + 1) % polygon.size()];
+                    if (a.onOutline && b.onOutline)
+                    {
+                        addSide(a, b);
+                    }
+                }
+            }
+        }
+        return data;
     }
 
     MeshData BuildTerrain(float minX, float maxX, float minZ, float maxZ, uint32_t columns, uint32_t rows, float uvScale,

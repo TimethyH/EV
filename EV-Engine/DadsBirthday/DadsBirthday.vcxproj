@@ -180,6 +180,7 @@
     <ClCompile Include="source\birthday_player.cpp" />
     <ClCompile Include="source\birthday_quiz.cpp" />
     <ClCompile Include="source\birthday_scene.cpp" />
+    <ClCompile Include="source\curacao.cpp" />
     <ClCompile Include="source\geometry.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\quiz_config.cpp" />
