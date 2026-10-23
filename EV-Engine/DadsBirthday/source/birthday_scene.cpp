@@ -72,7 +72,7 @@ BirthdayGame::BirthdayGame(const std::wstring& name, uint32_t width, uint32_t he
     m_shadowsEnabled = true;
     m_shadowCenter = XMFLOAT3(0.0f, 0.0f, -8.0f);
     m_shadowRadius = 45.0f;
-    m_shadowStrength = 0.8f;
+    m_shadowStrength = 0.9f;
 }
 
 BirthdayGame::~BirthdayGame() = default;
@@ -87,7 +87,9 @@ bool BirthdayGame::LoadContent()
     // Sunlight from where the sun is in the sky.
     m_directionalLights.resize(3);
     m_directionalLights[0].position = XMFLOAT3(g_sunDirection.x * 1000.0f, g_sunDirection.y * 1000.0f, g_sunDirection.z * 1000.0f);
-    m_directionalLights[0].color = XMFLOAT4(2.6f, 2.45f, 2.2f, 1.0f);
+    // A strong sun and less light from the rest of the sky, so the shadows are clearly seen.
+    m_directionalLights[0].color = XMFLOAT4(4.6f, 4.3f, 3.8f, 1.0f);
+    m_unlitPSO->SetIBLIntensity(0.55f);
 
     m_editor->SetPlayModeCallback([this](bool playing)
     {
