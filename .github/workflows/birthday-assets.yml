@@ -1,0 +1,103 @@
+name: Birthday assets (fetch candidates)
+
+# Downloads candidate CC0 assets for the DadsBirthday game (Poly Haven, Kenney, Poly Pizza) and uploads them
+# to the "birthday-assets-raw" release, so they can be inspected and picked without access to those sites.
+on:
+  push:
+    branches: [ Dads-Birthday ]
+    paths: [ .github/workflows/birthday-assets.yml ]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ github.token }}
+    steps:
+      - name: Poly Haven textures and skies
+        run: |
+          set -u
+          mkdir -p out/polyhaven
+          cd out/polyhaven
+          curl -sfL "https://api.polyhaven.com/assets?t=textures" -o textures.json || true
+          curl -sfL "https://api.polyhaven.com/assets?t=hdris" -o hdris.json || true
+          # Short listings to choose from.
+          jq -r 'to_entries[] | "\(.key)\t\(.value.categories | join(","))\t\(.value.tags | join(","))"' textures.json \
+            | grep -iE "sand|beach|floor|paving|pavement|cobble|brick|tile|plank|wood" > textures_list.txt || true
+          jq -r 'to_entries[] | "\(.key)\t\(.value.categories | join(","))\t\(.value.tags | join(","))"' hdris.json \
+            | grep -iE "pure|sky|beach|coast|sea|sun" > hdris_list.txt || true
+
+          for id in aerial_beach_01 aerial_beach_02 aerial_beach_03 coast_sand_01 coast_sand_02 coast_sand_03 coast_sand_04 coast_sand_05 sand_01 \
+                    cobblestone_floor_04 cobblestone_floor_08 patterned_paving_02 floor_tiles_06 brick_floor_003 large_sandstone_blocks \
+                    wood_planks wood_floor_deck weathered_planks; do
+            if curl -sfL "https://api.polyhaven.com/files/$id" -o "$id.json"; then
+              mkdir -p "$id"
+              for map in Diffuse nor_dx Rough AO arm Displacement; do
+                url=$(jq -r --arg m "$map" '.[$m]["2k"].jpg.url // .[$m]["2k"].png.url // empty' "$id.json")
+                [ -n "$url" ] && curl -sfL "$url" -o "$id/$(basename "$url")" || true
+              done
+              # Small previews to compare candidates.
+              curl -sfL "https://cdn.polyhaven.com/asset_img/thumbs/$id.png?width=256" -o "$id/thumb.png" || true
+            fi
+          done
+
+          for id in kloofendal_48d_partly_cloudy_puresky qwantani_puresky kloppenheim_06_puresky syferfontein_0d_clear_puresky \
+                    belfast_sunset_puresky citrus_orchard_puresky table_mountain_2_puresky; do
+            if curl -sfL "https://api.polyhaven.com/files/$id" -o "$id.json"; then
+              url=$(jq -r '.hdri["4k"].hdr.url // empty' "$id.json")
+              [ -n "$url" ] && curl -sfL "$url" -o "$id.hdr" || true
+              curl -sfL "https://cdn.polyhaven.com/asset_img/thumbs/$id.png?width=512" -o "$id.thumb.png" || true
+            fi
+          done
+          ls -la . */ | head -200
+
+      - name: Kenney kits
+        run: |
+          mkdir -p out/kenney
+          cd out/kenney
+          for kit in blaster-kit food-kit holiday-kit nature-kit pirate-kit survival-kit; do
+            page=$(curl -sfL "https://kenney.nl/assets/$kit" || true)
+            zip=$(echo "$page" | grep -oE "https://kenney.nl/media/pages/assets/$kit/[^\"']+\.zip" | head -1)
+            echo "$kit -> $zip"
+            [ -n "$zip" ] && curl -sfL "$zip" -o "$kit.zip" || true
+            if [ -f "$kit.zip" ]; then
+              mkdir -p "$kit"
+              unzip -q -o "$kit.zip" -d "$kit" || true
+              rm -f "$kit.zip"
+            fi
+          done
+          find . -iname "*.glb" | sort > glb_list.txt
+          find . -iname "*.gltf" | sort > gltf_list.txt
+          wc -l glb_list.txt gltf_list.txt
+
+      - name: Poly Pizza searches
+        run: |
+          mkdir -p out/polypizza
+          cd out/polypizza
+          for query in "sniper rifle" "rifle" "seagull" "bird" "flying bird" "birthday cake" "gift box" "present" "palm tree" "beach umbrella"; do
+            name=$(echo "$query" | tr ' ' '_')
+            curl -sfL "https://poly.pizza/search/$(echo "$query" | sed 's/ /%20/g')" -o "search_$name.html" || true
+            mkdir -p "$name"
+            # Thumbnails and models share the same id on static.poly.pizza.
+            grep -oE "static\.poly\.pizza/[a-f0-9-]{36}" "search_$name.html" | sort -u | head -12 | while read -r ref; do
+              id=${ref#static.poly.pizza/}
+              curl -sfL "https://static.poly.pizza/$id.glb" -o "$name/$id.glb" || rm -f "$name/$id.glb"
+              curl -sfL "https://static.poly.pizza/$id.webp" -o "$name/$id.webp" || true
+            done
+          done
+          ls -la */ | head -200
+
+      - name: Upload to the birthday-assets-raw release
+        run: |
+          cd out
+          tar -czf polyhaven.tar.gz polyhaven
+          tar -czf kenney.tar.gz kenney
+          tar -czf polypizza.tar.gz polypizza
+          ls -la
+          gh release view birthday-assets-raw -R "$GITHUB_REPOSITORY" >/dev/null 2>&1 || \
+            gh release create birthday-assets-raw -R "$GITHUB_REPOSITORY" --prerelease --target "$GITHUB_SHA" \
+              --title "Birthday assets (raw candidates)" --notes "Candidate CC0 assets fetched by birthday-assets.yml. Not used directly."
+          gh release upload birthday-assets-raw -R "$GITHUB_REPOSITORY" --clobber polyhaven.tar.gz kenney.tar.gz polypizza.tar.gz
