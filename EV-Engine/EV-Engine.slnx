@@ -10,6 +10,7 @@
   <Project Path="DadsBirthday/DadsBirthday.vcxproj" Id="b6f2c1d4-5e8a-4c3b-9d71-2a6e4f1b8c90">
     <BuildDependency Project="EV-Engine/EV-Engine.vcxproj" />
   </Project>
+  <Project Path="DadsBirthday/launcher/DadsBirthdayLauncher.vcxproj" Id="3c9a7e21-6d4b-4f8e-a215-8b0d5c7e9f34" />
   <Project Path="ShaderArt/ShaderArt.vcxproj" Id="be7dc341-2ecd-4f11-90ca-78f6fd15728d">
     <BuildDependency Project="EV-Engine/EV-Engine.vcxproj" />
   </Project>

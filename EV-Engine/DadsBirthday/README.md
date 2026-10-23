@@ -24,7 +24,9 @@ pictures together on the right one.
 
 ## Questions, answers and pictures
 
-Everything is in `game/questions.json` (open it with Notepad). Pictures go in `game/images`.
+Everything is in `game/questions.json` (open it with Notepad). Pictures go in `game/images`. In the packaged game (`HappyBirthday.zip`)
+that folder is `files/game`: next to `Happy Birthday.exe` there is only the `files` folder with everything the
+game needs.
 
 ```json
 {
