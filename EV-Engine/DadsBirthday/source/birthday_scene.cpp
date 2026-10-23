@@ -62,6 +62,11 @@ BirthdayGame::BirthdayGame(const std::wstring& name, uint32_t width, uint32_t he
 {
     m_loadDemoContent = false;
     m_skyPanoramaFile = g_skyFile;
+
+    // Distance fog in the color of the sky at the horizon: the far ocean and the edge of the ocean plane fade into it.
+    m_fogColor = XMFLOAT3(0.42f, 0.46f, 0.56f);
+    m_fogDensity = 0.0065f;
+    m_fogStart = 60.0f;
 }
 
 BirthdayGame::~BirthdayGame() = default;
@@ -82,6 +87,11 @@ bool BirthdayGame::LoadContent()
     {
         m_paused = false;
         ResetQuiz();
+        m_messageVisible = false; // The welcome message comes after waking up.
+        m_intro = playing ? IntroState::Menu : IntroState::Playing;
+        m_introTime = 0.0f;
+        m_scoped = false;
+        m_scope = 0.0f;
         if (playing)
         {
             // The ocean's fly camera must not keep moving with keys that were held in the editor.
@@ -400,9 +410,12 @@ void BirthdayGame::UpdateScene(float deltaTime)
     // The cake turns slowly and jumps when it is shot.
     if (m_cake)
     {
+        // Faster in the start menu.
+        const bool menu = m_intro == IntroState::Menu || m_intro == IntroState::FadeOut;
+        m_cakeAngle = std::fmod(m_cakeAngle + deltaTime * (menu ? 0.8f : 0.35f), XM_2PI);
         m_cakeBounce = std::max(0.0f, m_cakeBounce - deltaTime * 2.5f);
         const float jump = std::sin(m_cakeBounce * XM_PI) * 0.3f;
-        m_cake->SetLocalTransform(XMMatrixScaling(g_cakeScale, g_cakeScale, g_cakeScale) * XMMatrixRotationY(m_time * 0.35f) *
+        m_cake->SetLocalTransform(XMMatrixScaling(g_cakeScale, g_cakeScale, g_cakeScale) * XMMatrixRotationY(m_cakeAngle) *
             XMMatrixTranslation(0.0f, 1.0f + jump, 0.0f));
     }
 }
@@ -419,8 +432,10 @@ void BirthdayGame::UpdatePointLights(float time, FXMMATRIX viewMatrix)
     const float flash = (IsPlaying() && m_muzzleFlash > 0.0f) ? 1.0f : 0.0f;
     light.color = XMFLOAT4(9.0f * flash, 5.5f * flash, 2.2f * flash, 1.0f);
 
+    // The screen shader uses none of these, but EffectPSO binds them all.
     m_screenPSO->SetPointLights(m_pointLights);
     m_screenPSO->SetDirectionalLights(m_directionalLights);
+    m_screenPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
 }
 
 void BirthdayGame::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
@@ -434,7 +449,8 @@ void BirthdayGame::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
     {
         scene->Accept(visitor);
     }
-    if (IsPlaying() && m_rifle)
+    // The rifle is put away in the menu and while looking through the scope.
+    if (IsPlaying() && m_rifle && m_intro != IntroState::Menu && m_intro != IntroState::FadeOut && m_scope < 0.8f)
     {
         m_rifle->GetRootNode()->SetLocalTransform(GetRifleTransform());
         m_rifle->Accept(visitor);

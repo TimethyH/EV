@@ -128,6 +128,15 @@ private:
         uint32_t          color;
     };
 
+    // Playing starts in a menu; Play fades to black and the player wakes up on the beach.
+    enum class IntroState
+    {
+        Menu,
+        FadeOut,
+        Waking,
+        Playing,
+    };
+
     enum class QuizState
     {
         Intro,    // Waiting for the cake to be shot.
@@ -153,6 +162,7 @@ private:
     static float BeachHeight(float x, float z);
 
     // Player (birthday_player.cpp)
+    void StartGame(); // Play in the menu.
     void ResetPlayer();
     void UpdatePlayer(float deltaTime);
     void CaptureMouse(bool capture);
@@ -162,6 +172,10 @@ private:
     DirectX::XMMATRIX GetRifleTransform() const;
     void AimAt(DirectX::FXMVECTOR target);
     void DrawHUD();
+    void DrawMenu(ImDrawList* drawList, const ImVec2& viewportPosition, const ImVec2& viewportSize);
+    void DrawWakeUp(ImDrawList* drawList, const ImVec2& viewportPosition, const ImVec2& viewportSize);
+    void DrawScope(ImDrawList* drawList, const ImVec2& viewportPosition, const ImVec2& viewportSize);
+    float GetTextSize() const; // The HUD's text size in pixels.
     void DrawTextBox(ImDrawList* drawList, const ImVec2& viewportPosition, const ImVec2& viewportSize);
     void UpdateConfetti(float deltaTime, const ImVec2& viewportSize);
     void UpdateAutopilot(float deltaTime);
@@ -192,6 +206,7 @@ private:
     DirectX::XMFLOAT3                         m_rifleMuzzle = {}; // In the rifle's space.
     float                                     m_time = 0.0f;
     float                                     m_cakeBounce = 0.0f;
+    float                                     m_cakeAngle = 0.0f;
 
     // Player
     DirectX::XMFLOAT3 m_playerPosition = {}; // Feet.
@@ -205,6 +220,13 @@ private:
     bool              m_mouseCaptured = false;
     bool              m_leftButtonWasDown = true;
     bool              m_paused = false;
+    bool              m_scoped = false;      // Right mouse button toggles the scope.
+    float             m_scope = 0.0f;        // 0 = rifle at the hip, 1 = looking through the scope.
+    bool              m_rightButtonWasDown = true;
+    float             m_eyeDrop = 0.0f;      // How far below standing height the eye is (lying down while waking up).
+    float             m_pitchOverride = 0.0f; // Waking up: how much the view is still turned to the sky (0..1).
+    IntroState        m_intro = IntroState::Playing;
+    float             m_introTime = 0.0f;
 
     // Quiz
     Birthday::QuizConfig                                     m_quiz;

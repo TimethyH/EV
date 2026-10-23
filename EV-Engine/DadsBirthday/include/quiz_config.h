@@ -33,6 +33,7 @@ namespace Birthday
 
     struct QuizConfig
     {
+        std::string               title; // In the start menu.
         std::string               intro;
         std::vector<QuizQuestion> questions;
         std::string               finaleTitle;   // Big text on the left screen at the end.

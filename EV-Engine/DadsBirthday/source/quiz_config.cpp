@@ -31,6 +31,7 @@ namespace Birthday
     QuizConfig LoadQuizConfig(const std::filesystem::path& file)
     {
         QuizConfig config;
+        config.title = "Happy Birthday!";
         config.intro = g_defaultIntro;
         config.finaleTitle = "Happy Birthday!";
         config.finaleMessage = "That was the last question. Happy birthday!";
@@ -54,6 +55,7 @@ namespace Birthday
             return config;
         }
 
+        config.title = Text(root, "title", config.title);
         config.intro = Text(root, "intro", config.intro);
 
         const auto questions = root.find("questions");
