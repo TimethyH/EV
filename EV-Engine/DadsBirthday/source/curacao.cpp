@@ -385,3 +385,165 @@ void BirthdayGame::BuildCuracao(CommandList& commandList)
     town->AddMesh(CreateMesh(commandList, shared.shutter, CreatePaint(0x2E7D4F, 0.6f)));
     m_litScenes.push_back(AddEditorScene("Willemstad", town));
 }
+
+// ------------------------------------------------------------------------------------------------
+// The Queen Emma bridge ("Pontjesbrug"): a deck on a row of floating pontoons, with white railings, lamp posts
+// and arches of colored lights over the deck. Built along +z from the beach, x across the deck.
+
+namespace
+{
+    constexpr float g_deckWidth = 6.4f;
+    constexpr float g_sectionLength = 10.0f; // One pontoon and one arch per section.
+    constexpr float g_archHeight = 4.6f;     // Above the deck.
+    constexpr float g_archRadius = 0.09f;
+
+    // A tube along a half ellipse from (-halfWidth, 0) over (0, height) to (halfWidth, 0), in the x-y plane.
+    MeshData BuildArch(float halfWidth, float height, float radius)
+    {
+        MeshData data;
+        const int segments = 32;
+        const int sides = 8;
+        const XMVECTOR across = XMVectorSet(0.0f, 0.0f, 1.0f, 0.0f);
+        for (int s = 0; s <= segments; ++s)
+        {
+            const float t = XM_PI * s / segments;
+            const XMVECTOR center = XMVectorSet(-halfWidth * std::cos(t), height * std::sin(t), 0.0f, 1.0f);
+            const XMVECTOR along = XMVector3Normalize(XMVectorSet(halfWidth * std::sin(t), height * std::cos(t), 0.0f, 0.0f));
+            const XMVECTOR side = XMVector3Cross(across, along);
+            for (int k = 0; k <= sides; ++k)
+            {
+                const float angle = XM_2PI * k / sides;
+                const XMVECTOR normal = side * std::cos(angle) + across * std::sin(angle);
+                data.vertices.emplace_back(center + normal * radius, normal, XMVectorSet(static_cast<float>(k) / sides, t, 0.0f, 0.0f),
+                    along, XMVector3Cross(normal, along));
+            }
+        }
+        for (int s = 0; s < segments; ++s)
+        {
+            for (int k = 0; k < sides; ++k)
+            {
+                const uint32_t a = s * (sides + 1) + k;
+                const uint32_t b = a + sides + 1;
+                data.AddTriangle(a, a + 1, b);
+                data.AddTriangle(a + 1, b + 1, b);
+            }
+        }
+        return data;
+    }
+
+    // A fully saturated color around the color wheel (0 red, 1/3 green, 2/3 blue).
+    XMFLOAT3 HueToColor(float hue)
+    {
+        auto channel = [hue](float offset)
+        {
+            const float h = std::fmod(hue + offset, 1.0f) * 6.0f;
+            return std::clamp(std::abs(h - 3.0f) - 1.0f, 0.0f, 1.0f);
+        };
+        return XMFLOAT3(channel(0.0f), channel(2.0f / 3.0f), channel(1.0f / 3.0f));
+    }
+}
+
+void BirthdayGame::BuildBridge(CommandList& commandList)
+{
+    const int sections = static_cast<int>(bridgeLength / g_sectionLength);
+    const float halfDeck = g_deckWidth * 0.5f;
+    auto bridge = CreateNode("Queen Emma Bridge", nullptr, XMMatrixTranslation(bridgeX, 0.0f, bridgeStartZ));
+
+    // Where it starts: a stone landing on the beach. Then the deck on the pontoons: dark hulls, a little wider than
+    // the deck, with a light edge along the top.
+    MeshData landing, pontoons, rims, railings;
+    landing.AddBox(XMFLOAT3(0.0f, bridgeDeckTop - 1.5f, -3.0f), XMFLOAT3(g_deckWidth + 1.2f, 3.0f, 6.0f));
+    for (int i = 0; i < sections; ++i)
+    {
+        const float z = (i + 0.5f) * g_sectionLength;
+        pontoons.AddBox(XMFLOAT3(0.0f, -0.2f, z), XMFLOAT3(g_deckWidth + 1.4f, 2.0f, g_sectionLength - 0.7f));
+        for (float side : { -1.0f, 1.0f })
+        {
+            rims.AddBox(XMFLOAT3(side * (halfDeck + 0.72f), 0.85f, z), XMFLOAT3(0.1f, 0.12f, g_sectionLength - 0.7f));
+        }
+    }
+
+    // White railings (posts and two rails) on both sides, and lamp posts on both sides in turn.
+    for (float side : { -1.0f, 1.0f })
+    {
+        const float x = side * (halfDeck - 0.1f);
+        railings.AddBox(XMFLOAT3(x, bridgeDeckTop + 1.05f, bridgeLength * 0.5f), XMFLOAT3(0.08f, 0.08f, bridgeLength));
+        railings.AddBox(XMFLOAT3(x, bridgeDeckTop + 0.55f, bridgeLength * 0.5f), XMFLOAT3(0.05f, 0.05f, bridgeLength));
+        for (float z = 0.5f; z < bridgeLength; z += 2.0f)
+        {
+            railings.AddBox(XMFLOAT3(x, bridgeDeckTop + 0.55f, z), XMFLOAT3(0.07f, 1.1f, 0.07f));
+        }
+        for (int i = (side > 0.0f ? 0 : 1); i < sections; i += 2)
+        {
+            const float z = i * g_sectionLength + 0.4f;
+            railings.AddBox(XMFLOAT3(side * (halfDeck + 0.25f), bridgeDeckTop + 3.4f, z), XMFLOAT3(0.14f, 6.8f, 0.14f));
+            railings.AddBox(XMFLOAT3(side * (halfDeck - 0.15f), bridgeDeckTop + 6.75f, z), XMFLOAT3(0.9f, 0.12f, 0.2f));
+        }
+    }
+
+    // The bridge keeper's little yellow house with windows all around, beside the deck on its own pontoon.
+    MeshData house, houseTrim, houseGlass;
+    const float houseX = -(halfDeck + 2.0f);
+    const float houseZ = 9.0f;
+    pontoons.AddBox(XMFLOAT3(houseX, -0.2f, houseZ), XMFLOAT3(4.2f, 2.0f, 5.0f));
+    railings.AddBox(XMFLOAT3(houseX, bridgeDeckTop - 0.35f, houseZ), XMFLOAT3(4.0f, 0.3f, 4.8f)); // Its floor.
+    house.AddBox(XMFLOAT3(houseX, bridgeDeckTop + 1.4f, houseZ), XMFLOAT3(3.2f, 2.8f, 3.6f));
+    houseTrim.AddBox(XMFLOAT3(houseX, bridgeDeckTop + 2.92f, houseZ), XMFLOAT3(3.8f, 0.25f, 4.2f)); // The roof.
+    houseTrim.AddBox(XMFLOAT3(houseX, bridgeDeckTop + 1.3f, houseZ), XMFLOAT3(3.3f, 0.1f, 3.7f));   // Below the windows.
+    for (float side : { -1.0f, 1.0f })
+    {
+        for (float offset : { -1.0f, 0.0f, 1.0f })
+        {
+            houseGlass.AddBox(XMFLOAT3(houseX + side * 1.6f, bridgeDeckTop + 1.9f, houseZ + offset * 1.05f), XMFLOAT3(0.06f, 1.0f, 0.8f));
+        }
+        for (float offset : { -0.75f, 0.75f })
+        {
+            houseGlass.AddBox(XMFLOAT3(houseX + offset, bridgeDeckTop + 1.9f, houseZ + side * 1.8f), XMFLOAT3(0.9f, 1.0f, 0.06f));
+        }
+    }
+
+    auto planks = LoadSurface(commandList, L"assets/birthday/boardwalk/wood_planks_diff_2k.jpg",
+        L"assets/birthday/boardwalk/wood_planks_nor_dx_2k.jpg", L"assets/birthday/boardwalk/wood_planks_arm_2k.jpg");
+    auto deck = CreateNode("Deck", bridge, XMMatrixTranslation(0.0f, bridgeDeckTop - 0.2f, bridgeLength * 0.5f));
+    deck->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(g_deckWidth, 0.4f, bridgeLength), 0.35f), planks));
+    bridge->AddMesh(CreateMesh(commandList, landing, CreatePaint(0xB9B2A3, 0.9f)));
+    bridge->AddMesh(CreateMesh(commandList, pontoons, CreatePaint(0x2A3036, 0.6f)));
+    bridge->AddMesh(CreateMesh(commandList, rims, CreatePaint(0xD9CDAA, 0.7f)));
+    bridge->AddMesh(CreateMesh(commandList, railings, CreatePaint(g_white, 0.5f)));
+    bridge->AddMesh(CreateMesh(commandList, house, CreatePaint(0xF1CE5A, 0.8f)));
+    bridge->AddMesh(CreateMesh(commandList, houseTrim, CreatePaint(g_white, 0.6f)));
+    bridge->AddMesh(CreateMesh(commandList, houseGlass, CreatePaint(0x2A3A40, 0.2f)));
+
+    // An arch and a light strip along the pontoon at the water per section, each section in its own color.
+    auto arch = CreateMesh(commandList, BuildArch(halfDeck - 0.1f, g_archHeight, g_archRadius), nullptr);
+    MeshData strip;
+    for (float side : { -1.0f, 1.0f })
+    {
+        strip.AddBox(XMFLOAT3(side * (halfDeck + 0.72f), 0.45f, 0.0f), XMFLOAT3(0.06f, 0.12f, g_sectionLength - 1.2f));
+    }
+    auto stripMesh = CreateMesh(commandList, strip, nullptr);
+    m_bridgeLights.clear();
+    for (int i = 0; i < sections; ++i)
+    {
+        auto light = CreatePaint(0xFFFFFF, 0.3f);
+        m_bridgeLights.push_back(light);
+        auto section = CreateNode("Arch", bridge, XMMatrixTranslation(0.0f, bridgeDeckTop, (i + 0.5f) * g_sectionLength));
+        section->AddMesh(CloneMesh(*arch, light));
+        auto lights = CreateNode("Lights", bridge, XMMatrixTranslation(0.0f, 0.0f, (i + 0.5f) * g_sectionLength));
+        lights->AddMesh(CloneMesh(*stripMesh, light));
+    }
+    UpdateBridgeLights();
+    m_litScenes.push_back(AddEditorScene("Queen Emma Bridge", bridge));
+}
+
+void BirthdayGame::UpdateBridgeLights()
+{
+    // Pink, green, purple, blue... along the bridge, slowly moving on.
+    for (size_t i = 0; i < m_bridgeLights.size(); ++i)
+    {
+        const XMFLOAT3 color = HueToColor(std::fmod(0.83f + i * 0.29f + m_time * 0.04f, 1.0f));
+        const float glow = 1.6f;
+        m_bridgeLights[i]->SetDiffuseColor(XMFLOAT4(0.2f + color.x * 0.6f, 0.2f + color.y * 0.6f, 0.2f + color.z * 0.6f, 1.0f));
+        m_bridgeLights[i]->SetEmissiveColor(XMFLOAT4(color.x * glow, color.y * glow, color.z * glow, 1.0f));
+    }
+}

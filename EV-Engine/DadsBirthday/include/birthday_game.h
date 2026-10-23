@@ -7,7 +7,7 @@
  *  bird above the right screen. Built on OceanRenderer's ocean (EV::Ocean); the editor is still there with --editor.
  *
  *  birthday_scene.cpp  the beach, promenade, screens, birds, cake and palm trees
- *  curacao.cpp         Willemstad behind the promenade: the CURACAO letters and the colorful houses
+ *  curacao.cpp         Willemstad: the CURACAO letters and colorful houses behind the promenade, the Queen Emma bridge
  *  birthday_player.cpp walking, looking, the rifle, the HUD and the autopilot used by the CI
  *  birthday_quiz.cpp   questions, answers, pictures and the finale
  */
@@ -77,6 +77,12 @@ namespace Birthday::Layout
     constexpr float townHalfWidth = 56.0f;
     constexpr float lettersZ = -42.0f;  // The front of the letters.
     constexpr float housesZ = -52.0f;   // The houses' front walls.
+
+    // The Queen Emma bridge (the pontoon bridge) out into the sea on the right of the beach, along +z.
+    constexpr float bridgeX = 40.0f;
+    constexpr float bridgeStartZ = 6.0f;
+    constexpr float bridgeLength = 150.0f;
+    constexpr float bridgeDeckTop = 1.3f;
 }
 
 class BirthdayGame : public EV::Ocean
@@ -183,6 +189,8 @@ private:
     void BuildProps(EV::CommandList& commandList);
     // Curacao (curacao.cpp)
     void BuildCuracao(EV::CommandList& commandList);
+    void BuildBridge(EV::CommandList& commandList);
+    void UpdateBridgeLights(); // The colors of the bridge's arches and lights change slowly.
     // A copy of a model below parent, made size meters high (or long), turned and standing on the ground at (x, z)
     // (or with its bottom at height y when y is given).
     std::shared_ptr<EV::SceneNode> PlaceModel(const std::shared_ptr<EV::Scene>& model, const std::shared_ptr<EV::SceneNode>& parent,
@@ -238,6 +246,7 @@ private:
     std::shared_ptr<EV::SceneNode>            m_pedestal;
     std::shared_ptr<EV::SceneNode>            m_ship;
     DirectX::XMFLOAT4X4                       m_shipRest = {};
+    std::vector<std::shared_ptr<EV::Material>> m_bridgeLights; // One per arch, along the bridge.
     std::vector<Balloon>                      m_balloons;
     std::shared_ptr<EV::Mesh>                 m_balloonMesh;
     std::shared_ptr<EV::Mesh>                 m_stringMesh;
