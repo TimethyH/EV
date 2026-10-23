@@ -123,7 +123,6 @@ private:
 	bool m_cancelLoading;
 	std::string m_loadingText;
 	float m_loadingProgress;
-	bool m_showFileOpenDialog;
 	bool m_showControls = false;
 	bool m_toggleFullscreen = false; // Applied at the start of the next OnRender.
 	double m_FPS;
