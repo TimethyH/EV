@@ -895,13 +895,15 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
             }, always },
         { "12_shadows", [&]()
             {
-                // Standing on the promenade with the sun behind: the shadows fall away from the camera.
-                m_playerPosition = XMFLOAT3(5.0f, 0.0f, cakeZ + 4.5f);
-                m_lookYaw = 228.0f;
-                m_lookPitch = 22.0f;
+                // Behind the cake, looking towards the sun: the shadows fall towards the camera.
+                m_playerPosition = XMFLOAT3(-3.4f, 0.0f, cakeZ - 5.0f);
+                m_lookYaw = 34.0f;
+                m_lookPitch = 18.0f;
             }, always },
+        { "12_shadow_lookup", [&]() { m_shadowDebug = true; }, always },
         { "13_promenade", [&]()
             {
+                m_shadowDebug = false;
                 m_playerPosition = XMFLOAT3(13.0f, 0.0f, -3.0f);
                 m_lookYaw = 235.0f;
                 m_lookPitch = 8.0f;

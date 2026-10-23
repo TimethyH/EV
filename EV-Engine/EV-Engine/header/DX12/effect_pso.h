@@ -72,7 +72,7 @@ namespace EV
             float fogStart;     // Distance from the camera where the fog starts.
             float shadowStrength;  // 0 = no shadow map.
             float shadowTexelSize; // 1 / shadow map size.
-            float padding;
+            float shadowDebug;     // 1 = show the shadow lookup (SetShadowDebug).
             DirectX::XMMATRIX shadowMatrix; // World space to shadow map (u, v, depth).
         };
 
@@ -198,6 +198,10 @@ namespace EV
             m_shadowStrength = shadowMap ? strength : 0.0f;
         }
 
+        // Shows the shadow lookup as colors instead of the lighting: red = lit, green = depth from the light, blue =
+        // depth in the shadow map, magenta = outside the shadow map.
+        void SetShadowDebug(bool enabled) { m_shadowDebug = enabled; }
+
         // Distance fog: past start, the color goes to fogColor by 1 - exp(-density * (distance - start)).
         void SetFog(const DirectX::XMFLOAT3& color, float density, float start)
         {
@@ -232,6 +236,7 @@ namespace EV
         std::shared_ptr<Texture> m_shadowMap;
         DirectX::XMMATRIX m_shadowMatrix = DirectX::XMMatrixIdentity();
         float m_shadowStrength = 0.0f;
+        bool m_shadowDebug = false;
         std::shared_ptr<ShaderResourceView> m_defaultShadowSRV;
 
         std::shared_ptr<ShaderResourceView> m_defaultSRV;

@@ -244,6 +244,7 @@ void EffectPSO::Apply(CommandList& commandList)
         cameraData.fogStart = m_fogStart;
         cameraData.shadowStrength = m_shadowMap ? m_shadowStrength : 0.0f;
         cameraData.shadowTexelSize = m_shadowMap ? 1.0f / static_cast<float>(m_shadowMap->GetD3D12ResourceDesc().Width) : 0.0f;
+        cameraData.shadowDebug = m_shadowDebug ? 1.0f : 0.0f;
         cameraData.shadowMatrix = m_shadowMatrix;
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData);
     }
