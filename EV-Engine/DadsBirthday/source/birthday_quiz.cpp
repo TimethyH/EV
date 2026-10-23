@@ -249,8 +249,7 @@ void BirthdayGame::Answer(Side side)
 
     const bool last = m_questionIndex + 1 >= m_quiz.questions.size();
     ShowMessage((correct ? question.correctMessage : question.wrongMessage) + "\n" +
-        (last ? "Tira e bolo un lastu bia." : "Tira e bolo pa e volgende vraag") +
-        "\n(Tira e base di e bolo pa purba e pregunta aki atrobe)");
+        (last ? "Tira e bolo un lastu bia." : "Tira e bolo pa e volgende vraag"));
 }
 
 void BirthdayGame::StartFinale()
