@@ -6,6 +6,7 @@
 #include <cmath>
 
 #include "geometry.h"
+#include "textures.h"
 
 using namespace DirectX;
 using namespace EV;
@@ -284,6 +285,30 @@ void BirthdayGame::BuildScene(CommandList& commandList)
     for (float x : { -0.6f, 0.6f })
     {
         AddBalloons(m_cakeRoot, XMVectorSet(x, 1.0f, 0.6f, 1.0f), x > 0.0f ? XM_PIDIV2 - 0.3f : -XM_PIDIV2 + 0.3f, 3);
+    }
+    // "Try again" on every side of the pedestal: shooting the pedestal answers the current question again.
+    {
+        TextCard card;
+        card.text = L"Tirami pa purba atrobe";
+        card.maxFontSize = 170.0f;
+        card.topColor = XMFLOAT3(0.85f, 0.12f, 0.12f);
+        card.bottomColor = XMFLOAT3(0.45f, 0.03f, 0.03f);
+        auto material = std::make_shared<Material>();
+        material->SetEmissiveColor(XMFLOAT4(0.0f, 0.0f, 0.0f, 1.0f));
+        material->SetTexture(Material::TextureType::Emissive, Birthday::CreateTexture(commandList, RenderTextCard(card), L"Card: Redo"));
+        auto quad = CreateMesh(commandList, BuildScreenQuad(), material);
+        // Not below the pedestal, or the lit pass would draw them too (white, in front of the unlit ones); UpdateScene
+        // keeps them on it.
+        auto signs = CreateNode("Redo Signs", nullptr);
+        for (int i = 0; i < 4; ++i)
+        {
+            // 2 cm outside the pedestal's faces (it is 1.3 m wide) so it does not flicker with them, 16:9 like the card.
+            auto sign = CreateNode("Redo Sign", signs, XMMatrixScaling(1.12f, 0.63f, 1.0f) * XMMatrixTranslation(0.0f, 0.0f, 0.67f) *
+                XMMatrixRotationY(i * XM_PIDIV2));
+            sign->AddMesh(quad);
+        }
+        m_redoSigns = std::make_shared<Scene>();
+        m_redoSigns->SetRootNode(signs);
     }
     m_cake = CreateNode("Cake", m_cakeRoot, XMMatrixScaling(g_cakeScale, g_cakeScale, g_cakeScale) * XMMatrixTranslation(0.0f, 1.0f, 0.0f));
     CopyNodes(LoadModel(commandList, g_cakeFile)->GetRootNode(), m_cake);
@@ -649,6 +674,10 @@ void BirthdayGame::UpdateScene(float deltaTime)
         m_cake->SetLocalTransform(XMMatrixScaling(g_cakeScale, g_cakeScale, g_cakeScale) * XMMatrixRotationY(m_cakeAngle) *
             XMMatrixTranslation(0.0f, 1.0f + jump, 0.0f));
     }
+    if (m_redoSigns && m_pedestal)
+    {
+        m_redoSigns->GetRootNode()->SetLocalTransform(m_pedestal->GetWorldTransform());
+    }
 }
 
 void BirthdayGame::UpdatePointLights(float time, FXMMATRIX viewMatrix)
@@ -711,6 +740,11 @@ void BirthdayGame::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
         {
             screen.displayScene->Accept(screenVisitor);
         }
+    }
+    // Not in the start menu: its Play button is drawn right over the pedestal.
+    if (m_redoSigns && m_intro != IntroState::Menu && m_intro != IntroState::FadeOut)
+    {
+        m_redoSigns->Accept(screenVisitor);
     }
 }
 

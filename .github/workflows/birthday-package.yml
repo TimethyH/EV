@@ -98,6 +98,7 @@ jobs:
             "Double click 'Happy Birthday.exe' to play.",
             "",
             "Walk with W A S D (Shift to run), look around with the mouse, shoot with the left mouse button.",
+            "Space closes a message. Shoot the base of the cake to try a question again.",
             "Esc pauses the game; Esc again quits. F11 switches between full screen and a window.",
             "",
             "The questions and pictures are in the 'files\game' folder (questions.json and images)."

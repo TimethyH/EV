@@ -5,9 +5,10 @@ A birthday quiz on a beach, built on OceanRenderer's ocean.
 The game opens in a start menu with a rotating birthday cake. Play fades to black and you wake up on the beach,
 as if from a dream: the eyes open, blink, and you sit up looking at the sea. Behind you, on a brick promenade, are two big screens with a bird
 flying above each of them and a birthday cake on a pedestal in the middle. Shoot the cake to get a question: the
-left and right screen each show an answer. Shoot the bird above the answer you think is right. That screen then
-shows a picture: a nice one for the right answer, something else for the wrong one. Shoot the cake again for the
-next question. Behind the screens are the big CURACAO letters and a row of colorful Willemstad houses; on the right of the beach the Queen Emma pontoon bridge goes out to sea. After the last question the cake brings the finale: "Happy Birthday" on the left screen and all the
+left and right screen each show an answer. Shoot the bird above the answer you think is right. Both screens then
+show a picture: a nice one for the right answer, something else for the wrong one. Shoot the cake again for the
+next question, or the "Purba atrobe" signs on the pedestal under it to answer the same question again (as often as
+you like; questions that are done stay done). Behind the screens are the big CURACAO letters and a row of colorful Willemstad houses; on the right of the beach the Queen Emma pontoon bridge goes out to sea. After the last question the cake brings the finale: "Happy Birthday" on the left screen and all the
 pictures scrolling past on the right one.
 
 ## Controls
@@ -17,7 +18,8 @@ pictures scrolling past on the right one.
 | W A S D (or the arrow keys) | walk |
 | Shift | run |
 | Mouse | look around |
-| Left mouse button | shoot; continue after a message |
+| Left mouse button | shoot (messages do not get in the way) |
+| Space | close the message |
 | Right mouse button | scope in / out |
 | Esc | pause (Esc again quits) |
 | F11 | full screen on/off |
@@ -55,11 +57,14 @@ game needs.
 - `left` and `right` are the answers on the left and right screen, as seen when facing the screens.
 - `correct` is `"left"` or `"right"`.
 - `correctImage` / `wrongImage`: paths relative to the `game` folder. jpg, png, bmp, gif and tiff work. Photos of any
-  size are fine (they are made smaller when loaded) and phone photos are turned the right way up.
+  size are fine (they are made smaller when loaded) and phone photos are turned the right way up. The picture is
+  shown on the screen under the bird that was shot and on the other screen too.
+- `correctImage2` / `wrongImage2` are optional: a different picture for the other screen.
 - `correctMessage` / `wrongMessage` are optional; without them the game says "Correct! Well done." or
   "Oops, that was not the right one!".
-- `finale.images` is the list of pictures on the right screen at the end, in this order. Leave it empty (`[]`) to
-  use every `correctImage`. They are shown one at a time, each as big as on its own, scrolling up to the next one
+- `finale.images` is the list of pictures on the right screen at the end, in this order. An entry can also be a
+  folder (`"images/slideshow"`): every picture in it is added, `0.jpg`, `1.jpg`, ... `10.jpg` in number order.
+  Leave it empty (`[]`) to use every `correctImage`. They are shown one at a time, each as big as on its own, scrolling up to the next one
   every few seconds and starting over after the last one.
 - Lines starting with `//` are comments.
 - A mistake in the file (a missing comma, a picture that is not there) is shown in the welcome message when the game

@@ -303,27 +303,27 @@ void BirthdayGame::UpdatePlayer(float deltaTime)
         m_walkCycle = std::round(m_walkCycle / XM_PI) * XM_PI;
     }
 
-    // Left click: continue after a message, resume after pausing, otherwise shoot. Right click: scope in and out.
+    // Left click: resume after pausing, otherwise shoot (also while a message is shown, it does not stop the game;
+    // the next message replaces it). Space closes the message. Right click: scope in and out.
     const bool leftDown = focused && IsKeyDown(VK_LBUTTON);
     const bool rightDown = focused && IsKeyDown(VK_RBUTTON);
+    const bool spaceDown = focused && IsKeyDown(VK_SPACE);
     if (leftDown && !m_leftButtonWasDown && !autopilot)
     {
         if (m_paused)
         {
             m_paused = false;
         }
-        else if (m_messageVisible)
-        {
-            if (m_messageTime > 0.3f)
-            {
-                m_messageVisible = false;
-            }
-        }
         else if (inGame)
         {
             Fire();
         }
     }
+    if (spaceDown && !m_spaceWasDown && !autopilot && m_messageVisible && m_messageTime > 0.3f)
+    {
+        m_messageVisible = false;
+    }
+    m_spaceWasDown = spaceDown;
     if (rightDown && !m_rightButtonWasDown && !autopilot && inGame && !m_paused)
     {
         m_scoped = !m_scoped;
@@ -410,17 +410,18 @@ void BirthdayGame::Fire()
     const XMVECTOR origin = GetEyePosition();
     const XMVECTOR direction = GetLookDirection();
 
-    enum class Target { None, Cake, LeftBird, RightBird } hit = Target::None;
+    enum class Target { None, Cake, Redo, LeftBird, RightBird } hit = Target::None;
     float nearest = FLT_MAX;
     BoundingBox bounds;
     float distance = 0.0f;
-    // The cake and its pedestal (not the balloons tied to it).
-    for (const auto& part : { m_cake, m_pedestal })
+    // The cake and its pedestal, which has the "try again" signs (not the balloons tied to it).
+    const std::pair<std::shared_ptr<SceneNode>, Target> cakeParts[] = { { m_cake, Target::Cake }, { m_pedestal, Target::Redo } };
+    for (const auto& [part, target] : cakeParts)
     {
         if (part && ComputeWorldBounds(part, bounds) && bounds.Intersects(origin, direction, distance) && distance < nearest)
         {
             nearest = distance;
-            hit = Target::Cake;
+            hit = target;
         }
     }
     for (int i = 0; i < 2; ++i)
@@ -443,6 +444,10 @@ void BirthdayGame::Fire()
         m_hitMarker = 0.25f;
         m_cakeBounce = 1.0f;
         OnCakeShot();
+        break;
+    case Target::Redo:
+        m_hitMarker = 0.25f;
+        OnRedoShot();
         break;
     case Target::LeftBird:
     case Target::RightBird:
@@ -759,7 +764,7 @@ void BirthdayGame::DrawTextBox(ImDrawList* drawList, const ImVec2& position, con
     ImFont* font = largeFont ? largeFont : ImGui::GetFont();
     const float fontSize = GetTextSize();
 
-    // A box along the bottom, the text on the left and a "click to continue" arrow on the right side.
+    // A box along the bottom, the text on the left and a "space to close" arrow on the right side.
     const float width = std::min(size.x * 0.86f, fontSize * 36.0f);
     const float padding = fontSize * 0.7f;
     const float arrowArea = fontSize * 4.2f;
@@ -788,7 +793,7 @@ void BirthdayGame::DrawTextBox(ImDrawList* drawList, const ImVec2& position, con
     drawList->AddTriangleFilled(ImVec2(arrowCenter.x - arrowSize * 0.6f, arrowCenter.y - arrowSize),
         ImVec2(arrowCenter.x + arrowSize * 0.8f, arrowCenter.y), ImVec2(arrowCenter.x - arrowSize * 0.6f, arrowCenter.y + arrowSize),
         Color(255, 215, 120, appear));
-    const char* hint = "click to continue";
+    const char* hint = "spatie pa sera";
     const float hintSize = fontSize * 0.42f;
     const ImVec2 hintTextSize = font->CalcTextSizeA(hintSize, FLT_MAX, 0.0f, hint);
     drawList->AddText(font, hintSize, ImVec2(bottomRight.x - arrowArea * 0.5f - hintTextSize.x * 0.5f, arrowCenter.y + arrowSize * 1.3f),
@@ -849,6 +854,14 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
         m_fireCooldown = 0.0f;
         Fire();
     };
+    auto shootRedo = [this]()
+    {
+        BoundingBox bounds;
+        ComputeWorldBounds(m_pedestal, bounds);
+        AimAt(XMLoadFloat3(&bounds.Center));
+        m_fireCooldown = 0.0f;
+        Fire();
+    };
     auto always = []() { return true; };
 
     struct Step
@@ -873,6 +886,9 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
         { "05_screens", [&]() { m_scoped = false; m_scope = 0.0f; lookAtScreens(); }, always },
         { "06_question", [&]() { lookAtScreens(); shootCake(); lookAtScreens(); }, always },
         { "07_answer_left", [&]() { m_messageVisible = false; lookAtScreens(); shootBird(Side::Left); lookAtScreens(); }, always },
+        // The same question again, from where the "try again" signs on the pedestal can be seen.
+        { "07_redo", [&]() { lookAtScreens(); shootRedo(); }, always },
+        { "07_answer_again", [&]() { lookAtScreens(); shootBird(Side::Right); lookAtScreens(); }, always },
         { "08_second_question", [&]() { lookAtScreens(); shootCake(); m_messageVisible = false; lookAtScreens(); }, always },
         { "09_answer_right", [&]() { lookAtScreens(); shootBird(Side::Right); lookAtScreens(); }, always },
         { "10_finale", [&]()

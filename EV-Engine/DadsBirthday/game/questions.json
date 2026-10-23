@@ -4,6 +4,8 @@
 // - "correct" says which one is right: "left" or "right".
 // - "correctImage" is shown when the right bird is shot, "wrongImage" when the wrong one is. Paths are relative
 //   to this folder (put your pictures in game/images). jpg and png both work; big photos are made smaller.
+// - Both screens show the picture. "correctImage2" and "wrongImage2" are optional: a different picture for the
+//   other screen (the one whose bird was not shot).
 // - "correctMessage" and "wrongMessage" are optional; they appear in the text box after answering.
 // - Text between // and the end of a line is a comment and is ignored.
 {
@@ -15,35 +17,236 @@
 
   "questions": [
     {
+      "question": "Kuantu anja ba hasi?",
+      "left": "51",
+      "right": "21",
+      "correct": "left",
+      "correctImage": "images/17.jpg",
+      "wrongImage": "images/wrong/7.jpg",
+      "correctMessage": "Damn... bo wesunan ta stabiel ahinda?",
+      "wrongMessage": "Laten we realistisch zijn Yasir"
+    },
+    {
       "question": "Kon bo ta jama bo yu di mas grandi?",
       "left": "Mucha Konjo!",
       "right": "GARAPETUCHO",
       "correct": "right",
-      "correctImage": "images/question1_correct.png",
-      "wrongImage": "images/question1_wrong.png",
+      "correctImage": "images/64.jpg",
+      "wrongImage": "images/wrong/5.png",
       "correctMessage": "Correct! Nunka Tim a kompronde unda ba saka e nomber aki...",
-      "wrongMessage": "Bijna.."
-    },
-    {
-      "question": "Kuantu anja ba hasi?",
-      "left": "50",
-      "right": "21",
-      "correct": "left",
-      "correctImage": "images/question2_correct.png",
-      "wrongImage": "images/question2_wrong.png",
-      "correctMessage": "Damn... Konta ku bo wesu nan",
-      "wrongMessage": "Laten we realistisch zijn Yasir"
+      "wrongMessage": "Incorrect, Meneer Hyman ta trata su yu nan ku respect! ;);)"
     },
     {
       "question": "Het is 2001, bo ke bai hunga Tekken ku Oom David pero Timethy ta kana pompa, ki bo ta hasi?",
       "left": "Kore un rondje den auto ku Tim tokando Nelly - Dilemma",
       "right": "Laga Tim bai kore skelter ku Adan pafo",
       "correct": "left",
-      "correctImage": "images/question3_correct.png",
-      "wrongImage": "images/question3_wrong.png",
+      "correctImage": "images/63.jpg",
+      "wrongImage": "images/wrong/6.jpg",
       "correctMessage": "Correct :) de veilige optie. Ahinda Timethy stima e kantika aki",
       "wrongMessage": "Tim no tabata kore skelter ku 4 anja"
+    },
+    {
+      "question": "Ora ba kansa dje galinja farm ku bo tatin, nos a kuminsa kushina nan. Un di nan a skapa foi bo man i kuminsa bula / bons riba vloer ta bai richting bobo su kas. Kon bo ta puntra bo yu stima pa kue pabo?",
+      "left": "Tim ate ta bai! Kue pami",
+      "right": "Tim kue pami! mariku bo ta?!",
+      "correct": "right",
+      "correctImage": "images/8.jpg",
+      "wrongImage": "images/wrong/7.jpg",
+      "correctMessage": "Jammer genoeg esaki ta e antwoord korekto hahahahah",
+      "wrongMessage": "Si Si... anto despues ba bai misa ku Xiomara..."
+    },
+    {
+      "question": "Tempu ku Thianny tabatin mas o menos 5 anja, kasi tur djasabra papa ku Jani tabata bai ___ pa kumpra ___, pa despues wak ___ huntu ku Tim",
+      "left": "Albert Heijn, croissant, Avatar",
+      "right": "C-1000, donut ku jam, Avatar",
+      "correct": "right",
+      "correctImage": "images/46.jpg",
+      "wrongImage": "images/wrong/5.png",
+      "correctMessage": "Correct! Esaki ta un di mi lievelings herineringen!",
+      "wrongMessage": "BRRRRR WRONG"
+    },
+    {
+      "question": "Tempu ku nos tabata biba na Boneiru, papa a bai hunt i tira un palomba pa kome. Thianny tabata yora pasombra e tabata sinti malu pa e pobersitu palomba. Ora mama a kushine, kiko Jani su reactie tabata?",
+      "left": "Jani no a kome nada, ela keda tristu i no papia kubo pa 2 dia",
+      "right": "Jani a kome te pidi mas, ela diskubri ku palomba ta 10/10",
+      "correct": "right",
+      "correctImage": "images/48.jpg",
+      "wrongImage": "images/wrong/1.jpg",
+      "correctMessage": "Correct, 1 di e 1000 voorbeelden di un Jani hypokriet",
+      "wrongMessage": "Fout, pero mi por kompronde bo antwoord paso Jani ta rabia kubo pa tur kos"
+    },
+    {
+      "question": "Tempu ku nos tabata biba na hulanda, kua tabata un di Jani i papa su lievelings snacks ku nos tabata kome, kaba henter e paki den un dia?",
+      "left": "Tomati chikitu",
+      "right": "Komkommer chikitu",
+      "correct": "left",
+      "correctImage": "images/10.jpg",
+      "wrongImage": "images/wrong/2.jpg",
+      "correctMessage": "Correct! Cherry tomatoes :)",
+      "wrongMessage": "BRRRRR WRONG"
+    },
+    {
+      "question": "Moro: Pa Tim su verjaardag mi a puntra un chef lokaal pa un recept, ela splikami precies kon pa traha ___",
+      "left": "Pastechi",
+      "right": "Jhonny Cakes",
+      "correct": "right",
+      "correctImage": "images/65.jpg",
+      "wrongImage": "images/wrong/2.jpg",
+      "correctMessage": "Yes! They were very dushi",
+      "wrongMessage": "Nope, but you can teach me this next time in Curacao :)"
+    },
+    {
+      "question": "Moro: Na Korsou nos a bai jaag Yuana huntu, bo a tuma bo tempu pa kushine pa nos, ora nos a kaba di kome mi a bai ___",
+      "left": "Hunga domino ku abo tim i Opa Ibi",
+      "right": "Drumi paso tabata un lange dag",
+      "correct": "left",
+      "correctImage": "images/55.jpg",
+      "wrongImage": "images/wrong/7.jpg",
+      "correctMessage": "Correct! Danki atrobe pa esaki, e sopi yuana tabata hopi hopi dushi. Un experensia ku lo mi no lubida nunka di mi bida",
+      "wrongMessage": "No, dia di Tumba mi a bai drumi trempan :P"
+    },
+    {
+      "question": "Ken ta mas sabe lo todo? (mas sabi)",
+      "left": "Wensley",
+      "right": "Yasir",
+      "correct": "left",
+      "correctImage": "images/49.jpg",
+      "wrongImage": "images/wrong/0.jpg",
+      "correctMessage": "Correct! Hopi guerra nos a pasa huntu holibege!!",
+      "wrongMessage": "Nope, hahaha bo mes ta kere? holibege!!"
+    },
+    {
+      "question": "Raisi: Wak e volgende foto bon. Tira e Patu links pa mira e foto, bo ta hanja e vraag hierna",
+      "left": "Tira Esaki!",
+      "right": "Esaki tambe ta mustra e foto pero volg instructies Mr Hyman.",
+      "correct": "left",
+      "correctImage": "images/50.jpg",
+      "wrongImage": "images/50.jpg",
+      "correctMessage": "E pregunta ta volg hierna",
+      "wrongMessage": "Mi ta bisa Xiomara riba bo."
+    },
+    {
+      "question": "Raisi: Ki anja nos a bai road aki?",
+      "left": "2015",
+      "right": "2017",
+      "correct": "right",
+      "correctImage": "images/36.jpg",
+      "wrongImage": "images/wrong/4.png",
+      "correctMessage": "Correct! Hopi dushi nos a pasa :)",
+      "wrongMessage": "BRRRRR WRONG"
+    },
+    {
+      "question": "Angelo kabes grandi: Dia 3 di December, 2023. Ma bin biba Korsou, ora ma baha foi avion i ba bin buskami, unda ta e prome kaminda ku ba hibami",
+      "left": "Otrobanda pa e familie dagen",
+      "right": "Skarlo",
+      "correct": "right",
+      "correctImage": "images/52.jpg",
+      "wrongImage": "images/wrong/1.jpg",
+      "correctMessage": "Correct...",
+      "wrongMessage": "respect si ba kis esaki pero......."
+    },
+    {
+      "question": "Ora bo diskubri algu hopi kruel, kiko bo ta bisa?",
+      "left": "Ata hodementu...",
+      "right": "Shonan keda trankil, no kreis",
+      "correct": "left",
+      "correctImage": "images/23.jpg",
+      "wrongImage": "images/wrong/1.jpg",
+      "correctMessage": "Ding Ding Ding :) - Bobo",
+      "wrongMessage": "BRRRRR WRONG"
+    },
+    {
+      "question": "Xiomara: Ken tabata mas tormentoso tijdens birth?",
+      "left": "Yasir",
+      "right": "Dyandra",
+      "correct": "left",
+      "correctImage": "images/43.jpg",
+      "wrongImage": "images/wrong/4.png",
+      "correctMessage": "Klopt, bo a butami kibra awa foi 5or di marduga, ma keda limpi asinei den e kamber eibou kaminda e pia di trapi di anaben eibou. Limpi asina pa Ibi bai bin bai bin feita, kada be bai bai bin wak mi den kamber ei, dolo! Ora mahinta a habri ma kana bai Angela, mi di kune mi tin dolo, ma bira bin drumi bek ketu bai Ibi ta bai bin bai bin. Ma kibra awa, ketu bai mi ta keda warda... Ibi a bai ariba bai feita, bai laba auto hasi kiko hasi kiko.. ma yega kliniek bandi 8or di mahinta. Nan a hinkami den kamber, nan a bisami ku ora mi sinti mane mi tin un pupu duru (ora eibou bira duru) pa yama nan. Atardi 3or ma yama nan i Yasir a nase. Okay bon, te awero, mi ta bai banja",
+      "wrongMessage": "Fout, bo a butami kibra awa foi 5or di marduga, ma keda limpi asinei den e kamber eibou kaminda e pia di trapi di anaben eibou. Limpi asina pa Ibi bai bin bai bin feita, kada be bai bai bin wak mi den kamber ei, dolo! Ora mahinta a habri ma kana bai Angela, mi di kune mi tin dolo, ma bira bin drumi bek ketu bai Ibi ta bai bin bai bin. Ma kibra awa, ketu bai mi ta keda warda... Ibi a bai ariba bai feita, bai laba auto hasi kiko hasi kiko.. ma yega kliniek bandi 8or di mahinta. Nan a hinkami den kamber, nan a bisami ku ora mi sinti mane mi tin un pupu duru (ora eibou bira duru) pa yama nan. Atardi 3or ma yama nan i Yasir a nase. Okay bon, te awero, mi ta bai banja"
+    },
+    {
+      "question": "Na unda bo a baha Nice bon bon, i bai buske bek ku man for di luga?",
+      "left": "Na fiesta di Era na 1995",
+      "right": "Somewhere den Buena Vista nai na 1994",
+      "correct": "right",
+      "correctImage": "images/56.jpg",
+      "wrongImage": "images/wrong/6.jpg",
+      "correctMessage": "Ding Ding Ding! Hopi love pabo",
+      "wrongMessage": "Fout :("
+    },
+    {
+      "question": "Jeani: Wak e volgende foto bon. Tira e Patu links pa mira e foto, bo ta hanja e vraag hierna",
+      "left": "Tira Esaki!",
+      "right": "Esaki tambe ta mustra e foto pero volg instructies Mr Hyman.",
+      "correct": "left",
+      "correctImage": "images/57.jpg",
+      "wrongImage": "images/57.jpg",
+      "correctMessage": "E pregunta ta volg hierna",
+      "wrongMessage": "Mi ta bisa Xiomara riba bo."
+    },
+    {
+      "question": "Jeani: In die foto waren we met ___ bij ___",
+      "left": "Jimmy, Rondu",
+      "right": "Nies, Bonaire.",
+      "correct": "left",
+      "correctImage": "images/58.jpg",
+      "wrongImage": "images/58.jpg",
+      "correctMessage": "Klopt!",
+      "wrongMessage": "Volgende keer beter.."
+    },
+    {
+      "question": "Ibi: Riba ki dia bo a nanse?",
+      "left": "Djabierne 23 Oktober 1975",
+      "right": "Djawebs 23 Oktober 1975",
+      "correct": "right",
+      "correctImage": "images/62.jpg",
+      "wrongImage": "images/wrong/0.jpg",
+      "correctMessage": "Ding Ding Ding",
+      "wrongMessage": "Dichtbij"
+    },
+    {
+      "question": "Jimmy a skibi un bericht pabo in plaats van un pregunta: (tira links)",
+      "left": "Een bijzondere avond in Foshan, China\n26 juli 2025\n\nSoms zegt een foto veel meer dan je op het eerste gezicht zou denken.\n\nYasir en ik staan niet eens op deze foto, maar toch is het voor mij een van de mooiste herinneringen aan onze tijd samen in China.\n\nNa dagen vol drukte, afspraken en nieuwe indrukken was dit de enige avond waarop we even tijd hadden om samen uit te gaan en te genieten van het nachtleven in Foshan.\n\nOp de foto zie je onze drankjes, waaronder de beroemde B52-shots die we die avond dronken. Op zich niets bijzonders, zou je denken. Maar voor mij vertelt deze foto een heel ander verhaal.",
+      "right": "Daar zaten we dan, met z’n tweeën, voor het eerst samen in een land zo ver van huis. Omringd door een totaal andere cultuur, nog steeds onder de indruk van alles wat we in China zagen en meemaakten. Even geen verplichtingen, geen haast, gewoon samen genieten van het moment.\n\nMisschien juist omdat we niet op de foto staan, vind ik hem zo bijzonder. Het gaat niet om wat je ziet, maar om de herinnering die erachter zit.\n\nVoor mij is deze foto een kleine tijdcapsule. Een herinnering aan een bijzondere reis, een gezellige avond en vooral een moment dat Yasir en ik voor altijd met elkaar delen.\n\nEn Yasir, als we ooit weer samen naar China gaan, weet je wat ons te doen staat: opnieuw een avondje uit, en natuurlijk weer een B52!\n\nProost",
+      "correct": "left",
+      "correctImage": "images/61.jpg",
+      "wrongImage": "images/61.jpg",
+      "correctMessage": "Een mooie herinnering!",
+      "wrongMessage": "Een mooie herinnering!"
+    },
+    {
+      "question": "Yasir, kon bo a propone mi pa bo kasa kumi?",
+      "left": "Sinta ta kome, bo a bisami: Dushi mi ke kasa kubo",
+      "right": "'Dushi, si bo drecha un bon pan ku keshi pami, mi ta kasa kubo mi amor'",
+      "correct": "right",
+      "correctImage": "images/59.jpg",
+      "wrongImage": "images/58.jpg",
+      "correctMessage": "Yasir.. Klopt hahahaha pero dikon bo ta asina",
+      "wrongMessage": "Incorrect, e optie aki no ta Hyman level romantisch genoeg"
+    },
+    {
+      "question": "Janine: Kon nos a sera konosi ku otro?",
+      "left": "Na Isla Verde den un fiesta",
+      "right": "Via nos bon amigu Norbert, ku a laba bo sera konosi ku su aamiga. Bo a mirami, bo kurason a kuminsa bati mas duru i bo a keda pensa riba mi. <3",
+      "correct": "right",
+      "correctImage": "images/6.jpg",
+      "wrongImage": "images/slideshow/60.jpg",
+      "correctMessage": "Klopt! Norbert su keuze pa introdusi bosnan dos a kambia hopi den mundu. Tur kos ku bosnan a traha huntu, tur kos ku bosnan yu nan ta logra i beinvloed den mundu. Tur dor di 1 keuze",
+      "wrongMessage": "Incorrect, e optie aki no ta Hyman level romantisch genoeg"
+    },
+    {
+      "question": "Bericht di Timmy",
+      "left": "Hey papa, geniet di bo dia. Mi stimabu hopi hopi I mi ta orguyoso di e persona ku ba bira. Bo a krese hopi over de laatste paar jaren, mi ta spera ku papa mes tambe ta bewust djesaki. E stap nan ku ba hasi no ta nada fasil, i zeker no pa un Hyman",
+      "right": "Danki pa tur e lesnan ku ba sinjami na chiki, pa mi por para sterk in mijn schoenen awoki i por lanta pa mi mes. Danki pa kuida i stima mi mama tur a anja nan aki, i danki pa ta un guy master ku mi por look up to :)",
+      "correct": "right",
+      "correctImage": "images/slideshow/13.jpg",
+      "wrongImage": "images/slideshow/13.jpg",
+      "correctMessage": "The End, Love you dad",
+      "wrongMessage": "The End, Love you dad"
     }
+
   ],
 
   "finale": {
@@ -51,7 +254,8 @@
     "title": "Masha masha Pabien papa!",
     // Shown in the text box at the end, followed by the score.
     "message": "Spera bo a gusta bo kleine quiz :) mi no tatin hopi tempu pero ma hasi mi best! Un kleine groep di hende ku stimabu a contribui ku un par di pregunta, tur vraag ku bo a yena fout ta saka $10 for di bo crypto anto manda nan. Spera nos no ta broke awoki...",
-    // The pictures on the right screen at the end. Leave the list empty to use every correctImage.
-    "images": []
+    // The pictures on the right screen at the end. A folder adds every picture in it, in number order.
+    // Leave the list empty to use every correctImage.
+    "images": ["images/slideshow"]
   }
 }
