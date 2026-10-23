@@ -908,7 +908,20 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
                 m_lookYaw = 235.0f;
                 m_lookPitch = 8.0f;
             }, always },
-        { "14_editor", [this]() { m_editor->StopPlaying(); }, always },
+        { "14_curacao", [&]()
+            {
+                // Behind the screens: the CURACAO letters and the houses of Willemstad.
+                m_playerPosition = XMFLOAT3(0.0f, 0.0f, borderMinZ);
+                m_lookYaw = 180.0f;
+                m_lookPitch = -6.0f;
+            }, always },
+        { "15_willemstad", [&]()
+            {
+                m_playerPosition = XMFLOAT3(borderMaxX, 0.0f, -28.0f);
+                m_lookYaw = 215.0f;
+                m_lookPitch = -4.0f;
+            }, always },
+        { "16_editor",[this]() { m_editor->StopPlaying(); }, always },
     };
     constexpr size_t stepCount = sizeof(steps) / sizeof(steps[0]);
 

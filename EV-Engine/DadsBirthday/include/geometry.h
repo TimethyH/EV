@@ -43,7 +43,44 @@ namespace Birthday
         // Adds a flat quad. Corners in order: u0v0, u1v0, u0v1, u1v1; the normal is the quad's front.
         void AddQuad(DirectX::FXMVECTOR origin, DirectX::FXMVECTOR uAxis, DirectX::FXMVECTOR vAxis, DirectX::GXMVECTOR normal,
             float uRepeat, float vRepeat);
+
+        // Adds a flat, convex polygon facing the normal (corners in either order).
+        void AddPolygon(const std::vector<DirectX::XMFLOAT3>& corners, DirectX::FXMVECTOR normal);
+
+        // Adds a copy of another mesh, moved by a transform without scaling.
+        void Append(const MeshData& source, DirectX::FXMMATRIX transform);
+
+        // Adds a box (see BuildBox) with its center at a point.
+        void AddBox(const DirectX::XMFLOAT3& center, const DirectX::XMFLOAT3& size);
     };
+
+    // A black and white picture of a shape (true inside), rows top to bottom.
+    struct ShapeMask
+    {
+        uint32_t             width = 0;
+        uint32_t             height = 0;
+        std::vector<uint8_t> inside;
+    };
+
+    // A mask with polygons filled in (even-odd rule). Corners in pixels, y down.
+    ShapeMask BuildPolygonMask(uint32_t width, uint32_t height, const std::vector<std::vector<DirectX::XMFLOAT2>>& polygons);
+
+    // The distance (in meters) to the outline of a shape at a grid of points, positive inside.
+    struct DistanceField
+    {
+        uint32_t           width = 0;
+        uint32_t           height = 0;
+        float              spacing = 0.0f; // Meters between grid points.
+        std::vector<float> distance;
+    };
+
+    // The distance field of a mask whose pixels are pixelSize meters, sampled every step pixels.
+    DistanceField BuildDistanceField(const ShapeMask& mask, float pixelSize, uint32_t step);
+
+    // A slab from z = back to z = front of the part of a field more than inset meters inside the outline, its front
+    // facing +z. Grid point (i, j) is at x = -i * spacing, y = -j * spacing, so seen from the front the shape is the
+    // right way round (+x is on the left). Without a back (back >= front) only the front is made.
+    MeshData ExtrudeShape(const DistanceField& field, float inset, float front, float back);
 
     // A heightfield over x/z. The texture repeats every 1/uvScale meters.
     MeshData BuildTerrain(float minX, float maxX, float minZ, float maxZ, uint32_t columns, uint32_t rows, float uvScale,
