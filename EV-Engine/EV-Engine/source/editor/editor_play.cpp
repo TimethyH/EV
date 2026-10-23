@@ -127,7 +127,14 @@ void Editor::UpdatePlayMode()
         }
         else if (m_playing && ImGui::IsKeyPressed(ImGuiKey_Escape, false))
         {
-            StopPlaying();
+            if (m_standalonePlay && m_standaloneEscapeCallback)
+            {
+                m_standaloneEscapeCallback();
+            }
+            else
+            {
+                StopPlaying();
+            }
         }
     }
 

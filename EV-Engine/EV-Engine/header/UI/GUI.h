@@ -89,6 +89,13 @@ namespace EV
         ImTextureID GetTextureID(const std::shared_ptr<Texture>& texture);
         ImTextureID GetTextureID(const std::shared_ptr<ShaderResourceView>& srv);
 
+        /**
+         * A large bold font for game HUDs (Segoe UI Bold, 34 px at 96 DPI), or nullptr when Windows has no
+         * Segoe UI Bold. Use it with ImGui::PushFont(font, font->LegacySize): the atlas is baked once, so text is
+         * only sharp at the size the font was loaded at.
+         */
+        ImFont* GetLargeFont() const { return m_largeFont; }
+
     protected:
         GUI(HWND hWnd, const RenderTarget& renderTarget);
         virtual ~GUI();
@@ -115,5 +122,6 @@ namespace EV
 
         // DPI scale the font atlas was rasterized at.
         float m_fontDPIScale = 1.0f;
+        ImFont* m_largeFont = nullptr;
     };
 }  // namespace EV
