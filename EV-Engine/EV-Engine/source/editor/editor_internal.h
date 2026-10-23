@@ -4,9 +4,11 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <cstring>
 #include <filesystem>
+#include <future>
 #include <memory>
 #include <string>
 
@@ -14,6 +16,13 @@
 #include "imgui_internal.h"
 
 #include "DX12/scene_node.h"
+#include "resources/material.h"
+
+namespace EV
+{
+    class Scene;
+    class Texture;
+}
 
 namespace EV::EditorInternal
 {
@@ -74,6 +83,20 @@ namespace EV::EditorInternal
         }
         window->DockNode->TabBar->NextSelectedTabId = window->TabId;
         return true;
+    }
+
+    // Background loads (editor_assets.cpp). They run one at a time on the copy queue and return once the GPU has
+    // finished uploading, nullptr if the file could not be loaded.
+    std::shared_ptr<Scene>   LoadModel(const std::filesystem::path& path);
+    std::shared_ptr<Texture> LoadImageTexture(const std::filesystem::path& path, bool sRGB);
+
+    // Color textures are sampled as sRGB, data textures (normals, roughness...) as linear.
+    bool IsColorTexture(Material::TextureType type);
+
+    template<typename T>
+    bool IsReady(const std::future<T>& future)
+    {
+        return future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
     }
 
     inline std::string FormatBytes(uint64_t bytes)

@@ -30,6 +30,25 @@ namespace fs = std::filesystem;
 
 namespace
 {
+    // Background loads run one at a time and only return once the GPU has finished uploading. Loads share
+    // textures through the texture cache, so this way a texture handed out by the cache is always completely
+    // uploaded; with concurrent loads, a model could be drawn while another load was still uploading (and
+    // transitioning) one of its textures.
+    std::mutex g_loadMutex;
+
+    // Execute a loading command list and wait until the upload, including the mipmaps that ExecuteCommandList
+    // queues on the compute queue afterwards, has finished.
+    void ExecuteAndWait(CommandQueue& commandQueue, const std::shared_ptr<CommandList>& commandList)
+    {
+        commandQueue.WaitForFenceValue(commandQueue.ExecuteCommandList(commandList));
+
+        // The lock keeps fence values in order with the signals that ExecuteCommandList issues from other threads.
+        auto& computeQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
+        ResourceStateTracker::Lock();
+        const uint64_t mipsFence = computeQueue.Signal();
+        ResourceStateTracker::Unlock();
+        computeQueue.WaitForFenceValue(mipsFence);
+    }
 
     // Images larger than this are not loaded just for a thumbnail.
     constexpr uintmax_t g_maxThumbnailFileSize = 8ull * 1024ull * 1024ull;
@@ -74,69 +93,6 @@ namespace
         return AssetType::Unknown;
     }
 
-    // Background loads run one at a time and only return once the GPU has finished uploading. Loads share
-    // textures through the texture cache, so this way a texture handed out by the cache is always completely
-    // uploaded; with concurrent loads, a model could be drawn while another load was still uploading (and
-    // transitioning) one of its textures.
-    std::mutex g_loadMutex;
-
-    // Execute a loading command list and wait until the upload, including the mipmaps that ExecuteCommandList
-    // queues on the compute queue afterwards, has finished.
-    void ExecuteAndWait(CommandQueue& commandQueue, const std::shared_ptr<CommandList>& commandList)
-    {
-        commandQueue.WaitForFenceValue(commandQueue.ExecuteCommandList(commandList));
-
-        // The lock keeps fence values in order with the signals that ExecuteCommandList issues from other threads.
-        auto& computeQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COMPUTE);
-        ResourceStateTracker::Lock();
-        const uint64_t mipsFence = computeQueue.Signal();
-        ResourceStateTracker::Unlock();
-        computeQueue.WaitForFenceValue(mipsFence);
-    }
-
-    // Loading runs on a worker thread using the copy queue, like the applications' own scene loading.
-    std::shared_ptr<Scene> LoadModel(const fs::path& path)
-    {
-        try
-        {
-            std::lock_guard<std::mutex> lock(g_loadMutex);
-            auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-            auto commandList = commandQueue.GetCommandList();
-            auto scene = commandList->LoadSceneFromFile(path.wstring());
-            ExecuteAndWait(commandQueue, commandList);
-            return scene;
-        }
-        catch (const std::exception& e)
-        {
-            OutputDebugStringA((std::string("Failed to load model: ") + e.what() + "\n").c_str());
-            return nullptr;
-        }
-    }
-
-    std::shared_ptr<Texture> LoadImageTexture(const fs::path& path, bool sRGB)
-    {
-        try
-        {
-            std::lock_guard<std::mutex> lock(g_loadMutex);
-            auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-            auto commandList = commandQueue.GetCommandList();
-            auto texture = commandList->LoadTextureFromFile(path.wstring(), sRGB);
-            ExecuteAndWait(commandQueue, commandList);
-            return texture;
-        }
-        catch (const std::exception& e)
-        {
-            OutputDebugStringA((std::string("Failed to load texture: ") + e.what() + "\n").c_str());
-            return nullptr;
-        }
-    }
-
-    template<typename T>
-    bool IsReady(const std::future<T>& future)
-    {
-        return future.valid() && future.wait_for(std::chrono::seconds(0)) == std::future_status::ready;
-    }
-
     // World space bounds of all meshes below a node.
     bool ComputeWorldBounds(const std::shared_ptr<SceneNode>& root, BoundingBox& bounds)
     {
@@ -165,6 +121,52 @@ namespace
         });
         return any;
     }
+}
+
+// ------------------------------------------------------------------------------------------------
+// Background loads
+
+// Loading runs on a worker thread using the copy queue, like the applications' own scene loading.
+std::shared_ptr<Scene> EditorInternal::LoadModel(const fs::path& path)
+{
+    try
+    {
+        std::lock_guard<std::mutex> lock(g_loadMutex);
+        auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+        auto commandList = commandQueue.GetCommandList();
+        auto scene = commandList->LoadSceneFromFile(path.wstring());
+        ExecuteAndWait(commandQueue, commandList);
+        return scene;
+    }
+    catch (const std::exception& e)
+    {
+        OutputDebugStringA((std::string("Failed to load model: ") + e.what() + "\n").c_str());
+        return nullptr;
+    }
+}
+
+std::shared_ptr<Texture> EditorInternal::LoadImageTexture(const fs::path& path, bool sRGB)
+{
+    try
+    {
+        std::lock_guard<std::mutex> lock(g_loadMutex);
+        auto& commandQueue = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+        auto commandList = commandQueue.GetCommandList();
+        auto texture = commandList->LoadTextureFromFile(path.wstring(), sRGB);
+        ExecuteAndWait(commandQueue, commandList);
+        return texture;
+    }
+    catch (const std::exception& e)
+    {
+        OutputDebugStringA((std::string("Failed to load texture: ") + e.what() + "\n").c_str());
+        return nullptr;
+    }
+}
+
+bool EditorInternal::IsColorTexture(Material::TextureType type)
+{
+    return type == Material::TextureType::Diffuse || type == Material::TextureType::Emissive ||
+        type == Material::TextureType::Ambient || type == Material::TextureType::Specular;
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -1029,7 +1031,8 @@ void Editor::UpdateEnvironmentLoad()
         return;
     }
 
-    const std::string name = m_environmentLoad->path.filename().string();
+    const fs::path path = m_environmentLoad->path;
+    const std::string name = path.filename().string();
     auto panorama = m_environmentLoad->loading.get();
     m_environmentLoad.reset();
 
@@ -1040,6 +1043,7 @@ void Editor::UpdateEnvironmentLoad()
         return;
     }
     m_environmentCallback(panorama);
+    m_environmentPath = path; // Saved in scene files.
     m_statusMessage = "Environment: " + name;
     m_statusMessageTime = 3.0f;
 }
@@ -1049,10 +1053,7 @@ void Editor::UpdateEnvironmentLoad()
 
 void Editor::DropTextureOnMaterial(const fs::path& path, const std::shared_ptr<Material>& material, int slot)
 {
-    // Color textures are sampled as sRGB, data textures (normals, roughness...) as linear.
-    const auto type = static_cast<Material::TextureType>(slot);
-    const bool sRGB = type == Material::TextureType::Diffuse || type == Material::TextureType::Emissive ||
-        type == Material::TextureType::Ambient || type == Material::TextureType::Specular;
+    const bool sRGB = IsColorTexture(static_cast<Material::TextureType>(slot));
 
     TextureDrop drop;
     drop.loading = std::async(std::launch::async, LoadImageTexture, path, sRGB);
@@ -1108,7 +1109,7 @@ bool Editor::IsLoadingInBackground() const
             return true;
         }
     }
-    return m_previewedModel.loading.valid() || m_environmentLoad;
+    return m_previewedModel.loading.valid() || m_environmentLoad || m_sceneLoad.valid();
 }
 
 void Editor::UpdateSettledTextures()

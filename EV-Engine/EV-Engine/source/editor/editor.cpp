@@ -247,6 +247,20 @@ Editor::Editor(std::shared_ptr<GUI> gui)
         m_selectedAsset = modelPath;
         PreviewModel(modelPath);
     }
+
+    // "--scene <file.evscene>" opens a scene at startup.
+    int argumentCount = 0;
+    if (LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount))
+    {
+        for (int i = 1; i + 1 < argumentCount; ++i)
+        {
+            if (std::wstring(arguments[i]) == L"--scene")
+            {
+                LoadScene(arguments[++i]);
+            }
+        }
+        LocalFree(arguments);
+    }
 }
 
 Editor::~Editor() = default;
@@ -323,12 +337,39 @@ void Editor::BeginFrame()
     UpdateModelDrag();
     UpdateTextureDrops();
     UpdateEnvironmentLoad();
+    UpdateFileDialog();
+    UpdateSceneLoad();
     UpdateSettledTextures();
     UpdateShaderReloads();
     m_statusMessageTime = std::max(0.0f, m_statusMessageTime - ImGui::GetIO().DeltaTime);
 
     m_frameTimes[m_frameTimeIndex] = ImGui::GetIO().DeltaTime * 1000.0f;
     m_frameTimeIndex = (m_frameTimeIndex + 1) % IM_ARRAYSIZE(m_frameTimes);
+
+    // Scene file shortcuts (not while typing in a text field).
+    const ImGuiIO& io = ImGui::GetIO();
+    if (io.KeyCtrl && !io.WantTextInput && !m_fileDialog && !IsLoadingScene())
+    {
+        if (ImGui::IsKeyPressed(ImGuiKey_N, false))
+        {
+            NewScene();
+        }
+        else if (ImGui::IsKeyPressed(ImGuiKey_O, false))
+        {
+            ShowFileDialog(false);
+        }
+        else if (ImGui::IsKeyPressed(ImGuiKey_S, false))
+        {
+            if (io.KeyShift)
+            {
+                ShowFileDialog(true);
+            }
+            else
+            {
+                SaveCurrentScene();
+            }
+        }
+    }
 
     DrawMenuBar();
     DrawStatusBar();
@@ -437,6 +478,7 @@ void Editor::DrawMenuBar()
         return;
     }
 
+    DrawFileMenu();
     for (auto& callback : m_menuCallbacks)
     {
         callback();
@@ -535,6 +577,15 @@ void Editor::DrawStatusBar()
             else
             {
                 ImGui::TextColored(g_colorTextDim, "Nothing selected");
+            }
+            ImGui::SameLine(0.0f, 30.0f);
+            if (m_scenePath.empty())
+            {
+                ImGui::TextColored(g_colorTextDim, "Scene: unsaved");
+            }
+            else
+            {
+                ImGui::TextColored(g_colorTextDim, "Scene: %s", ToUTF8(m_scenePath.filename().wstring()).c_str());
             }
             ImGui::SameLine(0.0f, 30.0f);
             ImGui::TextColored(g_colorTextDim, "Viewport %ux%u", m_viewportWidth, m_viewportHeight);

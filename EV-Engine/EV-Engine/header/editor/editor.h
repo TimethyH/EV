@@ -14,6 +14,8 @@
  *      m_editor->SetSceneTexture(sceneTexture);
  *      ... your own ImGui windows ...
  *      m_editor->EndFrame(commandList, swapChainRenderTarget);
+ *
+ *  Scenes are saved to and loaded from .evscene files (File menu).
  */
 
 #include <cstdint>
@@ -104,8 +106,8 @@ namespace EV
         // Mouse position relative to the top left of the viewport image, in pixels.
         ImVec2 GetViewportMousePosition() const { return m_viewportMousePosition; }
 
-        // The camera used to render the viewport. Needed for picking and the transform gizmo.
-        void SetCamera(const Camera* camera) { m_camera = camera; }
+        // The camera used to render the viewport. Needed for picking and the transform gizmo, and saved in scene files.
+        void SetCamera(Camera* camera) { m_camera = camera; }
 
         // Near/far planes of the scene camera, used by the texture viewer to linearize depth.
         void SetCameraClipPlanes(float nearZ, float farZ);
@@ -154,6 +156,32 @@ namespace EV
 
         // Show a small preview of a texture inline (any format). Clicking it opens the Texture Viewer.
         void TextureThumbnail(const std::shared_ptr<Texture>& texture, float size);
+
+        // ----------------------------------------------------------------------------------------
+        // Scene files (.evscene, File menu)
+        //
+        // A scene file holds the models placed in the editor (model file, node hierarchy, transforms and
+        // material changes), the transforms of the application's own scenes (matched by the name given to
+        // AddScene), the camera and the environment. Models and textures are loaded again from their files,
+        // so they are stored relative to the working directory and have to stay where they are.
+
+        // Remove every model placed in the editor. Scenes added by the application stay.
+        void NewScene();
+
+        // Write the scene to a file. Returns false (and says why in the status bar) when it could not be written.
+        bool SaveScene(const std::filesystem::path& path);
+
+        // Load a scene file in the background. It replaces the current scene once all its models are loaded.
+        void LoadScene(const std::filesystem::path& path);
+
+        bool IsLoadingScene() const { return m_sceneLoad.valid(); }
+
+        // The file the scene was last saved to or loaded from, empty for a new scene.
+        const std::filesystem::path& GetScenePath() const { return m_scenePath; }
+
+        // Called after the editor moved the camera (a scene was loaded), so the application
+        // can update its camera controller, e.g. the pitch and yaw it rebuilds the camera rotation from.
+        void SetCameraChangedCallback(std::function<void()> callback) { m_cameraChangedCallback = std::move(callback); }
 
     private:
         struct Panel
@@ -220,6 +248,36 @@ namespace EV
         {
             std::filesystem::path                 path;
             std::future<std::shared_ptr<Texture>> loading;
+        };
+
+        // A scene file read in the background (editor_scene_file.cpp). Everything in it is built off the main
+        // thread; the main thread only swaps it in.
+        struct SceneFileContents
+        {
+            // Node transforms of a scene added by the application, in ForEachNode order.
+            struct ApplicationScene
+            {
+                std::string                      name;
+                std::vector<DirectX::XMFLOAT4X4> transforms;
+            };
+
+            std::filesystem::path         path;
+            std::string                   error; // Set when the file could not be read.
+            std::vector<std::string>      warnings;
+            std::vector<SceneEntry>       scenes; // Models placed in the editor.
+            std::vector<ApplicationScene> applicationScenes;
+            bool                          hasCamera = false;
+            DirectX::XMFLOAT3             cameraPosition = {};
+            DirectX::XMFLOAT4             cameraRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+            float                         cameraFov = 45.0f;
+            std::filesystem::path         environment;
+        };
+
+        // Open and save dialogs run on their own thread, so the window keeps rendering while one is open.
+        struct FileDialog
+        {
+            bool                               save = false;
+            std::future<std::filesystem::path> result; // Empty path when cancelled.
         };
 
         // A model file loaded for its thumbnail in the Assets panel. The model is rendered once and then released.
@@ -301,6 +359,16 @@ namespace EV
 
         std::shared_ptr<Texture> FindLiveTexture(const std::wstring& name) const;
 
+        // Scene files (editor_scene_file.cpp)
+        static std::unique_ptr<SceneFileContents> ReadSceneFile(const std::filesystem::path& path);
+        void ApplySceneFile(SceneFileContents& contents);
+        void UpdateSceneLoad();
+        void DrawFileMenu();
+        void SaveCurrentScene();
+        void ShowFileDialog(bool save);
+        void UpdateFileDialog();
+        void CancelModelDrag();
+
         // Textures created by background loads may still be uploading on the copy queue; they are not
         // sampled until all editor loads have finished.
         bool IsLoadingInBackground() const;
@@ -339,7 +407,7 @@ namespace EV
         bool     m_viewportDragging = false;
         bool     m_hierarchyFocused = false;
         ImVec2   m_viewportMousePosition = {};
-        const Camera* m_camera = nullptr;
+        Camera*  m_camera = nullptr;
         int      m_gizmoOperation = 0; // ImGuizmo::OPERATION
         bool     m_gizmoLocal = false;
         float    m_nearZ = 0.1f;
@@ -402,6 +470,14 @@ namespace EV
         bool         m_selectBufferCaptureTab = false;
         int          m_bufferViewFormat = -1; // Float, int, uint, hex (32 bit), uint16, hex16; -1 = from the stride.
         int          m_bufferViewColumns = 0; // Values per row, 0 = from the buffer's stride.
+
+        // Scene files
+        std::filesystem::path                           m_scenePath;
+        std::future<std::unique_ptr<SceneFileContents>> m_sceneLoad;
+        std::filesystem::path                           m_sceneLoadPath;
+        std::unique_ptr<FileDialog>                     m_fileDialog;
+        std::filesystem::path                           m_environmentPath; // Last environment loaded by the editor.
+        std::function<void()>                           m_cameraChangedCallback;
 
         // Stats
         float  m_frameTimes[120] = {};
