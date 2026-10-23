@@ -200,6 +200,14 @@ namespace EV
         // True when the application was started with --play: there is no editor to go back to.
         bool IsStandalonePlay() const { return m_standalonePlay; }
 
+        // Start playing on the next frame without the editor, like "--play" (a game that should not show the
+        // editor at all calls this after creating it).
+        void PlayStandalone() { m_startupPlay = true; }
+
+        // Without the editor Esc quits. With this callback set, Esc calls it instead (e.g. to show a pause screen
+        // that asks before quitting); quit with Application::Stop.
+        void SetStandaloneEscapeCallback(std::function<void()> callback) { m_standaloneEscapeCallback = std::move(callback); }
+
         // Called when play mode starts (true) and stops (false). Run game logic only while playing.
         void SetPlayModeCallback(std::function<void(bool playing)> callback) { m_playModeCallback = std::move(callback); }
 
@@ -521,6 +529,7 @@ namespace EV
         float                      m_playHintTime = 0.0f; // How long "Esc: stop playing" is still shown.
         PlaySnapshot               m_playSnapshot;
         std::function<void(bool)>  m_playModeCallback;
+        std::function<void()>      m_standaloneEscapeCallback;
 
         // Stats
         float  m_frameTimes[120] = {};

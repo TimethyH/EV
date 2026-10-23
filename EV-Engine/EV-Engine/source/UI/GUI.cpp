@@ -71,6 +71,13 @@ GUI::GUI(HWND hWnd, const RenderTarget& renderTarget)
         fontConfig.SizePixels = 13.0f * m_fontDPIScale;
         io.Fonts->AddFontDefault(&fontConfig);
     }
+    // Large text for game HUDs. Added after the default font, so it does not replace it.
+    if (GetFileAttributesW(L"C:\\Windows\\Fonts\\segoeuib.ttf") != INVALID_FILE_ATTRIBUTES)
+    {
+        ImFontConfig largeConfig;
+        largeConfig.OversampleH = 2;
+        m_largeFont = io.Fonts->AddFontFromFileTTF("C:\\Windows\\Fonts\\segoeuib.ttf", 34.0f * m_fontDPIScale, &largeConfig);
+    }
     ImGui::GetStyle().ScaleAllSizes(m_fontDPIScale);
 
     // Build texture atlas
