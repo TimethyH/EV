@@ -123,6 +123,9 @@
     <ClCompile Include="source\editor\editor_assets.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\editor\editor_play.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\editor\editor_scene_file.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>

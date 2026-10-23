@@ -15,7 +15,8 @@
  *      ... your own ImGui windows ...
  *      m_editor->EndFrame(commandList, swapChainRenderTarget);
  *
- *  Scenes are saved to and loaded from .evscene files (File menu).
+ *  Scenes are saved to and loaded from .evscene files (File menu). Play mode (F5) hides the editor and
+ *  shows only the scene; "--play <file.evscene>" on the command line starts the application that way.
  */
 
 #include <cstdint>
@@ -179,9 +180,28 @@ namespace EV
         // The file the scene was last saved to or loaded from, empty for a new scene.
         const std::filesystem::path& GetScenePath() const { return m_scenePath; }
 
-        // Called after the editor moved the camera (a scene was loaded), so the application
+        // Called after the editor moved the camera (a scene was loaded or play mode stopped), so the application
         // can update its camera controller, e.g. the pitch and yaw it rebuilds the camera rotation from.
         void SetCameraChangedCallback(std::function<void()> callback) { m_cameraChangedCallback = std::move(callback); }
+
+        // ----------------------------------------------------------------------------------------
+        // Play mode
+        //
+        // While playing, the editor draws no menus, panels or gizmos: the scene texture fills the window and the
+        // viewport size is the window size. F5 (or the Play button) starts playing, F5 or Esc stops. Transforms
+        // and the camera go back to where they were when play mode stops.
+        // Started with "--play <file.evscene>", the application only plays that scene and Esc quits; that is how
+        // a finished game runs. "--scene <file.evscene>" opens a scene in the editor.
+
+        void Play();
+        void StopPlaying();
+        bool IsPlaying() const { return m_playing; }
+
+        // True when the application was started with --play: there is no editor to go back to.
+        bool IsStandalonePlay() const { return m_standalonePlay; }
+
+        // Called when play mode starts (true) and stops (false). Run game logic only while playing.
+        void SetPlayModeCallback(std::function<void(bool playing)> callback) { m_playModeCallback = std::move(callback); }
 
     private:
         struct Panel
@@ -280,6 +300,15 @@ namespace EV
             std::future<std::filesystem::path> result; // Empty path when cancelled.
         };
 
+        // Transforms and camera when play mode started, restored when it stops.
+        struct PlaySnapshot
+        {
+            std::vector<std::pair<std::weak_ptr<SceneNode>, DirectX::XMFLOAT4X4>> transforms;
+            DirectX::XMFLOAT3 cameraPosition = {};
+            DirectX::XMFLOAT4 cameraRotation = { 0.0f, 0.0f, 0.0f, 1.0f };
+            float             cameraFov = 45.0f;
+        };
+
         // A model file loaded for its thumbnail in the Assets panel. The model is rendered once and then released.
         struct ModelThumbnail
         {
@@ -310,6 +339,7 @@ namespace EV
 
         void ApplyTheme();
         void DrawMenuBar();
+        void DrawEditorPanels();
         void DrawStatusBar();
         void BuildDefaultLayout(ImGuiID dockspaceID);
 
@@ -368,6 +398,11 @@ namespace EV
         void ShowFileDialog(bool save);
         void UpdateFileDialog();
         void CancelModelDrag();
+
+        // Play mode (editor_play.cpp)
+        void UpdatePlayMode();
+        void DrawPlayView();
+        void DrawPlayButton();
 
         // Textures created by background loads may still be uploading on the copy queue; they are not
         // sampled until all editor loads have finished.
@@ -478,6 +513,14 @@ namespace EV
         std::unique_ptr<FileDialog>                     m_fileDialog;
         std::filesystem::path                           m_environmentPath; // Last environment loaded by the editor.
         std::function<void()>                           m_cameraChangedCallback;
+
+        // Play mode
+        bool                       m_playing = false;
+        bool                       m_standalonePlay = false;
+        bool                       m_startupPlay = false; // --play: starts playing on the first frame.
+        float                      m_playHintTime = 0.0f; // How long "Esc: stop playing" is still shown.
+        PlaySnapshot               m_playSnapshot;
+        std::function<void(bool)>  m_playModeCallback;
 
         // Stats
         float  m_frameTimes[120] = {};
