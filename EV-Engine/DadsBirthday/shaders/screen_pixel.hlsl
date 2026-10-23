@@ -81,8 +81,16 @@ float3 LinearToSRGB(float3 color)
 
 float4 main(PixelShaderInput IN) : SV_Target
 {
+    // A picture that is partly past the edge of the screen (scrolling in the finale) has a quad over only its visible
+    // part: Reflectance.x and .y are the top and bottom of that part in the image (0 to 1), when Reflectance.z is 1.
+    float2 uv = IN.TexCoord;
+    if (material.Reflectance.z > 0.5f)
+    {
+        uv.y = lerp(material.Reflectance.x, material.Reflectance.y, uv.y);
+    }
+
     // sRGB textures are read as linear values.
-    const float3 color = material.hasEmissiveTexture ? EmissiveTexture.Sample(anisotropicSampler, IN.TexCoord).rgb : material.Emissive.rgb;
+    const float3 color = material.hasEmissiveTexture ? EmissiveTexture.Sample(anisotropicSampler, uv).rgb : material.Emissive.rgb;
 
     // The tonemapper outputs pow(curve(x), 1 / Gamma) to an sRGB-encoded display; aim for the image's sRGB value.
     const float3 sdr = pow(saturate(LinearToSRGB(color)), Gamma);

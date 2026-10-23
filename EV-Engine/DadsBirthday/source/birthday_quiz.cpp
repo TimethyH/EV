@@ -59,8 +59,8 @@ void BirthdayGame::LoadQuiz(CommandList& commandList)
         m_answerCards.push_back(makeCard(AnswerCard(question.leftAnswer)));
         m_answerCards.push_back(makeCard(AnswerCard(question.rightAnswer)));
     }
-    m_idleCards[static_cast<int>(Side::Left)] = makeCard(AnswerCard("Shoot the birthday cake"));
-    m_idleCards[static_cast<int>(Side::Right)] = makeCard(AnswerCard("to start the quiz!"));
+    m_idleCards[static_cast<int>(Side::Left)] = makeCard(AnswerCard("Tira e bolo"));
+    m_idleCards[static_cast<int>(Side::Right)] = makeCard(AnswerCard("pa kuminsa bo quiz!"));
     m_finaleCard = makeCard(FinaleCard(m_quiz.finaleTitle));
 
     // Every picture once. They are decoded at the same time on worker threads and uploaded here.
@@ -192,7 +192,7 @@ void BirthdayGame::StartQuestion(size_t index)
         question.question;
     if (index == 0)
     {
-        message += "\nShoot the bird above the answer you think is right.";
+        message += "\nTira e patu riba e antwoord korekto.";
     }
     ShowMessage(message);
 }
@@ -216,7 +216,7 @@ void BirthdayGame::Answer(Side side)
 
     const bool last = m_questionIndex + 1 >= m_quiz.questions.size();
     ShowMessage((correct ? question.correctMessage : question.wrongMessage) + "\n" +
-        (last ? "Shoot the cake one more time for a surprise!" : "Shoot the cake for the next question."));
+        (last ? "Tira e bolo un lastu bia." : "Tira e bolo pa e volgende vraag"));
 }
 
 void BirthdayGame::StartFinale()
@@ -233,7 +233,7 @@ void BirthdayGame::StartFinale()
             pictures.push_back(picture);
         }
     }
-    ShowOnScreen(Side::Right, pictures);
+    ShowScrolling(Side::Right, pictures);
 
     ShowMessage(m_quiz.finaleMessage + "\nYou got " + std::to_string(m_correctAnswers) + " of " +
         std::to_string(m_quiz.questions.size()) + " right!");

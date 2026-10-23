@@ -8,45 +8,49 @@
 // - Text between // and the end of a line is a comment and is ignored.
 {
   // The title of the start menu.
-  "title": "Happy Birthday!",
+  "title": "Gift for Meneer Hyman",
 
   // The first message, after waking up on the beach.
-  "intro": "Happy birthday! Walk with W A S D, look around with the mouse and shoot with the left mouse button. Turn around and shoot the birthday cake to start the quiz!",
+  "intro": "Kana ku W A S D, wak rond ku bo muis, tira ku left mouse button anto zoom ku rechts. Tip: Tira e patu korekto ;)",
 
   "questions": [
     {
-      "question": "What is the capital of the Netherlands?",
-      "left": "Amsterdam",
-      "right": "Rotterdam",
-      "correct": "left",
+      "question": "Kon bo ta jama bo yu di mas grandi?",
+      "left": "Mucha Konjo!",
+      "right": "GARAPETUCHO",
+      "correct": "right",
       "correctImage": "images/question1_correct.png",
       "wrongImage": "images/question1_wrong.png",
-      "correctMessage": "Correct! Amsterdam it is.",
-      "wrongMessage": "Nope! Rotterdam has the biggest harbour, but Amsterdam is the capital."
+      "correctMessage": "Correct! Nunka Tim a kompronde unda ba saka e nomber aki...",
+      "wrongMessage": "Bijna.."
     },
     {
-      "question": "How many legs does a spider have?",
-      "left": "Six",
-      "right": "Eight",
-      "correct": "right",
+      "question": "Kuantu anja ba hasi?",
+      "left": "50",
+      "right": "21",
+      "correct": "left",
       "correctImage": "images/question2_correct.png",
-      "wrongImage": "images/question2_wrong.png"
+      "wrongImage": "images/question2_wrong.png",
+      "correctMessage": "Damn... Konta ku bo wesu nan",
+      "wrongMessage": "Laten we realistisch zijn Yasir"
     },
     {
-      "question": "Which of these is a fruit?",
-      "left": "Tomato",
-      "right": "Carrot",
+      "question": "Het is 2001, bo ke bai hunga Tekken ku Oom David pero Timethy ta kana pompa, ki bo ta hasi?",
+      "left": "Kore un rondje den auto ku Tim tokando Nelly - Dilemma",
+      "right": "Laga Tim bai kore skelter ku Adan pafo",
       "correct": "left",
       "correctImage": "images/question3_correct.png",
-      "wrongImage": "images/question3_wrong.png"
+      "wrongImage": "images/question3_wrong.png",
+      "correctMessage": "Correct :) de veilige optie. Ahinda Timethy stima e kantika aki",
+      "wrongMessage": "Tim no tabata kore skelter ku 4 anja"
     }
   ],
 
   "finale": {
     // Big text on the left screen after the last question.
-    "title": "Happy Birthday Dad!",
+    "title": "Masha masha Pabien papa!",
     // Shown in the text box at the end, followed by the score.
-    "message": "That was the last question. Happy birthday, have a wonderful day!",
+    "message": "Spera bo a gusta bo kleine quiz :) mi no tatin hopi tempu pero ma hasi mi best! Un kleine groep di hende ku stimabu a contribui ku un par di pregunta, tur vraag ku bo a yena fout ta saka $10 for di bo crypto anto manda nan. Spera nos no ta broke awoki...",
     // The pictures on the right screen at the end. Leave the list empty to use every correctImage.
     "images": []
   }

@@ -8,7 +8,7 @@ flying above each of them and a birthday cake on a pedestal in the middle. Shoot
 left and right screen each show an answer. Shoot the bird above the answer you think is right. That screen then
 shows a picture: a nice one for the right answer, something else for the wrong one. Shoot the cake again for the
 next question. Behind the screens are the big CURACAO letters and a row of colorful Willemstad houses; on the right of the beach the Queen Emma pontoon bridge goes out to sea. After the last question the cake brings the finale: "Happy Birthday" on the left screen and all the
-pictures together on the right one.
+pictures scrolling past on the right one.
 
 ## Controls
 
@@ -59,7 +59,8 @@ game needs.
 - `correctMessage` / `wrongMessage` are optional; without them the game says "Correct! Well done." or
   "Oops, that was not the right one!".
 - `finale.images` is the list of pictures on the right screen at the end, in this order. Leave it empty (`[]`) to
-  use every `correctImage`. They are made as big as possible while all fitting on the screen.
+  use every `correctImage`. They are shown one at a time, each as big as on its own, scrolling up to the next one
+  every few seconds and starting over after the last one.
 - Lines starting with `//` are comments.
 - A mistake in the file (a missing comma, a picture that is not there) is shown in the welcome message when the game
   starts, and a missing picture shows "Picture not found" on the screen, so test the whole quiz once.

@@ -128,6 +128,15 @@ private:
         std::shared_ptr<EV::Mesh>      quad;    // Shared by the display's quads.
     };
 
+    // A picture scrolling past a screen (ShowScrolling): two quads, as it can be seen twice when the list wraps around.
+    struct ScrollingPicture
+    {
+        float                          width = 0.0f;
+        float                          height = 0.0f;
+        std::shared_ptr<EV::SceneNode> quads[2];
+        std::shared_ptr<EV::Material>  materials[2];
+    };
+
     struct Bird
     {
         std::shared_ptr<EV::SceneNode> body; // Animated every frame.
@@ -203,6 +212,10 @@ private:
     void UpdateScene(float deltaTime);
     DirectX::XMVECTOR GetBirdFlightCenter(Birthday::Side side) const;
     void ShowOnScreen(Birthday::Side side, const std::vector<std::shared_ptr<EV::Texture>>& textures);
+    // Shows the pictures one after the other, each as big as on its own, scrolling up from one to the next and
+    // starting over after the last one.
+    void ShowScrolling(Birthday::Side side, const std::vector<std::shared_ptr<EV::Texture>>& textures);
+    void UpdateScrolling(float deltaTime);
     static float GroundHeight(float x, float z);
     static float BeachHeight(float x, float z);
 
@@ -260,6 +273,9 @@ private:
     float                                     m_time = 0.0f;
     float                                     m_cakeBounce = 0.0f;
     float                                     m_cakeAngle = 0.0f;
+    std::vector<ScrollingPicture>             m_scrolling;  // On m_scrollingSide; empty when nothing scrolls.
+    Birthday::Side                            m_scrollingSide = Birthday::Side::Right;
+    float                                     m_scrollTime = 0.0f;
 
     // Player
     DirectX::XMFLOAT3 m_playerPosition = {}; // Feet.
