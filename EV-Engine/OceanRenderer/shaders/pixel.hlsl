@@ -131,6 +131,9 @@ struct Camera
 {
     float3 Position;
     float IBLIntensity; // Scales the image based (environment) lighting.
+    float3 FogColor;
+    float FogDensity;   // 0 = no fog.
+    float FogStart;     // Distance where the fog starts.
 };
 
 cbuffer CameraCB : register(b1, space0)
@@ -331,5 +334,10 @@ float4 main(PixelShaderInput IN) : SV_Target
 
      // Combine ambient, point light, and directional light contributions
     BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;
+
+    // Distance fog.
+    const float viewDistance = length(camera.Position - IN.PositionWS.xyz);
+    const float fog = 1.0f - exp(-camera.FogDensity * max(viewDistance - camera.FogStart, 0.0f));
+    BRDF = lerp(BRDF, camera.FogColor, fog);
     return float4(BRDF, 1.0f);
 }

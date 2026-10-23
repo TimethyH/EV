@@ -30,16 +30,17 @@ EV::SkyboxPSO::SkyboxPSO(const std::wstring& vertexpath, const std::wstring& pix
     CD3DX12_DESCRIPTOR_RANGE1 descriptorRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
 
     // TODO: cleanup by using enums
-    CD3DX12_ROOT_PARAMETER1 rootParameters[2];
+    CD3DX12_ROOT_PARAMETER1 rootParameters[3];
     rootParameters[0].InitAsConstants(sizeof(DirectX::XMMATRIX) / 4, 0, 0, D3D12_SHADER_VISIBILITY_VERTEX);
     rootParameters[1].InitAsDescriptorTable(1, &descriptorRange, D3D12_SHADER_VISIBILITY_PIXEL);
+    rootParameters[2].InitAsConstants(4, 0, 0, D3D12_SHADER_VISIBILITY_PIXEL); // Fog color and amount (b0 in the pixel shader).
 
     CD3DX12_STATIC_SAMPLER_DESC linearClampSampler(
         0, D3D12_FILTER_COMPARISON_MIN_MAG_MIP_LINEAR, D3D12_TEXTURE_ADDRESS_MODE_CLAMP,
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP, D3D12_TEXTURE_ADDRESS_MODE_CLAMP);
 
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription;
-    rootSignatureDescription.Init_1_1(2, rootParameters, 1, &linearClampSampler, rootSignatureFlags);
+    rootSignatureDescription.Init_1_1(3, rootParameters, 1, &linearClampSampler, rootSignatureFlags);
 
     m_rootSignature = app.CreateRootSignature(rootSignatureDescription.Desc_1_1);
 
@@ -103,6 +104,8 @@ void SkyboxPSO::Apply(CommandList& commandList)
 
     auto viewProjection = rotationOnlyView * m_pAlignedMVP->projection;
     commandList.SetGraphics32BitConstants(0, viewProjection);
+
+    commandList.SetGraphics32BitConstants(2, m_fog);
 
     if (m_skyboxSRV)  // use m_skyboxSRV, not m_skyboxTexture
         commandList.SetShaderResourceView(1, 0, m_skyboxSRV,

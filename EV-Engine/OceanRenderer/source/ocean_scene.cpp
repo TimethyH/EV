@@ -618,6 +618,13 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     m_unlitPSO->SetPointLights(m_pointLights);
     m_displacementPSO->SetPointLights(m_pointLights);
 
+    // Distance fog.
+    m_unlitPSO->SetFog(m_fogColor, m_fogDensity, m_fogStart);
+    m_displacementPSO->m_oceanRenderParams.fogColor = m_fogColor;
+    m_displacementPSO->m_oceanRenderParams.fogDensity = m_fogDensity;
+    m_displacementPSO->m_oceanRenderParams.fogStart = m_fogStart;
+    m_skyboxPSO->SetFog(m_fogColor, m_fogDensity > 0.0f ? 1.0f : 0.0f);
+
     // Update heightmap
     // UpdateSpectrum(time);
 
@@ -965,6 +972,18 @@ void Ocean::DrawOceanParameters()
         {
             ImGui::SetTooltip("Image-based lighting strength of the objects (models), 1 = physically based");
         }
+        ImGui::Unindent();
+    }
+
+    // ── Fog ──
+    if (ImGui::CollapsingHeader("  Fog", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        ImGui::Indent();
+        ImGui::SliderFloat("Density", &m_fogDensity, 0.0f, 0.02f, "%.4f");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How quickly the distance fades into the fog (0 = no fog)");
+        ImGui::SliderFloat("Start (m)", &m_fogStart, 0.0f, 300.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Distance from the camera where the fog starts");
+        ImGui::ColorEdit3("Fog Color", &m_fogColor.x, ImGuiColorEditFlags_Float | ImGuiColorEditFlags_HDR);
         ImGui::Unindent();
     }
 
