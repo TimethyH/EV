@@ -367,12 +367,15 @@ bool Ocean::LoadContent()
 
     m_skybox = commandList->CreateCube(1.0f, true);
     // Turned into the skybox cubemap and image based lighting by SetEnvironment, once the PSOs exist.
-    auto skyPanorama = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
+    auto skyPanorama = commandList->LoadTextureFromFile(m_skyPanoramaFile, true);
 
     // m_cubeMesh = commandList->CreateCube();
-    m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
-    m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
-    m_boat = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
+    if (m_loadDemoContent)
+    {
+        m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
+        m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
+        m_boat = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
+    }
 
     m_sphere = commandList->CreateSphere(0.1f);
 
@@ -399,6 +402,8 @@ bool Ocean::LoadContent()
     {
     	GenerateH0(commandList, i);
     }
+
+    LoadGameContent(commandList);
 
     auto fence = commandQueue.ExecuteCommandList(commandList);
 
@@ -541,6 +546,8 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
     UpdateImageBasedLighting();
 
+    UpdateGame(e);
+
     // Update Camera
     float speedMultiplier = (m_shift ? 64.0f : 16.0f);
     XMVECTOR cameraTranslate = XMVectorSet(m_right - m_left, 0.0f, m_forward - m_backward, 1.0f) * speedMultiplier * static_cast<float>(e.deltaTime);
@@ -605,6 +612,21 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     float time = static_cast<float>(e.totalTime);
 
     // Initialize point lights BEFORE the scene visitor
+    UpdatePointLights(time, viewMatrix);
+
+    // Set lights ONCE before rendering
+    m_unlitPSO->SetPointLights(m_pointLights);
+    m_displacementPSO->SetPointLights(m_pointLights);
+
+    // Update heightmap
+    // UpdateSpectrum(time);
+
+    OnRender();
+
+}
+
+void Ocean::UpdatePointLights(float time, FXMMATRIX viewMatrix)
+{
     m_pointLights.resize(1);
 
     // Populate the point light with valid data
@@ -620,16 +642,27 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     XMVECTOR posWS = XMLoadFloat4(&light.positionWS);
     XMVECTOR posVS = XMVector3TransformCoord(posWS, viewMatrix);
     XMStoreFloat4(&light.positionVS, posVS);
+}
 
-    // Set lights ONCE before rendering
-    m_unlitPSO->SetPointLights(m_pointLights);
-    m_displacementPSO->SetPointLights(m_pointLights);
+void Ocean::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
+{
+    if (m_helmet)
+    {
+        m_helmet->Accept(visitor);
+    }
 
-    // Update heightmap
-    // UpdateSpectrum(time);
+    // Models dropped into the scene from the editor's Assets panel.
+    for (const auto& scene : m_editor->GetSpawnedScenes())
+    {
+        scene->Accept(visitor);
+    }
 
-    OnRender();
-
+    // Visualize the point lights as small spheres.
+    for (const auto& light : m_pointLights)
+    {
+        m_sphere->GetRootNode()->SetLocalTransform(XMMatrixTranslationFromVector(XMLoadFloat4(&light.positionWS)));
+        m_sphere->Accept(visitor);
+    }
 }
 
 void Ocean::OnRender()
@@ -801,23 +834,7 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
         .Execute([this](RGPassContext& context)
         {
             SceneVisitor visitor(context.GetCommandList(), m_camera, *m_unlitPSO, false);
-            if (m_helmet)
-            {
-                m_helmet->Accept(visitor);
-            }
-
-            // Models dropped into the scene from the editor's Assets panel.
-            for (const auto& scene : m_editor->GetSpawnedScenes())
-            {
-                scene->Accept(visitor);
-            }
-
-            // Visualize the point lights as small spheres.
-            for (const auto& light : m_pointLights)
-            {
-                m_sphere->GetRootNode()->SetLocalTransform(XMMatrixTranslationFromVector(XMLoadFloat4(&light.positionWS)));
-                m_sphere->Accept(visitor);
-            }
+            DrawObjects(context, visitor);
         });
 
     // HDR -> SDR into the image the editor's Scene panel shows.
@@ -838,6 +855,8 @@ void Ocean::OnGUI(const std::shared_ptr<CommandList>& commandList, const RenderT
 {
     m_editor->BeginFrame();
     m_editor->SetSceneTexture(m_isLoading ? nullptr : m_viewportTexture);
+
+    DrawGameGUI();
 
     if (m_isLoading)
     {
