@@ -76,6 +76,13 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID)
     float sampleDelta = 0.025;
     uint numSamples = 0;
 
+    // Read the mip whose texels are about as far apart as the samples (a face spans PI / 2). The full size map
+    // has texels much smaller than that, so whether a sample hit the sun was luck, which made the irradiance
+    // blotchy (blocks of light and dark on objects, changing as they turn).
+    float envWidth, envHeight, envMipCount;
+    environmentMap.GetDimensions(0, envWidth, envHeight, envMipCount);
+    const float sampleMip = clamp(log2(envWidth * sampleDelta / (PI * 0.5f)) + 1.0f, 0.0f, envMipCount - 1.0f);
+
     // phi  = azimuth, which is the horizontal angle
     for (float phi = 0.0f; phi < 2.0f * PI; phi += sampleDelta)
     {
@@ -89,7 +96,7 @@ void main( uint3 dispatchThreadID : SV_DispatchThreadID)
                              + tangentSample.y * B
                              + tangentSample.z * N;
 
-            irradiance += environmentMap.SampleLevel(linearSampler, sampleDir, 0).rgb
+            irradiance += environmentMap.SampleLevel(linearSampler, sampleDir, sampleMip).rgb
                         * cos(theta) * sin(theta);
 
             numSamples++;
