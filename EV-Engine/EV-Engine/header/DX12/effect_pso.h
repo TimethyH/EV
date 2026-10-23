@@ -70,7 +70,10 @@ namespace EV
             DirectX::XMFLOAT3 fogColor;
             float fogDensity;   // 0 = no fog.
             float fogStart;     // Distance from the camera where the fog starts.
-            float padding[3];
+            float shadowStrength;  // 0 = no shadow map.
+            float shadowTexelSize; // 1 / shadow map size.
+            float padding;
+            DirectX::XMMATRIX shadowMatrix; // World space to shadow map (u, v, depth).
         };
 
         // An enum for root signature parameters.
@@ -186,6 +189,15 @@ namespace EV
             m_iblIntensity = intensity;
         }
 
+        // Shadows of the (first) directional light: a depth texture rendered with ShadowPSO and the matrix from world
+        // space to its texture coordinates (u, v) and depth. strength 0 (or no texture) = no shadows.
+        void XM_CALLCONV SetShadowMap(const std::shared_ptr<Texture>& shadowMap, DirectX::FXMMATRIX worldToShadow, float strength)
+        {
+            m_shadowMap = shadowMap;
+            m_shadowMatrix = worldToShadow;
+            m_shadowStrength = shadowMap ? strength : 0.0f;
+        }
+
         // Distance fog: past start, the color goes to fogColor by 1 - exp(-density * (distance - start)).
         void SetFog(const DirectX::XMFLOAT3& color, float density, float start)
         {
@@ -217,6 +229,10 @@ namespace EV
         DirectX::XMFLOAT3 m_fogColor = {};
         float m_fogDensity = 0.0f;
         float m_fogStart = 0.0f;
+        std::shared_ptr<Texture> m_shadowMap;
+        DirectX::XMMATRIX m_shadowMatrix = DirectX::XMMatrixIdentity();
+        float m_shadowStrength = 0.0f;
+        std::shared_ptr<ShaderResourceView> m_defaultShadowSRV;
 
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
         std::shared_ptr<ShaderResourceView> m_defaultCubeSRV;

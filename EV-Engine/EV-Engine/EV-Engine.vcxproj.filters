@@ -192,6 +192,9 @@
     <ClCompile Include="source\DX12\skybox_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\DX12\shadow_pso.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
     <ClCompile Include="source\DX12\sdr_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
@@ -408,6 +411,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\skybox_pso.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="header\DX12\shadow_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="header\DX12\sdr_pso.h">

@@ -42,6 +42,7 @@ namespace EV
 	class Texture;
 	class SceneVisitor;
 	class RGPassContext;
+	class ShadowPSO;
 }
 
 // struct DirectionalLight;
@@ -114,6 +115,9 @@ protected:
 	virtual void DrawObjects(EV::RGPassContext& context, EV::SceneVisitor& visitor);
 	// ImGui drawn by the game itself, between Editor::BeginFrame and EndFrame (also in play mode).
 	virtual void DrawGameGUI() {}
+	// Draw what casts shadows (render graph pass "Shadows", with m_shadowsEnabled). OceanRenderer: the helmet and
+	// the models placed in the editor.
+	virtual void DrawShadowCasters(EV::SceneVisitor& visitor);
 
 	// Load the helmet, chessboard and boat. A game turns this off in its constructor.
 	bool m_loadDemoContent = true;
@@ -125,6 +129,15 @@ protected:
 	DirectX::XMFLOAT3 m_fogColor = DirectX::XMFLOAT3(0.42f, 0.46f, 0.56f);
 	float m_fogDensity = 0.0f;
 	float m_fogStart = 50.0f;
+
+	// Shadows of the sun on the objects (not on the ocean), in a square of m_shadowRadius meters to each side of
+	// m_shadowCenter. (Ocean Parameters > Lighting)
+	bool m_shadowsEnabled = false;
+	DirectX::XMFLOAT3 m_shadowCenter = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
+	float m_shadowRadius = 40.0f;
+	float m_shadowStrength = 0.85f; // 1 = no sunlight at all in the shadow.
+	uint32_t m_shadowMapSize = 2048;
+	std::shared_ptr<EV::ShadowPSO> m_shadowPSO;
 
 protected:
 	/// <summary>

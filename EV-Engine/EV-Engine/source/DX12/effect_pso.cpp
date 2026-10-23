@@ -36,7 +36,7 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 12, 3 );
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 13, 3 ); // t3..t15 (t15: shadow map)
 
 
     // clang-format off
@@ -60,8 +60,18 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
         D3D12_TEXTURE_ADDRESS_MODE_CLAMP
     );
 
+    // Shadow map lookups compare against the stored depth; outside the map is lit.
+    CD3DX12_STATIC_SAMPLER_DESC shadowSampler(
+        2, // s2
+        D3D12_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT,
+        D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        D3D12_TEXTURE_ADDRESS_MODE_BORDER,
+        0.0f, 1, D3D12_COMPARISON_FUNC_LESS_EQUAL, D3D12_STATIC_BORDER_COLOR_OPAQUE_WHITE
+    );
+
     CD3DX12_VERSIONED_ROOT_SIGNATURE_DESC rootSignatureDescription; 
-    std::array<CD3DX12_STATIC_SAMPLER_DESC, 2> samplers = { anisotropicSampler, linearClampSampler };
+    std::array<CD3DX12_STATIC_SAMPLER_DESC, 3> samplers = { anisotropicSampler, linearClampSampler, shadowSampler };
 
     rootSignatureDescription.Init_1_1(RootParameters::NumRootParameters, rootParameters,samplers.size(), samplers.data(), rootSignatureFlags);
 
@@ -92,6 +102,11 @@ EffectPSO::EffectPSO(EV::Camera& cam, const std::wstring& vertexpath, const std:
     defaultCubeSRV.TextureCube.MostDetailedMip = 0;
 
     m_defaultCubeSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultCubeSRV);
+
+    // Without a shadow map (a depth format, sampled with a comparison sampler).
+    D3D12_SHADER_RESOURCE_VIEW_DESC defaultShadowSRV = defaultSRV;
+    defaultShadowSRV.Format = DXGI_FORMAT_R32_FLOAT;
+    m_defaultShadowSRV = Application::Get().CreateShaderResourceView(nullptr, &defaultShadowSRV);
 }
 
 EffectPSO::~EffectPSO()
@@ -206,8 +221,16 @@ void EffectPSO::Apply(CommandList& commandList)
         m_specularIBL ? m_specularIBL : m_defaultCubeSRV,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
     commandList.SetShaderResourceView(RootParameters::Textures, 11,
-        m_lutIBL,
+        m_lutIBL ? m_lutIBL : m_defaultSRV,
         D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    if (m_shadowMap && m_shadowStrength > 0.0f)
+    {
+        commandList.SetShaderResourceView(RootParameters::Textures, 12, m_shadowMap, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
+    else
+    {
+        commandList.SetShaderResourceView(RootParameters::Textures, 12, m_defaultShadowSRV, D3D12_RESOURCE_STATE_PIXEL_SHADER_RESOURCE);
+    }
 
     // if (m_dirtyFlags & DF_Camera)
     {
@@ -219,6 +242,9 @@ void EffectPSO::Apply(CommandList& commandList)
         cameraData.fogColor = m_fogColor;
         cameraData.fogDensity = m_fogDensity;
         cameraData.fogStart = m_fogStart;
+        cameraData.shadowStrength = m_shadowMap ? m_shadowStrength : 0.0f;
+        cameraData.shadowTexelSize = m_shadowMap ? 1.0f / static_cast<float>(m_shadowMap->GetD3D12ResourceDesc().Width) : 0.0f;
+        cameraData.shadowMatrix = m_shadowMatrix;
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData);
     }
     if (m_dirtyFlags & DF_PointLights)
