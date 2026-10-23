@@ -15,6 +15,12 @@
 
 using namespace EV;
 
+namespace
+{
+    // Identifies each load of a model file (see Mesh::Source).
+    std::atomic<uint64_t> g_nextLoadID = 1;
+}
+
 // A progress handler for Assimp
 class ProgressHandler : public Assimp::ProgressHandler
 {
@@ -103,6 +109,8 @@ bool Scene::LoadSceneFromFile(CommandList& commandList, const std::wstring& file
         return false;
     }
 
+    m_sceneFile = fileName;
+    m_loadID = g_nextLoadID++;
     ImportScene(commandList, *scene, parentPath);
 
     return true;
@@ -396,6 +404,12 @@ void Scene::ImportMesh(EV::CommandList& commandList, const aiMesh& aiMesh)
 
     // Set the AABB from the AI Mesh's AABB.
     mesh->SetAABB(CreateBoundingBox(aiMesh.mAABB));
+
+    // Remember where the mesh came from, so scene files can refer to it.
+    if (!m_sceneFile.empty())
+    {
+        mesh->SetSource({ m_sceneFile, m_loadID, static_cast<uint32_t>(m_meshes.size()) });
+    }
 
     m_meshes.push_back(mesh);
 }

@@ -32,6 +32,7 @@
 
 #include <DirectXCollision.h> // For DirectX::BoundingBox
 
+#include <cstdint>
 #include <filesystem>
 #include <functional>
 #include <map>
@@ -121,5 +122,6 @@ namespace EV
         std::shared_ptr<SceneNode> m_rootNode;
 
         std::wstring m_sceneFile;
+        uint64_t     m_loadID = 0;
     };
 }
