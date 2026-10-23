@@ -409,10 +409,14 @@ void BirthdayGame::Fire()
     float nearest = FLT_MAX;
     BoundingBox bounds;
     float distance = 0.0f;
-    if (m_cakeRoot && ComputeWorldBounds(m_cakeRoot, bounds) && bounds.Intersects(origin, direction, distance) && distance < nearest)
+    // The cake and its pedestal (not the balloons tied to it).
+    for (const auto& part : { m_cake, m_pedestal })
     {
-        nearest = distance;
-        hit = Target::Cake;
+        if (part && ComputeWorldBounds(part, bounds) && bounds.Intersects(origin, direction, distance) && distance < nearest)
+        {
+            nearest = distance;
+            hit = Target::Cake;
+        }
     }
     for (int i = 0; i < 2; ++i)
     {
@@ -827,7 +831,7 @@ void BirthdayGame::UpdateAutopilot(float deltaTime)
     auto shootCake = [this]()
     {
         BoundingBox bounds;
-        ComputeWorldBounds(m_cakeRoot, bounds);
+        ComputeWorldBounds(m_cake, bounds);
         AimAt(XMLoadFloat3(&bounds.Center));
         m_fireCooldown = 0.0f;
         Fire();

@@ -67,6 +67,12 @@ BirthdayGame::BirthdayGame(const std::wstring& name, uint32_t width, uint32_t he
     m_fogColor = XMFLOAT3(0.42f, 0.46f, 0.56f);
     m_fogDensity = 0.0065f;
     m_fogStart = 60.0f;
+
+    // The sun's shadows over the beach and the promenade.
+    m_shadowsEnabled = true;
+    m_shadowCenter = XMFLOAT3(0.0f, 0.0f, -8.0f);
+    m_shadowRadius = 45.0f;
+    m_shadowStrength = 0.8f;
 }
 
 BirthdayGame::~BirthdayGame() = default;
@@ -149,6 +155,12 @@ void BirthdayGame::UnloadContent()
     m_rifle.reset();
     m_cake.reset();
     m_cakeRoot.reset();
+    m_promenade.reset();
+    m_pedestal.reset();
+    m_ship.reset();
+    m_balloons.clear();
+    m_balloonMesh.reset();
+    m_stringMesh.reset();
     for (auto& screen : m_screens)
     {
         screen = {};
@@ -208,6 +220,11 @@ std::shared_ptr<Scene> BirthdayGame::LoadModel(CommandList& commandList, const s
 
 void BirthdayGame::BuildScene(CommandList& commandList)
 {
+    // Balloons (spheres) and their strings, made in code and shared by every balloon.
+    m_balloonMesh = commandList.CreateSphere(1.0f, 24)->GetRootNode()->GetMesh(0);
+    m_stringMesh = CreateMesh(commandList, BuildBox(XMFLOAT3(0.012f, 1.0f, 0.012f), 0.0f),
+        CreateColorMaterial(XMFLOAT4(0.95f, 0.95f, 0.95f, 1.0f), 0.8f, 0.0f));
+
     // The beach: one heightfield from the dunes behind the promenade down into the sea.
     auto sand = LoadSurface(commandList, L"assets/birthday/sand/sand_01_diff_2k.jpg", L"assets/birthday/sand/sand_01_nor_dx_2k.jpg",
         L"assets/birthday/sand/sand_01_arm_2k.jpg");
@@ -216,13 +233,14 @@ void BirthdayGame::BuildScene(CommandList& commandList)
     m_beach = AddEditorScene("Beach", beach);
     m_litScenes.push_back(m_beach);
 
-    // The promenade: a slab of bricks between the beach and the dunes.
-    auto bricks = LoadSurface(commandList, L"assets/birthday/bricks/brick_floor_003_diffuse_2k.jpg",
-        L"assets/birthday/bricks/brick_floor_003_nor_dx_2k.jpg", L"assets/birthday/bricks/brick_floor_003_arm_2k.jpg");
+    // The promenade: a wooden boardwalk between the beach and the dunes.
+    auto planks = LoadSurface(commandList, L"assets/birthday/boardwalk/wood_planks_diff_2k.jpg",
+        L"assets/birthday/boardwalk/wood_planks_nor_dx_2k.jpg", L"assets/birthday/boardwalk/wood_planks_arm_2k.jpg");
     const float slabDepth = floorFront - floorBack;
     auto promenade = CreateNode("Promenade", nullptr, XMMatrixTranslation(0.0f, floorTop - 0.3f, (floorFront + floorBack) * 0.5f));
-    promenade->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(floorHalfWidth * 2.0f, 0.6f, slabDepth), 0.6f), bricks));
-    m_litScenes.push_back(AddEditorScene("Promenade", promenade));
+    promenade->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(floorHalfWidth * 2.0f, 0.6f, slabDepth), 0.35f), planks));
+    m_promenade = AddEditorScene("Promenade", promenade);
+    m_litScenes.push_back(m_promenade);
 
     // The two screens, turned a little towards the middle. Left and right as seen when facing them.
     m_screens[static_cast<int>(Side::Left)] = CreateScreen(commandList, "Left Screen", screenX, -screenTurn);
@@ -243,9 +261,16 @@ void BirthdayGame::BuildScene(CommandList& commandList)
 
     // The cake on a pedestal in the middle; shooting it starts the next question.
     m_cakeRoot = CreateNode("Birthday Cake", nullptr, XMMatrixTranslation(0.0f, floorTop, cakeZ));
-    auto pedestal = CreateNode("Pedestal", m_cakeRoot, XMMatrixTranslation(0.0f, 0.5f, 0.0f));
-    pedestal->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(1.3f, 1.0f, 1.3f), 0.0f),
+    m_pedestal = CreateNode("Pedestal", m_cakeRoot, XMMatrixTranslation(0.0f, 0.5f, 0.0f));
+    m_pedestal->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(1.3f, 1.0f, 1.3f), 0.0f),
         CreateColorMaterial(XMFLOAT4(0.92f, 0.9f, 0.86f, 1.0f), 0.35f, 0.0f)));
+    // Two balloons at each corner of the pedestal.
+    for (int corner = 0; corner < 4; ++corner)
+    {
+        const float x = (corner & 1) ? 0.6f : -0.6f;
+        const float z = (corner & 2) ? 0.6f : -0.6f;
+        AddBalloons(m_cakeRoot, XMVectorSet(x, 1.0f, z, 1.0f), std::atan2(x, z), 2);
+    }
     m_cake = CreateNode("Cake", m_cakeRoot, XMMatrixScaling(g_cakeScale, g_cakeScale, g_cakeScale) * XMMatrixTranslation(0.0f, 1.0f, 0.0f));
     CopyNodes(LoadModel(commandList, g_cakeFile)->GetRootNode(), m_cake);
     m_litScenes.push_back(AddEditorScene("Birthday Cake", m_cakeRoot));
@@ -266,6 +291,8 @@ void BirthdayGame::BuildScene(CommandList& commandList)
         CopyNodes(palmModels[place.model]->GetRootNode(), CreateNode("Palm", palms, transform));
     }
     m_litScenes.push_back(AddEditorScene("Palm Trees", palms));
+
+    BuildProps(commandList);
 
     // The rifle is drawn in front of the camera while playing; it is not part of the editable scene.
     m_rifle = LoadModel(commandList, g_rifleFile);
@@ -296,6 +323,10 @@ BirthdayGame::Screen BirthdayGame::CreateScreen(CommandList& commandList, const 
         auto post = CreateNode("Post", screen.frame,
             XMMatrixTranslation(side * (screenWidth * 0.5f - 1.2f), -screenHeight * 0.5f - postHeight * 0.5f + 0.5f, -0.1f));
         post->AddMesh(postMesh);
+
+        // Balloons tied to the post, leaning out sideways and a little to the front.
+        AddBalloons(screen.frame, XMVectorSet(side * (screenWidth * 0.5f - 1.2f), -screenHeight * 0.5f - 0.3f, 0.2f, 1.0f),
+            side * (XM_PIDIV2 - 0.5f), 3);
     }
 
     // The picture area just in front of the frame. Its quads are made by ShowOnScreen.
@@ -310,6 +341,157 @@ BirthdayGame::Screen BirthdayGame::CreateScreen(CommandList& commandList, const 
 
     AddEditorScene(name, screen.root);
     return screen;
+}
+
+std::shared_ptr<SceneNode> BirthdayGame::PlaceModel(const std::shared_ptr<Scene>& model, const std::shared_ptr<SceneNode>& parent,
+    const std::string& name, float x, float z, float turnDegrees, float size, Fit fit, float y)
+{
+    BoundingBox bounds;
+    ComputeModelBounds(model->GetRootNode(), bounds);
+    const float extent = fit == Fit::Height ? bounds.Extents.y * 2.0f :
+        std::max({ bounds.Extents.x, bounds.Extents.y, bounds.Extents.z }) * 2.0f;
+    const float scale = extent > 0.0f ? size / extent : 1.0f;
+    const float bottom = (bounds.Center.y - bounds.Extents.y) * scale;
+    const float base = std::isnan(y) ? GroundHeight(x, z) : y;
+
+    auto node = CreateNode(name, parent, XMMatrixScaling(scale, scale, scale) * XMMatrixRotationY(XMConvertToRadians(turnDegrees)) *
+        XMMatrixTranslation(x, base - bottom, z));
+    CopyNodes(model->GetRootNode(), node);
+    return node;
+}
+
+void BirthdayGame::AddBalloons(const std::shared_ptr<SceneNode>& parent, FXMVECTOR tiedAt, float lean, int count)
+{
+    static const XMFLOAT4 colors[] = {
+        { 0.9f, 0.08f, 0.1f, 1.0f }, { 1.0f, 0.75f, 0.05f, 1.0f }, { 0.1f, 0.35f, 0.95f, 1.0f }, { 0.95f, 0.3f, 0.65f, 1.0f },
+        { 0.15f, 0.75f, 0.25f, 1.0f }, { 1.0f, 0.45f, 0.05f, 1.0f }, { 0.55f, 0.2f, 0.85f, 1.0f },
+    };
+    for (int i = 0; i < count; ++i)
+    {
+        const size_t index = m_balloons.size();
+        const float spread = (i - (count - 1) * 0.5f) * 0.55f;
+        const float tilt = 0.18f + 0.07f * static_cast<float>(index % 3);
+        const float length = 1.3f + 0.25f * static_cast<float>((index * 7) % 4);
+
+        // Leaning: tip the string over towards +z, then turn that towards the lean direction.
+        Balloon balloon;
+        XMStoreFloat4x4(&balloon.rest, XMMatrixRotationX(tilt) * XMMatrixRotationY(lean + spread) * XMMatrixTranslationFromVector(tiedAt));
+        balloon.pivot = CreateNode("Balloon", parent, XMLoadFloat4x4(&balloon.rest));
+        balloon.phase = static_cast<float>(index) * 1.37f;
+
+        auto string = CreateNode("String", balloon.pivot, XMMatrixScaling(1.0f, length, 1.0f) * XMMatrixTranslation(0.0f, length * 0.5f, 0.0f));
+        string->AddMesh(m_stringMesh);
+        auto sphere = CreateNode("Ball", balloon.pivot, XMMatrixScaling(0.3f, 0.36f, 0.3f) * XMMatrixTranslation(0.0f, length + 0.34f, 0.0f));
+        sphere->AddMesh(CloneMesh(*m_balloonMesh, CreateColorMaterial(colors[index % _countof(colors)], 0.2f, 0.0f)));
+        m_balloons.push_back(balloon);
+    }
+}
+
+void BirthdayGame::BuildProps(CommandList& commandList)
+{
+    auto model = [&](const wchar_t* file) { return LoadModel(commandList, std::wstring(L"assets/birthday/") + file); };
+
+    // On the beach: a little picnic on the left, a rowboat and some cargo on the right, rocks and grass around.
+    auto beach = CreateNode("Beach Props", nullptr);
+    auto crate = model(L"pirate/crate.glb");
+    PlaceModel(model(L"survival/bedroll.glb"), beach, "Towel", -13.0f, 3.0f, 15.0f, 1.9f, Fit::Size);
+    PlaceModel(model(L"survival/tent-canvas.glb"), beach, "Sunshade", -15.2f, 1.0f, 30.0f, 2.2f, Fit::Height);
+    PlaceModel(crate, beach, "Table", -11.2f, 2.0f, 10.0f, 0.55f, Fit::Height);
+    const float tableTop = GroundHeight(-11.2f, 2.0f) + 0.55f;
+    auto cocktail = model(L"food/cocktail.glb");
+    PlaceModel(cocktail, beach, "Cocktail", -11.4f, 1.85f, 20.0f, 0.22f, Fit::Height, tableTop);
+    PlaceModel(cocktail, beach, "Cocktail", -11.0f, 2.2f, 160.0f, 0.22f, Fit::Height, tableTop);
+    PlaceModel(model(L"food/pineapple.glb"), beach, "Pineapple", -11.15f, 1.7f, 0.0f, 0.3f, Fit::Height, tableTop);
+    PlaceModel(model(L"food/watermelon.glb"), beach, "Watermelon", -12.2f, 4.4f, 0.0f, 0.3f, Fit::Height);
+    auto coconut = model(L"food/coconut.glb");
+    PlaceModel(coconut, beach, "Coconut", -13.9f, 4.6f, 0.0f, 0.18f, Fit::Height);
+    PlaceModel(coconut, beach, "Coconut", -10.3f, 3.9f, 40.0f, 0.18f, Fit::Height);
+    PlaceModel(model(L"survival/campfire-pit.glb"), beach, "Campfire", -5.0f, -3.5f, 0.0f, 1.3f, Fit::Size);
+
+    PlaceModel(model(L"pirate/boat-row-large.glb"), beach, "Rowboat", 14.5f, 8.2f, 35.0f, 3.2f, Fit::Size);
+    PlaceModel(model(L"pirate/tool-paddle.glb"), beach, "Paddle", 12.4f, 6.9f, 70.0f, 1.7f, Fit::Height);
+    auto barrel = model(L"pirate/barrel.glb");
+    PlaceModel(barrel, beach, "Barrel", 17.5f, 1.5f, 0.0f, 0.95f, Fit::Height);
+    PlaceModel(barrel, beach, "Barrel", 18.5f, 2.7f, 45.0f, 0.95f, Fit::Height);
+    PlaceModel(model(L"pirate/crate-bottles.glb"), beach, "Crate", 16.2f, 2.9f, -15.0f, 0.75f, Fit::Height);
+    PlaceModel(model(L"pirate/chest.glb"), beach, "Treasure Chest", 15.5f, -2.5f, -20.0f, 0.75f, Fit::Height);
+
+    std::shared_ptr<Scene> rocks[] = { model(L"pirate/rocks-sand-a.glb"), model(L"pirate/rocks-sand-b.glb"), model(L"pirate/rocks-sand-c.glb") };
+    PlaceModel(rocks[0], beach, "Rocks", 19.5f, 7.5f, 40.0f, 1.1f, Fit::Height);
+    PlaceModel(rocks[1], beach, "Rocks", -19.5f, 8.0f, 200.0f, 0.9f, Fit::Height);
+    PlaceModel(rocks[2], beach, "Rocks", -8.0f, 10.4f, 120.0f, 0.7f, Fit::Height);
+    PlaceModel(rocks[0], beach, "Rocks", 9.0f, 10.8f, 300.0f, 0.8f, Fit::Height);
+    PlaceModel(rocks[1], beach, "Rocks", 24.0f, -4.0f, 80.0f, 1.4f, Fit::Height);
+    auto grass = model(L"pirate/grass-plant.glb");
+    const XMFLOAT2 grassPlaces[] = { { -21.0f, -6.5f }, { 21.0f, -6.8f }, { -17.0f, -7.2f }, { 16.0f, -7.0f }, { -6.5f, -7.3f }, { 7.0f, -7.4f },
+        { -23.5f, 2.0f }, { 23.0f, -1.0f } };
+    for (size_t i = 0; i < _countof(grassPlaces); ++i)
+    {
+        PlaceModel(grass, beach, "Grass", grassPlaces[i].x, grassPlaces[i].y, i * 47.0f, 0.5f, Fit::Height);
+    }
+
+    // A wooden dock into the sea on the right.
+    auto dock = model(L"pirate/structure-platform-dock.glb");
+    for (int i = 0; i < 4; ++i)
+    {
+        PlaceModel(dock, beach, "Dock", 27.0f, 8.5f + i * 2.5f, 0.0f, 2.5f, Fit::Size, -0.35f);
+    }
+    m_litScenes.push_back(AddEditorScene("Beach Props", beach));
+
+    // On the promenade: benches looking at the sea, lanterns with string lights, flags at the corners.
+    auto promenade = CreateNode("Promenade Props", nullptr);
+    auto bench = model(L"holiday/bench.glb");
+    for (float x : { -18.5f, -9.5f, 9.5f, 18.5f })
+    {
+        PlaceModel(bench, promenade, "Bench", x, floorFront - 2.0f, 180.0f, 1.8f, Fit::Size);
+    }
+    auto lantern = model(L"holiday/lantern.glb");
+    auto lights = model(L"holiday/lights-colored.glb");
+    const float lanternX[] = { -23.0f, -14.0f, -5.0f, 5.0f, 14.0f, 23.0f };
+    const float lanternZ = floorFront - 0.7f;
+    const float lanternHeight = 3.2f;
+    for (float x : lanternX)
+    {
+        PlaceModel(lantern, promenade, "Lantern", x, lanternZ, 0.0f, lanternHeight, Fit::Height);
+    }
+    BoundingBox lightsBounds;
+    ComputeModelBounds(lights->GetRootNode(), lightsBounds);
+    for (size_t i = 0; i + 1 < _countof(lanternX); ++i)
+    {
+        // Stretched from lantern to lantern, hanging a little.
+        const float span = lanternX[i + 1] - lanternX[i];
+        const float sag = 0.8f;
+        auto node = CreateNode("String Lights", promenade,
+            XMMatrixScaling(span / (lightsBounds.Extents.x * 2.0f), sag / (lightsBounds.Extents.y * 2.0f), 1.0f) *
+            XMMatrixTranslation((lanternX[i] + lanternX[i + 1]) * 0.5f - lightsBounds.Center.x * span / (lightsBounds.Extents.x * 2.0f),
+                floorTop + lanternHeight - 0.25f - sag, lanternZ));
+        CopyNodes(lights->GetRootNode(), node);
+    }
+    auto flag = model(L"pirate/flag-pennant.glb");
+    for (const XMFLOAT2& corner : { XMFLOAT2(-25.0f, floorFront - 0.6f), XMFLOAT2(25.0f, floorFront - 0.6f), XMFLOAT2(-25.0f, floorBack + 0.6f),
+        XMFLOAT2(25.0f, floorBack + 0.6f) })
+    {
+        PlaceModel(flag, promenade, "Flag", corner.x, corner.y, -60.0f, 3.5f, Fit::Height);
+    }
+    PlaceModel(model(L"survival/signpost.glb"), promenade, "Signpost", 3.5f, floorFront - 1.0f, 200.0f, 1.9f, Fit::Height);
+
+    // Presents around the cake.
+    const struct { const wchar_t* file; float x, z, turn, height; } presents[] = {
+        { L"holiday/present-a-cube.glb", 1.0f, -0.6f, 20.0f, 0.45f }, { L"holiday/present-b-round.glb", -0.95f, -0.75f, 0.0f, 0.4f },
+        { L"holiday/present-a-rectangle.glb", 0.85f, 0.95f, -30.0f, 0.35f }, { L"holiday/present-a-cube.glb", -0.9f, 0.9f, 50.0f, 0.38f },
+    };
+    for (const auto& present : presents)
+    {
+        PlaceModel(model(present.file), promenade, "Present", present.x, cakeZ + present.z, present.turn, present.height, Fit::Height);
+    }
+    m_litScenes.push_back(AddEditorScene("Promenade Props", promenade));
+
+    // A ship sailing past.
+    auto ship = model(L"pirate/ship-medium.glb");
+    auto shipRoot = CreateNode("Ship", nullptr);
+    m_ship = PlaceModel(ship, shipRoot, "Ship", -45.0f, 95.0f, 70.0f, 22.0f, Fit::Size, -1.6f);
+    XMStoreFloat4x4(&m_shipRest, m_ship->GetLocalTransform());
+    m_litScenes.push_back(AddEditorScene("Ship", shipRoot));
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -407,6 +589,22 @@ void BirthdayGame::UpdateScene(float deltaTime)
             XMMatrixRotationY(bird.heading - g_duckForward + spin) * XMMatrixTranslationFromVector(position));
     }
 
+    // Balloons sway on their strings.
+    for (const Balloon& balloon : m_balloons)
+    {
+        const float swayX = 0.09f * std::sin(m_time * 1.3f + balloon.phase);
+        const float swayZ = 0.09f * std::sin(m_time * 1.05f + balloon.phase * 1.7f);
+        balloon.pivot->SetLocalTransform(XMMatrixRotationX(swayX) * XMMatrixRotationZ(swayZ) * XMLoadFloat4x4(&balloon.rest));
+    }
+
+    // The ship rocks on the waves.
+    if (m_ship)
+    {
+        const XMMATRIX rocking = XMMatrixRotationX(0.025f * std::sin(m_time * 0.7f + 1.0f)) * XMMatrixRotationZ(0.04f * std::sin(m_time * 0.5f)) *
+            XMMatrixTranslation(0.0f, 0.25f * std::sin(m_time * 0.6f), 0.0f);
+        m_ship->SetLocalTransform(rocking * XMLoadFloat4x4(&m_shipRest)); // Around the bottom of the hull.
+    }
+
     // The cake turns slowly and jumps when it is shot.
     if (m_cake)
     {
@@ -436,6 +634,22 @@ void BirthdayGame::UpdatePointLights(float time, FXMMATRIX viewMatrix)
     m_screenPSO->SetPointLights(m_pointLights);
     m_screenPSO->SetDirectionalLights(m_directionalLights);
     m_screenPSO->SetIBLTextures(m_diffuseCubemapSRV, m_specularCubemapSRV, m_brdfLUTSRV);
+}
+
+void BirthdayGame::DrawShadowCasters(SceneVisitor& visitor)
+{
+    // The ground only receives shadows.
+    for (const auto& scene : m_litScenes)
+    {
+        if (scene != m_beach && scene != m_promenade)
+        {
+            scene->Accept(visitor);
+        }
+    }
+    for (const auto& scene : m_editor->GetSpawnedScenes())
+    {
+        scene->Accept(visitor);
+    }
 }
 
 void BirthdayGame::DrawObjects(RGPassContext& context, SceneVisitor& visitor)
