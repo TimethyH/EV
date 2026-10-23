@@ -63,7 +63,7 @@ class ShaderLibrary;
 		int Run(std::shared_ptr<Game> pGame);
 		void Quit(int exitCode = 0);
 
-		Microsoft::WRL::ComPtr<ID3D12Device13> GetDevice() const;
+		Microsoft::WRL::ComPtr<ID3D12Device2> GetDevice() const;
 		CommandQueue& GetCommandQueue(
 			D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 		void Flush();
@@ -192,7 +192,7 @@ class ShaderLibrary;
 		void Initialize();
 
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> CreateAdapter(bool bUseWarp);
-		Microsoft::WRL::ComPtr<ID3D12Device13> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
+		Microsoft::WRL::ComPtr<ID3D12Device2> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
 		bool CheckTearingSupport();
 		void TrackLiveTexture(const std::shared_ptr<Texture>& texture);
 
@@ -207,7 +207,7 @@ class ShaderLibrary;
 		// Instance the application was made with
 		HINSTANCE m_hInstance = {};
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> m_dxgiAdapter = {};
-		Microsoft::WRL::ComPtr<ID3D12Device13> m_device = {};
+		Microsoft::WRL::ComPtr<ID3D12Device2> m_device = {};
 
 		std::shared_ptr<CommandQueue> m_DirectCommandQueue;
 		std::shared_ptr<CommandQueue> m_ComputeCommandQueue;
