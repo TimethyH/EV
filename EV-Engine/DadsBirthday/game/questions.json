@@ -7,6 +7,10 @@
 // - "correctMessage" and "wrongMessage" are optional; they appear in the text box after answering.
 // - Text between // and the end of a line is a comment and is ignored.
 {
+  // The title of the start menu.
+  "title": "Happy Birthday!",
+
+  // The first message, after waking up on the beach.
   "intro": "Happy birthday! Walk with W A S D, look around with the mouse and shoot with the left mouse button. Turn around and shoot the birthday cake to start the quiz!",
 
   "questions": [

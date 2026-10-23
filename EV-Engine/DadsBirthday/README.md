@@ -2,7 +2,8 @@
 
 A birthday quiz on a beach, built on OceanRenderer's ocean.
 
-You start on the beach looking at the sea. Behind you, on a brick promenade, are two big screens with a bird
+The game opens in a start menu with a rotating birthday cake. Play fades to black and you wake up on the beach,
+as if from a dream: the eyes open, blink, and you sit up looking at the sea. Behind you, on a brick promenade, are two big screens with a bird
 flying above each of them and a birthday cake on a pedestal in the middle. Shoot the cake to get a question: the
 left and right screen each show an answer. Shoot the bird above the answer you think is right. That screen then
 shows a picture: a nice one for the right answer, something else for the wrong one. Shoot the cake again for the
@@ -17,6 +18,7 @@ pictures together on the right one.
 | Shift | run |
 | Mouse | look around |
 | Left mouse button | shoot; continue after a message |
+| Right mouse button | scope in / out |
 | Esc | pause (Esc again quits) |
 | F11 | full screen on/off |
 
@@ -65,6 +67,7 @@ Everything is in `game/questions.json` (open it with Notepad). Pictures go in `g
 - Build `DadsBirthday` in `EV-Engine.slnx` and run it. It needs `EV-Engine/assets/birthday`: run
   `EV-Engine/download-birthday-assets.bat` once.
 - Without arguments the game starts right away, full screen, without the editor.
+- The start menu's title is `"title"` in `questions.json`; `"intro"` is the message after waking up.
 - `--editor` starts in the editor (F5 plays, Esc or F5 goes back). Everything can be moved there: the screens, the
   birds (they follow their screen), the cake, the palm trees. Save the layout with File > Save Scene As... as
   `DadsBirthday/game/scene.evscene`; the game loads it when it starts.
@@ -82,6 +85,8 @@ Everything is in `game/questions.json` (open it with Notepad). Pictures go in `g
   shooting (an instant ray from the crosshair), the HUD and the autopilot.
 - `source/birthday_quiz.cpp` and `source/quiz_config.cpp`: the quiz.
 - `source/textures.cpp`: text on the screens (drawn with Windows GDI) and loading pictures.
+- Distance fog (`m_fogColor`, `m_fogDensity`, `m_fogStart` of `EV::Ocean`, also in the editor under Ocean Parameters >
+  Fog) fades the far ocean and the sky below the horizon into the horizon's color, so the edge of the ocean is not seen.
 - `shaders/screen_pixel.hlsl`: the screens are unlit and go through the inverse of the tonemapping curve, so pictures
   look exactly like the files.
 - Assets: `assets/birthday/CREDITS.txt` (Poly Haven, Kenney and Khronos, all free to use). The
