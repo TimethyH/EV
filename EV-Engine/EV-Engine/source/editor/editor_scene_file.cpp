@@ -35,6 +35,7 @@ using json = nlohmann::json;
  *    "format": "EV Scene", "version": 1,
  *    "camera": { "position": [x, y, z], "rotation": [x, y, z, w], "fov": 45 },
  *    "environment": "assets/sky4k.hdr",
+ *    "settings": { "ocean.windSpeed": 0.5, ... },   (the application's, see Editor::SetSceneSettingsCallbacks)
  *    "models": [ "assets/kenny/ship-large.obj", ... ],      One entry per loaded copy of a model file.
  *    "materials": [ { "diffuse": [r, g, b, a], ..., "textures": { "Diffuse": "assets/...png", "Normal": null } } ],
  *    "objects": [ { "name": "ship-large", "root": <node> } ], Models placed in the editor.
@@ -288,6 +289,15 @@ bool Editor::SaveScene(const fs::path& path)
     {
         file["environment"] = ToScenePath(m_environmentPath);
     }
+    if (m_saveSettingsCallback)
+    {
+        std::map<std::string, float> settings;
+        m_saveSettingsCallback(settings);
+        if (!settings.empty())
+        {
+            file["settings"] = settings;
+        }
+    }
 
     // Every loaded copy of a model file gets an entry; meshes and materials refer to them by index.
     std::map<std::pair<std::wstring, uint64_t>, size_t> modelIndices;
@@ -465,6 +475,16 @@ std::unique_ptr<Editor::SceneFileContents> Editor::ReadSceneFile(const fs::path&
         if (const auto environment = file.find("environment"); environment != file.end() && environment->is_string())
         {
             contents->environment = PathFromUTF8(environment->get<std::string>().c_str());
+        }
+        if (const auto settings = file.find("settings"); settings != file.end() && settings->is_object())
+        {
+            for (const auto& [name, value] : settings->items())
+            {
+                if (value.is_number())
+                {
+                    contents->settings[name] = value.get<float>();
+                }
+            }
         }
 
         // Load every model once; meshes are looked up by their index in the file.
@@ -646,6 +666,11 @@ void Editor::ApplySceneFile(SceneFileContents& contents)
             }
             break;
         }
+    }
+
+    if (!contents.settings.empty() && m_loadSettingsCallback)
+    {
+        m_loadSettingsCallback(contents.settings);
     }
 
     if (contents.hasCamera && m_camera)
