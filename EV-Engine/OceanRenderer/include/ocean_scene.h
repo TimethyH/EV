@@ -120,6 +120,12 @@ protected:
 	// The HDR panorama the skybox and image based lighting are made from.
 	std::wstring m_skyPanoramaFile = L"assets/sky4k.hdr";
 
+	// Distance fog over the ocean and the objects; the sky below the horizon fades to it too, which hides the edge
+	// of the ocean plane. Density 0 = no fog. (Ocean Parameters > Fog)
+	DirectX::XMFLOAT3 m_fogColor = DirectX::XMFLOAT3(0.42f, 0.46f, 0.56f);
+	float m_fogDensity = 0.0f;
+	float m_fogStart = 50.0f;
+
 protected:
 	/// <summary>
 	/// Gets the file path of the currently running executable.

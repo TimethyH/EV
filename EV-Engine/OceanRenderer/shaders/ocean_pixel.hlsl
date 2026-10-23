@@ -56,6 +56,9 @@ cbuffer OceanCB : register(b2)
     float peakScatterIntensity;
     float IBLIntensity;
     float pad1;
+    float3 fogColor;
+    float fogDensity; // 0 = no fog.
+    float fogStart;   // Distance where the fog starts.
 }
 
 cbuffer Constants : register(b3)
@@ -265,5 +268,10 @@ float4 main(PixelShaderInput IN) : SV_Target
 	// Add Foam
     float3 foamColor = float3(1.0f, 1.0f, 1.0f);
     BRDF = lerp(BRDF, foamColor, saturate(foam));
+
+    // Distance fog: the far ocean (and the edge of the ocean plane) fades into the horizon.
+    const float viewDistance = length(cameraPosition - IN.PositionWS);
+    const float fog = 1.0f - exp(-fogDensity * max(viewDistance - fogStart, 0.0f));
+    BRDF = lerp(BRDF, fogColor, fog);
     return float4(BRDF, 1.0f);
 }

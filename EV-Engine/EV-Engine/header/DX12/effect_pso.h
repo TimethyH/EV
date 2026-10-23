@@ -67,6 +67,10 @@ namespace EV
         {
             DirectX::XMFLOAT3 position;
             float iblIntensity; // Scales the image based (environment) lighting.
+            DirectX::XMFLOAT3 fogColor;
+            float fogDensity;   // 0 = no fog.
+            float fogStart;     // Distance from the camera where the fog starts.
+            float padding[3];
         };
 
         // An enum for root signature parameters.
@@ -182,6 +186,14 @@ namespace EV
             m_iblIntensity = intensity;
         }
 
+        // Distance fog: past start, the color goes to fogColor by 1 - exp(-density * (distance - start)).
+        void SetFog(const DirectX::XMFLOAT3& color, float density, float start)
+        {
+            m_fogColor = color;
+            m_fogDensity = density;
+            m_fogStart = start;
+        }
+
         void Apply(CommandList& commandList) override;
         void SetIBLTextures(std::shared_ptr<ShaderResourceView> diffuse, std::shared_ptr<ShaderResourceView> specular,
                             std::shared_ptr<ShaderResourceView> lut);
@@ -202,6 +214,9 @@ namespace EV
 
         // An SRV used pad unused texture slots.
         float m_iblIntensity = 1.0f;
+        DirectX::XMFLOAT3 m_fogColor = {};
+        float m_fogDensity = 0.0f;
+        float m_fogStart = 0.0f;
 
         std::shared_ptr<ShaderResourceView> m_defaultSRV;
         std::shared_ptr<ShaderResourceView> m_defaultCubeSRV;

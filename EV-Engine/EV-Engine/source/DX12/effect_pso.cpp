@@ -213,9 +213,12 @@ void EffectPSO::Apply(CommandList& commandList)
     {
         // // TODO: Move camera data in its own class so we can retrieve it here and get rid of Demo.
         auto position = m_camera.GetTranslation();
-        CameraData cameraData;
+        CameraData cameraData = {};
         cameraData.position = DirectX::XMFLOAT3(position.m128_f32[0], position.m128_f32[1], position.m128_f32[2]);
         cameraData.iblIntensity = m_iblIntensity;
+        cameraData.fogColor = m_fogColor;
+        cameraData.fogDensity = m_fogDensity;
+        cameraData.fogStart = m_fogStart;
         commandList.SetGraphicsDynamicConstantBuffer(RootParameters::Camera, cameraData);
     }
     if (m_dirtyFlags & DF_PointLights)

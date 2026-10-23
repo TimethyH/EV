@@ -101,8 +101,11 @@ namespace EV
             float peakScatterIntensity = 0.0f;
             float IBLIntensity = 0.0f;
             float pad1 = 0.0f;
+            DirectX::XMFLOAT3 fogColor = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
+            float fogDensity = 0.0f; // 0 = no fog.
+            float fogStart = 0.0f;   // Distance from the camera where the fog starts.
 
-            // 48 bytes.
+            // 68 bytes, padded to 80.
         }m_oceanRenderParams;
 
 	private:
