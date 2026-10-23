@@ -248,14 +248,16 @@ Editor::Editor(std::shared_ptr<GUI> gui)
         PreviewModel(modelPath);
     }
 
-    // "--scene <file.evscene>" opens a scene at startup.
+    // "--scene <file.evscene>" opens a scene at startup, "--play <file.evscene>" only plays it (no editor).
     int argumentCount = 0;
     if (LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount))
     {
         for (int i = 1; i + 1 < argumentCount; ++i)
         {
-            if (std::wstring(arguments[i]) == L"--scene")
+            const std::wstring argument = arguments[i];
+            if (argument == L"--scene" || argument == L"--play")
             {
+                m_startupPlay = argument == L"--play";
                 LoadScene(arguments[++i]);
             }
         }
@@ -346,6 +348,13 @@ void Editor::BeginFrame()
     m_frameTimes[m_frameTimeIndex] = ImGui::GetIO().DeltaTime * 1000.0f;
     m_frameTimeIndex = (m_frameTimeIndex + 1) % IM_ARRAYSIZE(m_frameTimes);
 
+    // F5 / Esc start and stop play mode. While playing, only the scene is shown.
+    UpdatePlayMode();
+    if (m_playing)
+    {
+        return;
+    }
+
     // Scene file shortcuts (not while typing in a text field).
     const ImGuiIO& io = ImGui::GetIO();
     if (io.KeyCtrl && !io.WantTextInput && !m_fileDialog && !IsLoadingScene())
@@ -385,6 +394,25 @@ void Editor::BeginFrame()
 
 void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const RenderTarget& renderTarget)
 {
+    if (m_playing)
+    {
+        DrawPlayView();
+    }
+    else
+    {
+        DrawEditorPanels();
+    }
+
+    // Previews and readbacks have to be recorded before the GUI samples them.
+    m_texturePreview->Render(*commandList);
+    m_modelPreview->Render(*commandList);
+    m_textureReadback->Record(*commandList);
+
+    m_gui->Render(commandList, renderTarget);
+}
+
+void Editor::DrawEditorPanels()
+{
     DrawSceneViewport();
     DrawHierarchy();
     DrawInspector();
@@ -420,13 +448,6 @@ void Editor::EndFrame(const std::shared_ptr<CommandList>& commandList, const Ren
     {
         ImGui::ShowDemoWindow(&m_showImGuiDemo);
     }
-
-    // Previews and readbacks have to be recorded before the GUI samples them.
-    m_texturePreview->Render(*commandList);
-    m_modelPreview->Render(*commandList);
-    m_textureReadback->Record(*commandList);
-
-    m_gui->Render(commandList, renderTarget);
 }
 
 void Editor::BuildDefaultLayout(ImGuiID dockspaceID)
@@ -516,6 +537,8 @@ void Editor::DrawMenuBar()
         ImGui::EndMenu();
     }
 
+    DrawPlayButton();
+
     // Frame rate on the right side of the menu bar.
     float averageMs = 0.0f;
     for (float ms : m_frameTimes) averageMs += ms;
@@ -600,7 +623,7 @@ void Editor::DrawStatusBar()
             }
             else
             {
-                ImGui::TextColored(g_colorTextDim, "Right mouse + WASD/QE: fly   Left click: select   Del: delete   Drag assets into the scene");
+                ImGui::TextColored(g_colorTextDim, "Right mouse + WASD/QE: fly   Left click: select   Del: delete   Drag assets into the scene   F5: play");
             }
             ImGui::EndMenuBar();
         }
