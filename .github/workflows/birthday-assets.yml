@@ -22,7 +22,8 @@ jobs:
         run: |
           set -euo pipefail
           A=pack/assets/birthday
-          mkdir -p $A/sky $A/sand $A/bricks $A/rifle/Textures $A/cake/Textures $A/palms/Textures $A/duck
+          mkdir -p $A/sky $A/sand $A/bricks $A/boardwalk $A/rifle/Textures $A/cake/Textures $A/palms/Textures $A/duck
+          mkdir -p $A/pirate/Textures $A/survival/Textures $A/holiday/Textures $A/food/Textures
 
           # Poly Haven: sky and the two floor materials (2k color, DirectX normal map, AO/roughness/metal).
           polyhaven() { curl -sfL "https://api.polyhaven.com/files/$1" | jq -r "$2"; }
@@ -31,6 +32,7 @@ jobs:
           for map in Diffuse nor_dx arm; do
             url=$(polyhaven sand_01 ".${map}[\"2k\"].jpg.url"); curl -sfL -o "$A/sand/$(basename "$url")" "$url"
             url=$(polyhaven brick_floor_003 ".${map}[\"2k\"].jpg.url"); curl -sfL -o "$A/bricks/$(basename "$url")" "$url"
+            url=$(polyhaven wood_planks ".${map}[\"2k\"].jpg.url"); curl -sfL -o "$A/boardwalk/$(basename "$url")" "$url"
           done
 
           # Kenney kits: rifle, birthday cake, palm trees.
@@ -42,6 +44,8 @@ jobs:
           kenney blaster-kit
           kenney food-kit
           kenney pirate-kit
+          kenney survival-kit
+          kenney holiday-kit
           cp "kenney/blaster-kit/Models/GLB format/blaster-e.glb" $A/rifle/
           cp "kenney/blaster-kit/Models/GLB format/Textures/colormap.png" $A/rifle/Textures/
           cp kenney/blaster-kit/License.txt $A/rifle/
@@ -51,6 +55,19 @@ jobs:
           for p in palm-detailed-straight palm-detailed-bend; do cp "kenney/pirate-kit/Models/GLB format/$p.glb" $A/palms/; done
           cp "kenney/pirate-kit/Models/GLB format/Textures/colormap.png" $A/palms/Textures/
           cp kenney/pirate-kit/License.txt $A/palms/
+
+          # Props that make the beach lively.
+          props() { # kit folder models...
+            kit=$1; folder=$2; shift 2
+            for m in "$@"; do cp "kenney/$kit/Models/GLB format/$m.glb" "$A/$folder/"; done
+            cp "kenney/$kit/Models/GLB format/Textures/colormap.png" "$A/$folder/Textures/"
+            cp "kenney/$kit/License.txt" "$A/$folder/"
+          }
+          props pirate-kit pirate boat-row-large tool-paddle barrel chest crate crate-bottles rocks-sand-a rocks-sand-b rocks-sand-c \
+            grass-plant flag-pennant ship-medium structure-platform-dock
+          props survival-kit survival tent-canvas campfire-pit bedroll signpost
+          props holiday-kit holiday bench lantern lights-colored present-a-cube present-b-round present-a-rectangle
+          props food-kit food cocktail coconut pineapple watermelon
 
           # Khronos glTF sample: the duck (stands in for the birds).
           for f in Duck.gltf Duck0.bin DuckCM.png; do
@@ -64,6 +81,8 @@ jobs:
           sky/kloofendal_48d_partly_cloudy_puresky.hdr  Poly Haven (Greg Zaal, Jarod Guest), CC0  https://polyhaven.com/a/kloofendal_48d_partly_cloudy_puresky
           sand/sand_01_*                                Poly Haven, CC0  https://polyhaven.com/a/sand_01
           bricks/brick_floor_003_*                      Poly Haven, CC0  https://polyhaven.com/a/brick_floor_003
+          boardwalk/wood_planks_*                       Poly Haven, CC0  https://polyhaven.com/a/wood_planks
+          pirate/, survival/, holiday/, food/           Kenney Pirate, Survival, Holiday and Food Kits, CC0  https://kenney.nl
           rifle/blaster-e.glb                           Kenney Blaster Kit, CC0  https://kenney.nl/assets/blaster-kit
           cake/cake-birthday.glb                        Kenney Food Kit, CC0  https://kenney.nl/assets/food-kit
           palms/palm-detailed-*.glb                     Kenney Pirate Kit, CC0  https://kenney.nl/assets/pirate-kit
