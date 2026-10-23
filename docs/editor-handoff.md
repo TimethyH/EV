@@ -66,6 +66,54 @@ Branch: `shader-hot-reload`. Save an `.hlsl` file while an app runs and the chan
 - Editor: **Shaders** panel (docked with Assets/Textures): every loaded shader with profile, status and last reload, per shader and "Reload All" buttons, "Reload on save" toggle, the selected shader's paths, includes and error output. The status bar reports reloads; a failed reload selects the shader in the panel. ShaderArt (no editor) shows a "Shader Errors" window while a shader has errors.
 - Not hot reloaded: the engine's built-in shaders (mip generation and ImGui are embedded byte arrays, `pano_to_cubemap_CS` is loaded per command list) and the editor's embedded preview shaders. OceanRenderer computes the image based lighting again (BRDF LUT + `SetEnvironment` with the current panorama) when `ibl_convolution`, `ibl_specular` or `brdf_lut` is reloaded, because those only run once per environment.
 
+## TODO: sky lighting streaks and blocks (IBL bake fix, port from `Dads-Birthday`)
+Found and fixed on the `Dads-Birthday` branch (commit `11bf7d9`), which is not a development branch. Bring
+**only these two shader edits** over by hand. Do not merge or cherry-pick anything else from `Dads-Birthday`:
+that branch also has game code, shadow maps and asset changes that do not belong here.
+
+**Symptom**: rough, non-metal objects (the Kenney models, e.g. the rifle and lamp posts) show thin light/dark
+streaks along their flat faces that change with the view angle, blotchy/blocky shading, and sparkle on the floor.
+The materials and textures are fine (roughness 1, metallic 0); the noise is baked into the IBL cubemaps.
+
+**Cause**: both IBL bakes read the skybox cubemap (1024 per face, full mip chain) at far too detailed a mip, so
+the sun and clouds are undersampled:
+- `ibl_specular.hlsl` computes `saTexel` (solid angle of one texel) from `cubemapSize`, the size of the mip being
+  *written* (512 -> 32), instead of the size of the environment map being *sampled*.
+- `ibl_convolution.hlsl` always samples mip 0 with ~16k samples at 0.025 rad spacing.
+
+**Fix** (`EV-Engine/OceanRenderer/shaders/`, both files on this branch were identical to the pre-fix versions):
+
+1. `ibl_specular.hlsl`, in `main`, replace
+   ```hlsl
+   float resolution = float(cubemapSize);
+   float saTexel = 4.0 * PI / (6.0 * resolution * resolution);
+   ```
+   with
+   ```hlsl
+   // The solid angle of a texel of the environment map that is sampled (not of the map being written).
+   float envWidth, envHeight, envMipCount;
+   environmentMap.GetDimensions(0, envWidth, envHeight, envMipCount);
+   float saTexel = 4.0 * PI / (6.0 * envWidth * envWidth);
+   ```
+   and in the sample loop replace the `mipLevel` line with (one mip blurrier, clamped to the chain):
+   ```hlsl
+   float mipLevel = roughness == 0.0 ? 0.0 : clamp(0.5 * log2(saSample / saTexel) + 1.0, 0.0, envMipCount - 1.0);
+   ```
+2. `ibl_convolution.hlsl`, in `main`, after `uint numSamples = 0;` add
+   ```hlsl
+   // Read the mip whose texels are about as far apart as the samples (a face spans PI / 2).
+   float envWidth, envHeight, envMipCount;
+   environmentMap.GetDimensions(0, envWidth, envHeight, envMipCount);
+   const float sampleMip = clamp(log2(envWidth * sampleDelta / (PI * 0.5f)) + 1.0f, 0.0f, envMipCount - 1.0f);
+   ```
+   and change `environmentMap.SampleLevel(linearSampler, sampleDir, 0)` to
+   `environmentMap.SampleLevel(linearSampler, sampleDir, sampleMip)`.
+
+No C++ changes are needed: `skyboxCubemapSRV` already exposes all mips (`MipLevels = -1`), and saving the shaders
+while OceanRenderer runs re-bakes the IBL (hot reload), so the result can be checked straight away.
+**Check**: a rough object (a Kenney model from `assets/`) in front of the default sky has smooth shading without
+streaks, the boardwalk/ground has no sparkle, and sky reflections still look right on shiny objects (the helmet).
+
 ## Planned next
 - Undo/redo for transforms and drops; snapping; multi-select.
 - `.hdr` drop to change the skybox (needs IBL recompute in the app).
