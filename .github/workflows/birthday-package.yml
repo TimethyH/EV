@@ -64,19 +64,25 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           msbuild EV-Engine/DadsBirthday/DadsBirthday.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
           if ($LASTEXITCODE -ne 0) { exit 1 }
+          msbuild EV-Engine/DadsBirthday/launcher/DadsBirthdayLauncher.vcxproj /m /p:Configuration=Release /p:Platform=x64 /p:SolutionDir="$PWD\EV-Engine\\" /nologo /v:minimal
+          if ($LASTEXITCODE -ne 0) { exit 1 }
 
       - name: Put the package together
         run: |
+          # Only "Happy Birthday.exe" (the launcher) is at the top; it starts the game in "files", where everything
+          # else is: the game needs its shaders and the Visual C++ runtime next to its own .exe.
           $package = "package/Happy Birthday"
-          New-Item -ItemType Directory -Force $package | Out-Null
+          $files = "$package/files"
+          New-Item -ItemType Directory -Force $files | Out-Null
+          Copy-Item "EV-Engine/x64/Release/DadsBirthdayLauncher/Happy Birthday.exe" "$package/Happy Birthday.exe"
           $build = "EV-Engine/x64/Release/DadsBirthday"
-          Copy-Item "$build/DadsBirthday.exe" "$package/Happy Birthday.exe"
-          Copy-Item "$build/*.cso" $package
+          Copy-Item "$build/DadsBirthday.exe" "$files/DadsBirthday.exe"
+          Copy-Item "$build/*.cso" $files
 
           # The assets and the quiz (questions and pictures).
           gh release download birthday-assets -p birthday-assets.zip -R ${{ github.repository }} --clobber
-          Expand-Archive birthday-assets.zip -DestinationPath $package -Force
-          Copy-Item -Recurse EV-Engine/DadsBirthday/game "$package/game"
+          Expand-Archive birthday-assets.zip -DestinationPath $files -Force
+          Copy-Item -Recurse EV-Engine/DadsBirthday/game "$files/game"
 
           # The Visual C++ runtime next to the .exe, so nothing has to be installed.
           $vs = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -prerelease -property installationPath
@@ -84,9 +90,9 @@ jobs:
             ForEach-Object { Get-ChildItem "$($_.FullName)\x64" -Directory -Filter "Microsoft.VC*.CRT" -ErrorAction SilentlyContinue } |
             Select-Object -First 1
           Write-Host "Runtime: $($redist.FullName)"
-          Copy-Item "$($redist.FullName)\*.dll" $package
+          Copy-Item "$($redist.FullName)\*.dll" $files
 
-          Set-Content "$package/README.txt" -Value @(
+          Set-Content "$files/README.txt" -Value @(
             "Happy Birthday!",
             "",
             "Double click 'Happy Birthday.exe' to play.",
@@ -94,7 +100,7 @@ jobs:
             "Walk with W A S D (Shift to run), look around with the mouse, shoot with the left mouse button.",
             "Esc pauses the game; Esc again quits. F11 switches between full screen and a window.",
             "",
-            "The questions and pictures are in the 'game' folder (questions.json and images)."
+            "The questions and pictures are in the 'files\game' folder (questions.json and images)."
           )
           Get-ChildItem -Recurse $package | Select-Object -ExpandProperty FullName
 
@@ -110,13 +116,13 @@ jobs:
           New-Item -ItemType Directory -Force $shots | Out-Null
           $process = Start-Process -FilePath "$package\Happy Birthday.exe" -ArgumentList "--autopilot", "`"$shots`"" -WorkingDirectory $package -PassThru
           if (-not $process.WaitForExit(1500000)) { Stop-Process -Id $process.Id -Force; Write-Host "::error::The packaged game did not finish"; exit 1 }
-          if (Test-Path "$package\ev_crash.log") { Write-Host "::error::$(Get-Content "$package\ev_crash.log" -Raw)"; exit 1 }
+          if (Test-Path "$package\files\ev_crash.log") { Write-Host "::error::$(Get-Content "$package\files\ev_crash.log" -Raw)"; exit 1 }
           $count = (Get-ChildItem $shots -Filter *.bmp).Count
           Write-Host "Exit code $($process.ExitCode), $count screenshots"
           if ($count -lt 9) { exit 1 }
           # The editor layout of the test run is not needed. The .assbin files (preprocessed models) stay: they make
           # the first start faster.
-          Remove-Item -Force -ErrorAction SilentlyContinue "$package\imgui.ini", "$package\ev_crash*.log"
+          Remove-Item -Force -ErrorAction SilentlyContinue "$package\files\imgui.ini", "$package\files\ev_crash*.log"
 
       - name: Publish
         run: |
