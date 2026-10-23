@@ -5,6 +5,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cwchar>
+#include <string>
 
 #include "geometry.h"
 #include "textures.h"
@@ -332,6 +333,13 @@ void BirthdayGame::BuildCuracao(CommandList& commandList)
     letters->AddMesh(CreateMesh(commandList, yellow, CreatePaint(g_signYellow, 0.45f)));
     letters->AddMesh(CreateMesh(commandList, white, CreatePaint(g_white, 0.45f)));
     letters->AddMesh(CreateMesh(commandList, blue, CreatePaint(g_signBlue, 0.4f)));
+    if (!m_options.exportFolder.empty())
+    {
+        // Standing on y = 0 with their front at z = 0, centered on x = 0.
+        WriteObj(m_options.exportFolder / "curacao_letters.obj", { { "Yellow", yellow, FromSRGB(g_signYellow), 0.45f },
+            { "White", white, FromSRGB(g_white), 0.45f }, { "Blue", blue, FromSRGB(g_signBlue), 0.4f } },
+            XMMatrixTranslation(0.0f, -plazaTop, -lettersZ));
+    }
 
     // Palm trees at both ends of the letters.
     std::shared_ptr<Scene> palm = LoadModel(commandList, L"assets/birthday/palms/palm-detailed-straight.glb");
@@ -366,6 +374,7 @@ void BirthdayGame::BuildCuracao(CommandList& commandList)
     }
 
     HouseMeshes shared;
+    std::vector<ObjPart> exportParts;
     auto town = CreateNode("Willemstad", nullptr);
     float x = streetWidth * 0.5f;
     for (size_t i = 0; i < _countof(houses); ++i)
@@ -376,6 +385,7 @@ void BirthdayGame::BuildCuracao(CommandList& commandList)
         MeshData wall;
         BuildHouse(house, XMMatrixTranslation(x - house.width * 0.5f, townTop, z), shared, wall);
         town->AddMesh(CreateMesh(commandList, wall, CreatePaint(house.color, 0.8f)));
+        exportParts.push_back({ "Wall" + std::to_string(i + 1), wall, FromSRGB(house.color), 0.8f });
         x -= house.width;
     }
     town->AddMesh(CreateMesh(commandList, shared.trim, CreatePaint(g_white, 0.7f)));
@@ -384,6 +394,16 @@ void BirthdayGame::BuildCuracao(CommandList& commandList)
     town->AddMesh(CreateMesh(commandList, shared.door, CreatePaint(0x5A3A26, 0.6f)));
     town->AddMesh(CreateMesh(commandList, shared.shutter, CreatePaint(0x2E7D4F, 0.6f)));
     m_litScenes.push_back(AddEditorScene("Willemstad", town));
+    if (!m_options.exportFolder.empty())
+    {
+        // On y = 0 with the front walls at about z = 0, centered on x = 0.
+        exportParts.push_back({ "Trim", shared.trim, FromSRGB(g_white), 0.7f });
+        exportParts.push_back({ "Glass", shared.glass, FromSRGB(0x22343C), 0.25f });
+        exportParts.push_back({ "Roof", shared.roof, FromSRGB(0xC9542C), 0.75f });
+        exportParts.push_back({ "Door", shared.door, FromSRGB(0x5A3A26), 0.6f });
+        exportParts.push_back({ "Shutter", shared.shutter, FromSRGB(0x2E7D4F), 0.6f });
+        WriteObj(m_options.exportFolder / "willemstad_houses.obj", exportParts, XMMatrixTranslation(0.0f, -townTop, -housesZ));
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -504,8 +524,10 @@ void BirthdayGame::BuildBridge(CommandList& commandList)
 
     auto planks = LoadSurface(commandList, L"assets/birthday/boardwalk/wood_planks_diff_2k.jpg",
         L"assets/birthday/boardwalk/wood_planks_nor_dx_2k.jpg", L"assets/birthday/boardwalk/wood_planks_arm_2k.jpg");
-    auto deck = CreateNode("Deck", bridge, XMMatrixTranslation(0.0f, bridgeDeckTop - 0.2f, bridgeLength * 0.5f));
-    deck->AddMesh(CreateMesh(commandList, BuildBox(XMFLOAT3(g_deckWidth, 0.4f, bridgeLength), 0.35f), planks));
+    const MeshData deckBox = BuildBox(XMFLOAT3(g_deckWidth, 0.4f, bridgeLength), 0.35f);
+    const XMMATRIX deckPlace = XMMatrixTranslation(0.0f, bridgeDeckTop - 0.2f, bridgeLength * 0.5f);
+    auto deck = CreateNode("Deck", bridge, deckPlace);
+    deck->AddMesh(CreateMesh(commandList, deckBox, planks));
     bridge->AddMesh(CreateMesh(commandList, landing, CreatePaint(0xB9B2A3, 0.9f)));
     bridge->AddMesh(CreateMesh(commandList, pontoons, CreatePaint(0x2A3036, 0.6f)));
     bridge->AddMesh(CreateMesh(commandList, rims, CreatePaint(0xD9CDAA, 0.7f)));
@@ -515,7 +537,8 @@ void BirthdayGame::BuildBridge(CommandList& commandList)
     bridge->AddMesh(CreateMesh(commandList, houseGlass, CreatePaint(0x2A3A40, 0.2f)));
 
     // An arch and a light strip along the pontoon at the water per section, each section in its own color.
-    auto arch = CreateMesh(commandList, BuildArch(halfDeck - 0.1f, g_archHeight, g_archRadius), nullptr);
+    const MeshData archTube = BuildArch(halfDeck - 0.1f, g_archHeight, g_archRadius);
+    auto arch = CreateMesh(commandList, archTube, nullptr);
     MeshData strip;
     for (float side : { -1.0f, 1.0f })
     {
@@ -534,6 +557,30 @@ void BirthdayGame::BuildBridge(CommandList& commandList)
     }
     UpdateBridgeLights();
     m_litScenes.push_back(AddEditorScene("Queen Emma Bridge", bridge));
+
+    if (!m_options.exportFolder.empty())
+    {
+        // Starting at z = 0 (the landing on the beach is before it) and going along +z; the deck at y = bridgeDeckTop
+        // above the water at y = 0. The deck gets a wood color instead of the planks, and the lights their first colors.
+        MeshData deckMesh;
+        deckMesh.Append(deckBox, deckPlace);
+        std::vector<ObjPart> parts = {
+            { "Landing", landing, FromSRGB(0xB9B2A3), 0.9f }, { "Deck", deckMesh, FromSRGB(0x7A5A3E), 0.85f },
+            { "Pontoons", pontoons, FromSRGB(0x2A3036), 0.6f }, { "Rims", rims, FromSRGB(0xD9CDAA), 0.7f },
+            { "Railings", railings, FromSRGB(g_white), 0.5f }, { "House", house, FromSRGB(0xF1CE5A), 0.8f },
+            { "HouseTrim", houseTrim, FromSRGB(g_white), 0.6f }, { "HouseGlass", houseGlass, FromSRGB(0x2A3A40), 0.2f },
+        };
+        for (int i = 0; i < sections; ++i)
+        {
+            ObjPart part = { "Lights" + std::to_string(i + 1), {}, m_bridgeLights[i]->GetDiffuseColor(), 0.3f };
+            const XMFLOAT4& emissive = m_bridgeLights[i]->GetEmissiveColor();
+            part.emissive = XMFLOAT3(emissive.x, emissive.y, emissive.z);
+            part.mesh.Append(archTube, XMMatrixTranslation(0.0f, bridgeDeckTop, (i + 0.5f) * g_sectionLength));
+            part.mesh.Append(strip, XMMatrixTranslation(0.0f, 0.0f, (i + 0.5f) * g_sectionLength));
+            parts.push_back(part);
+        }
+        WriteObj(m_options.exportFolder / "queen_emma_bridge.obj", parts, XMMatrixIdentity());
+    }
 }
 
 void BirthdayGame::UpdateBridgeLights()

@@ -93,6 +93,7 @@ public:
         std::filesystem::path gameFolder;      // questions.json, images, scene.evscene
         bool                  editor = false;  // Start in the editor (F5 plays) instead of playing right away.
         std::filesystem::path autopilotFolder; // Play a fixed script, save screenshots there and quit (used by the CI).
+        std::filesystem::path exportFolder;    // Write the models made in code (Curacao) there as OBJ files and quit.
     };
 
     BirthdayGame(const std::wstring& name, uint32_t width, uint32_t height, const Options& options);

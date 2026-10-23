@@ -1,0 +1,254 @@
+# Colors are linear, as the EV engine uses them. Pr/Pm: PBR roughness and metalness.
+
+newmtl Landing
+Kd 0.493616 0.453456 0.373615
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 22
+Pr 0.9
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Deck
+Kd 0.197516 0.101145 0.0445526
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 32
+Pr 0.85
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Pontoons
+Kd 0.018913 0.0253713 0.0328759
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 82
+Pr 0.6
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Rims
+Kd 0.701169 0.618686 0.409826
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 62
+Pr 0.7
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Railings
+Kd 0.907547 0.899384 0.859174
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 102
+Pr 0.5
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl House
+Kd 0.88318 0.625345 0.101145
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl HouseTrim
+Kd 0.907547 0.899384 0.859174
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 82
+Pr 0.6
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl HouseGlass
+Kd 0.018913 0.0384727 0.0477758
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 162
+Pr 0.2
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Lights1
+Kd 0.788 0.2 0.8
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.568 0 1.6
+d 1
+illum 2
+
+newmtl Lights2
+Kd 0.8 0.632 0.2
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.6 1.152 0
+d 1
+illum 2
+
+newmtl Lights3
+Kd 0.2 0.8 0.476
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0 1.6 0.736
+d 1
+illum 2
+
+newmtl Lights4
+Kd 0.32 0.2 0.8
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0.32 0 1.6
+d 1
+illum 2
+
+newmtl Lights5
+Kd 0.8 0.2 0.236
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.6 0 0.0959995
+d 1
+illum 2
+
+newmtl Lights6
+Kd 0.392 0.8 0.2
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0.512 1.6 0
+d 1
+illum 2
+
+newmtl Lights7
+Kd 0.2 0.548 0.8
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0 0.928 1.6
+d 1
+illum 2
+
+newmtl Lights8
+Kd 0.8 0.2 0.704
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.6 0 1.344
+d 1
+illum 2
+
+newmtl Lights9
+Kd 0.8 0.739999 0.2
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.6 1.44 0
+d 1
+illum 2
+
+newmtl Lights10
+Kd 0.2 0.8 0.584
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0 1.6 1.024
+d 1
+illum 2
+
+newmtl Lights11
+Kd 0.427999 0.2 0.8
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0.607998 0 1.6
+d 1
+illum 2
+
+newmtl Lights12
+Kd 0.8 0.272 0.2
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.6 0.192 0
+d 1
+illum 2
+
+newmtl Lights13
+Kd 0.284 0.8 0.2
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0.224001 1.6 0
+d 1
+illum 2
+
+newmtl Lights14
+Kd 0.2 0.44 0.8
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 0 0.64 1.6
+d 1
+illum 2
+
+newmtl Lights15
+Kd 0.8 0.2 0.596
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 142
+Pr 0.3
+Pm 0
+Ke 1.6 0 1.056
+d 1
+illum 2

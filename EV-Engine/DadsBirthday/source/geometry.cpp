@@ -4,6 +4,9 @@
 
 #include <algorithm>
 #include <cmath>
+#include <fstream>
+#include <stdexcept>
+#include <unordered_map>
 
 using namespace DirectX;
 using namespace EV;
@@ -341,6 +344,64 @@ namespace Birthday
             }
         }
         return data;
+    }
+
+    void WriteObj(const std::filesystem::path& path, const std::vector<ObjPart>& parts, FXMMATRIX transform)
+    {
+        std::filesystem::path materialPath = path;
+        materialPath.replace_extension(".mtl");
+        std::error_code error;
+        std::filesystem::create_directories(path.parent_path(), error);
+        std::ofstream obj(path);
+        std::ofstream mtl(materialPath);
+        if (!obj || !mtl)
+        {
+            throw std::runtime_error("Could not write " + path.string());
+        }
+        obj << "# Made by the DadsBirthday game (--export-models).\nmtllib " << materialPath.filename().string() << "\n";
+        mtl << "# Colors are linear, as the EV engine uses them. Pr/Pm: PBR roughness and metalness.\n";
+
+        // Positions and normals are written once each (to the millimeter); faces refer to them by number, from 1.
+        std::unordered_map<std::string, uint32_t> positions, normals;
+        auto index = [&](std::unordered_map<std::string, uint32_t>& written, const char* kind, const XMFLOAT3& value)
+        {
+            char text[96];
+            snprintf(text, sizeof(text), "%.4f %.4f %.4f", value.x, value.y, value.z);
+            auto [it, added] = written.emplace(text, static_cast<uint32_t>(written.size() + 1));
+            if (added)
+            {
+                obj << kind << ' ' << text << '\n';
+            }
+            return it->second;
+        };
+
+        for (const ObjPart& part : parts)
+        {
+            mtl << "\nnewmtl " << part.name << "\nKd " << part.color.x << ' ' << part.color.y << ' ' << part.color.z
+                << "\nKa 0 0 0\nKs 0.04 0.04 0.04\nNs " << (1.0f - part.roughness) * 200.0f + 2.0f << "\nPr " << part.roughness
+                << "\nPm 0\nKe " << part.emissive.x << ' ' << part.emissive.y << ' ' << part.emissive.z << "\nd 1\nillum 2\n";
+
+            std::vector<std::pair<uint32_t, uint32_t>> corners; // Position and normal of every vertex.
+            obj << "\no " << part.name << '\n';
+            for (const Vertex& vertex : part.mesh.vertices)
+            {
+                XMFLOAT3 p, n;
+                XMStoreFloat3(&p, XMVector3TransformCoord(XMLoadFloat3(&vertex.position), transform));
+                XMStoreFloat3(&n, XMVector3Normalize(XMVector3TransformNormal(XMLoadFloat3(&vertex.normal), transform)));
+                corners.emplace_back(index(positions, "v", XMFLOAT3(p.x, p.y, -p.z)), index(normals, "vn", XMFLOAT3(n.x, n.y, -n.z)));
+            }
+            obj << "usemtl " << part.name << '\n';
+            for (size_t i = 0; i + 2 < part.mesh.indices.size(); i += 3)
+            {
+                // Flipping z mirrors the triangles, so their corners go the other way round.
+                obj << 'f';
+                for (uint32_t corner : { part.mesh.indices[i], part.mesh.indices[i + 2], part.mesh.indices[i + 1] })
+                {
+                    obj << ' ' << corners[corner].first << "//" << corners[corner].second;
+                }
+                obj << '\n';
+            }
+        }
     }
 
     MeshData BuildTerrain(float minX, float maxX, float minZ, float maxZ, uint32_t columns, uint32_t rows, float uvScale,

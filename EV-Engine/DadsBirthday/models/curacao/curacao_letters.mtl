@@ -1,0 +1,34 @@
+# Colors are linear, as the EV engine uses them. Pr/Pm: PBR roughness and metalness.
+
+newmtl Yellow
+Kd 0.923993 0.56681 0
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 112
+Pr 0.45
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl White
+Kd 0.907547 0.899384 0.859174
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 112
+Pr 0.45
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Blue
+Kd 0.00658496 0.0414519 0.348865
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 122
+Pr 0.4
+Pm 0
+Ke 0 0 0
+d 1
+illum 2

@@ -54,7 +54,8 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int)
     std::error_code error;
     options.gameFolder = fs::is_directory(root / "game", error) ? root / "game" : root / "DadsBirthday" / "game";
 
-    // --editor starts in the editor (F5 plays); --autopilot <folder> plays a fixed tour and saves screenshots there.
+    // --editor starts in the editor (F5 plays); --autopilot <folder> plays a fixed tour and saves screenshots there;
+    // --export-models <folder> writes the models made in code as OBJ files there.
     int argumentCount = 0;
     if (LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount))
     {
@@ -68,6 +69,10 @@ int CALLBACK wWinMain(HINSTANCE hInstance, HINSTANCE, PWSTR, int)
             else if (argument == L"--autopilot" && i + 1 < argumentCount)
             {
                 options.autopilotFolder = fs::absolute(arguments[++i], error);
+            }
+            else if (argument == L"--export-models" && i + 1 < argumentCount)
+            {
+                options.exportFolder = fs::absolute(arguments[++i], error);
             }
         }
         LocalFree(arguments);
