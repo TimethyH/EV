@@ -136,7 +136,7 @@ struct Camera
     float FogStart;     // Distance where the fog starts.
     float ShadowStrength;  // 0 = no shadow map (EffectPSO::SetShadowMap).
     float ShadowTexelSize; // 1 / shadow map size.
-    float Padding;
+    float ShadowDebug;     // 1 = show the shadow lookup instead of the lighting (EffectPSO::SetShadowDebug).
     matrix ShadowMatrix;   // World space to shadow map (u, v, depth).
 };
 
@@ -367,6 +367,21 @@ float4 main(PixelShaderInput IN) : SV_Target
 
     // The sun's light is blocked by shadow casters.
     directionalLightBRDF *= ShadowFactor(IN.PositionWS.xyz, normalize(IN.NormalWS));
+    if (camera.ShadowDebug > 0.5f)
+    {
+        // Red: lit (1) or in shadow (0). Green: depth from the light. Blue: depth in the shadow map there.
+        // Magenta: outside the shadow map.
+        const float4 shadowPosition = mul(camera.ShadowMatrix, float4(IN.PositionWS.xyz, 1.0f));
+        const float3 uvz = shadowPosition.xyz / shadowPosition.w;
+        if (any(uvz.xy < 0.0f) || any(uvz.xy > 1.0f))
+        {
+            return float4(1.0f, 0.0f, 1.0f, 1.0f);
+        }
+        float width, height;
+        ShadowMap.GetDimensions(width, height);
+        const float stored = ShadowMap.Load(int3(uvz.xy * float2(width, height), 0));
+        return float4(ShadowFactor(IN.PositionWS.xyz, normalize(IN.NormalWS)), saturate(uvz.z), stored, 1.0f);
+    }
 
      // Combine ambient, point light, and directional light contributions
     BRDF += emissive + pointLightBRDF + directionalLightBRDF + ambient;

@@ -889,6 +889,7 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
         {
             m_unlitPSO->SetShadowMap(shadowMap.IsValid() ? context.GetTexture(shadowMap) : nullptr, XMLoadFloat4x4(&shadowMatrix),
                 m_shadowStrength);
+            m_unlitPSO->SetShadowDebug(m_shadowDebug);
             SceneVisitor visitor(context.GetCommandList(), m_camera, *m_unlitPSO, false);
             DrawObjects(context, visitor);
         });
@@ -1015,6 +1016,8 @@ void Ocean::DrawOceanParameters()
         ImGui::Checkbox("Shadows", &m_shadowsEnabled);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Shadows of the sun on the objects");
         ImGui::SliderFloat("Shadow Strength", &m_shadowStrength, 0.0f, 1.0f);
+        ImGui::Checkbox("Show Shadow Lookup", &m_shadowDebug);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Red: lit, green: depth from the sun, blue: depth in the shadow map, magenta: outside it");
         ImGui::SliderFloat("Shadow Area (m)", &m_shadowRadius, 5.0f, 200.0f);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Meters to each side of the shadow center that get shadows");
 

@@ -135,6 +135,7 @@ protected:
 	bool m_shadowsEnabled = false;
 	DirectX::XMFLOAT3 m_shadowCenter = DirectX::XMFLOAT3(0.0f, 0.0f, 0.0f);
 	float m_shadowRadius = 40.0f;
+	bool m_shadowDebug = false; // Show the shadow lookup as colors (EffectPSO::SetShadowDebug).
 	float m_shadowStrength = 0.85f; // 1 = no sunlight at all in the shadow.
 	uint32_t m_shadowMapSize = 2048;
 	std::shared_ptr<EV::ShadowPSO> m_shadowPSO;
