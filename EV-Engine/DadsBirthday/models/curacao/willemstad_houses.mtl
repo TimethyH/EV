@@ -1,0 +1,221 @@
+# Colors are linear, as the EV engine uses them. Pr/Pm: PBR roughness and metalness.
+
+newmtl Wall1
+Kd 0.212044 0.585973 0.774227
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall2
+Kd 0.899384 0.378676 0.0399472
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall3
+Kd 0.819964 0.259027 0.487765
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall4
+Kd 0.348865 0.701169 0.487765
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall5
+Kd 0.891262 0.547994 0.0253713
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall6
+Kd 0.0342302 0.136099 0.547994
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall7
+Kd 0.751895 0.0938759 0.0657539
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall8
+Kd 0.91575 0.632043 0.0563741
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall9
+Kd 0.0563741 0.493616 0.43134
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall10
+Kd 0.875138 0.280124 0.101145
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall11
+Kd 0.481952 0.368591 0.715465
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall12
+Kd 0.394083 0.632043 0.111299
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall13
+Kd 0.859174 0.215764 0.399293
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall14
+Kd 0.160444 0.481952 0.859174
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Wall15
+Kd 0.932277 0.687031 0.176774
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 42
+Pr 0.8
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Trim
+Kd 0.907547 0.899384 0.859174
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 62
+Pr 0.7
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Glass
+Kd 0.0118813 0.0302565 0.0414519
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 152
+Pr 0.25
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Roof
+Kd 0.592438 0.0869013 0.0209511
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 52
+Pr 0.75
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Door
+Kd 0.101145 0.0384727 0.0151752
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 82
+Pr 0.6
+Pm 0
+Ke 0 0 0
+d 1
+illum 2
+
+newmtl Shutter
+Kd 0.0231036 0.20836 0.0759261
+Ka 0 0 0
+Ks 0.04 0.04 0.04
+Ns 82
+Pr 0.6
+Pm 0
+Ke 0 0 0
+d 1
+illum 2

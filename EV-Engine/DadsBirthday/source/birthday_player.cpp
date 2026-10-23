@@ -90,6 +90,11 @@ void BirthdayGame::UpdateGame(UpdateEventArgs& e)
 {
     const float deltaTime = std::min(static_cast<float>(e.deltaTime), 0.1f);
 
+    if (!m_options.exportFolder.empty())
+    {
+        Application::Get().Stop(); // The models were written while the scene was built.
+        return;
+    }
     UpdateAutopilot(deltaTime);
     UpdateScene(deltaTime);
     m_messageTime += deltaTime;

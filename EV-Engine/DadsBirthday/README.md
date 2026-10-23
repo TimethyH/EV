@@ -73,6 +73,9 @@ Everything is in `game/questions.json` (open it with Notepad). Pictures go in `g
   `DadsBirthday/game/scene.evscene`; the game loads it when it starts.
 - `--autopilot <folder>` plays a fixed tour and saves a screenshot of every step in the folder, then quits. The CI
   does this and publishes the screenshots on the `ci-screenshots` branch (`birthday/`).
+- `--export-models <folder>` writes the models made in code (the CURACAO letters, the Willemstad houses and the Queen
+  Emma bridge) as OBJ files with their colors in `.mtl` files, then quits. They are in `DadsBirthday/models/curacao`;
+  drop one into the editor's Scene (or load it with `LoadSceneFromFile`) to use it in another scene.
 
 ## How it is built
 
@@ -84,6 +87,10 @@ Everything is in `game/questions.json` (open it with Notepad). Pictures go in `g
 - `source/birthday_player.cpp`: walking inside the invisible border, looking, the rifle with recoil and a muzzle flash,
   shooting (an instant ray from the crosshair), the HUD and the autopilot.
 - `source/birthday_quiz.cpp` and `source/quiz_config.cpp`: the quiz.
+- `source/curacao.cpp`: Willemstad behind the screens and the bridge, all made in code. The letters are the font's
+  outlines (`RenderLetterMask`) turned into distance fields and extruded (`ExtrudeShape` in `source/geometry.cpp`);
+  the yellow body, the white line and the blue front are the same outline moved inwards. The houses' gables are
+  polygons extruded the same way; the rest of the houses and the bridge are boxes, and the arches are tubes.
 - `source/textures.cpp`: text on the screens (drawn with Windows GDI) and loading pictures.
 - Distance fog (`m_fogColor`, `m_fogDensity`, `m_fogStart` of `EV::Ocean`, also in the editor under Ocean Parameters >
   Fog) fades the far ocean and the sky below the horizon into the horizon's color, so the edge of the ocean is not seen.

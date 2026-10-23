@@ -87,6 +87,9 @@ StyleCopReport.xml
 *.ilk
 *.meta
 *.obj
+# ...but not the models the birthday game exported (--export-models).
+!EV-Engine/DadsBirthday/models/**/*.obj
+EV-Engine/DadsBirthday/models/**/*.assbin
 *.idb
 *.iobj
 *.pch

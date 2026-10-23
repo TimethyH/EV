@@ -10,6 +10,7 @@
 #include <DirectXMath.h>
 
 #include <cstdint>
+#include <filesystem>
 #include <functional>
 #include <memory>
 #include <string>
@@ -81,6 +82,21 @@ namespace Birthday
     // facing +z. Grid point (i, j) is at x = -i * spacing, y = -j * spacing, so seen from the front the shape is the
     // right way round (+x is on the left). Without a back (back >= front) only the front is made.
     MeshData ExtrudeShape(const DistanceField& field, float inset, float front, float back);
+
+    // A part of a model for WriteObj: a mesh in one plain color.
+    struct ObjPart
+    {
+        std::string       name;
+        MeshData          mesh;
+        DirectX::XMFLOAT4 color;             // Linear, as the engine's materials use it.
+        float             roughness = 0.8f;
+        DirectX::XMFLOAT3 emissive = { 0.0f, 0.0f, 0.0f };
+    };
+
+    // Writes the parts, moved by a transform, as a Wavefront OBJ file with a .mtl file of the same name next to it.
+    // OBJ files are right-handed: z is flipped (and the triangles turned around), which the engine's model loader
+    // undoes, so a written model loads back exactly as it was built.
+    void WriteObj(const std::filesystem::path& path, const std::vector<ObjPart>& parts, DirectX::FXMMATRIX transform);
 
     // A heightfield over x/z. The texture repeats every 1/uvScale meters.
     MeshData BuildTerrain(float minX, float maxX, float minZ, float maxZ, uint32_t columns, uint32_t rows, float uvScale,
