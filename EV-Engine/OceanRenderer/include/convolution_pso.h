@@ -29,7 +29,7 @@ public:
     void DispatchSpecular(std::shared_ptr<CommandList> commandList,
                           const std::shared_ptr<ShaderResourceView>& envCubemap,
                           const std::shared_ptr<Texture>& specularMap, uint32_t cubemapSize, uint32_t sampleCount,
-                          uint32_t mipLevels);
+                          uint32_t mip, uint32_t mipLevels, uint32_t face);
     void DispatchBRDFLUT(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& brdfLUT,
                          uint32_t lutSize);
 
