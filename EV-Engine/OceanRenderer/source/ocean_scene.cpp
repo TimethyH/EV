@@ -233,9 +233,20 @@ void Ocean::SetEnvironment(const std::shared_ptr<Texture>& panorama)
     auto specularCubemapSRV = app.CreateShaderResourceView(specularIrradianceMap, &irradianceSRVDesc);
 
     m_convolutionPSO->Dispatch(commandList, skyboxCubemapSRV, diffuseIrradianceMap, m_convolutionPlaneSize, m_convolutionSampleCount);
-    m_specularConvolutionPSO->DispatchSpecular(commandList, skyboxCubemapSRV, specularIrradianceMap, g_brdfTextureSize, 4096, g_specularMipLevels);
+    computeQueue.ExecuteCommandList(commandList);
 
-    computeQueue.WaitForFenceValue(computeQueue.ExecuteCommandList(commandList));
+    // The specular prefilter is heavy (4096 samples per texel), so each face of each mip gets its own submission:
+    // Windows resets a GPU that cannot preempt a running dispatch once one submission takes about 2 seconds.
+    for (uint32_t mip = 0; mip < g_specularMipLevels; ++mip)
+    {
+        for (uint32_t face = 0; face < 6; ++face)
+        {
+            auto specularCommandList = computeQueue.GetCommandList();
+            m_specularConvolutionPSO->DispatchSpecular(specularCommandList, skyboxCubemapSRV, specularIrradianceMap,
+                g_brdfTextureSize, 4096, mip, g_specularMipLevels, face);
+            computeQueue.WaitForFenceValue(computeQueue.ExecuteCommandList(specularCommandList));
+        }
+    }
 
     // Swap them in. Frames still in flight keep the previous textures alive (command lists track them).
     m_skyboxTexture = panorama;

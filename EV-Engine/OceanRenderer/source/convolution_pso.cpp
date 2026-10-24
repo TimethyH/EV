@@ -107,36 +107,35 @@ void ConvolutionCompute::DispatchSpecular(
     const std::shared_ptr<Texture>& specularMap,
     uint32_t cubemapSize,
     uint32_t sampleCount,
-    uint32_t mipLevels)
+    uint32_t mip,
+    uint32_t mipLevels,
+    uint32_t face)
 {
     SetPipelineState(*commandList);
 
-    for (uint32_t mip = 0; mip < mipLevels; mip++)
+    uint32_t mipSize = cubemapSize >> mip;
+    if (mipSize < 1) mipSize = 1;
+
+    float roughness = (float)mip / (float)(mipLevels - 1);
+
+    struct SpecularCB
     {
-        uint32_t mipSize = cubemapSize >> mip;
-        if (mipSize < 1) mipSize = 1;
+        uint32_t cubemapSize;
+        uint32_t sampleCount;
+        float roughness;
+        uint32_t face;
+    } cb = { mipSize, sampleCount, roughness, face };
 
-        float roughness = (float)mip / (float)(mipLevels - 1);
+    commandList->SetCompute32BitConstants(0, cb);
 
-        struct SpecularCB
-        {
-            uint32_t cubemapSize;
-            uint32_t sampleCount;
-            float roughness;
-            float padding;
-        } cb = { mipSize, sampleCount, roughness, 0.0f };
+    // Bind source environment cubemap SRV
+    commandList->SetShaderResourceView(1, 0, envCubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 
-        commandList->SetCompute32BitConstants(0, cb);
+    // Bind UAV for this specific mip slice
+    commandList->SetUnorderedAccessView(2, 0, specularMap, mip);
 
-        // Bind source environment cubemap SRV
-        commandList->SetShaderResourceView(1, 0, envCubemap, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-
-        // Bind UAV for this specific mip slice
-        commandList->SetUnorderedAccessView(2, 0, specularMap, mip);
-
-        uint32_t groups = std::max(1u, (mipSize + 16 - 1) / 16);
-        commandList->Dispatch(groups, groups, 6);
-    }
+    uint32_t groups = std::max(1u, (mipSize + 16 - 1) / 16);
+    commandList->Dispatch(groups, groups, 1);
 }
 
 void ConvolutionCompute::DispatchBRDFLUT(

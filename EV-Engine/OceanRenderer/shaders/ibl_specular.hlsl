@@ -6,7 +6,7 @@ cbuffer SpecularCB : register(b0)
     uint cubemapSize;
     uint sampleCount;
     float roughness; // set per mip level dispatch (0.0 -> 1.0)
-    float padding;
+    uint face; // one face per dispatch, see Ocean::SetEnvironment
 }
 
 TextureCube<float4> environmentMap : register(t0);
@@ -91,7 +91,15 @@ void main(uint3 DTid : SV_DispatchThreadID)
         N = asdpofijsdf;
     }
 */
-    N = normalize(mul(RotateUV[DTid.z], N));
+    N = normalize(mul(RotateUV[face], N));
+    const uint3 texel = uint3(DTid.xy, face);
+
+    // A perfect mirror: every GGX sample is N itself, so one read gives the same result as sampleCount of them.
+    if (roughness == 0.0)
+    {
+        specularMap[texel] = float4(environmentMap.SampleLevel(linearSampler, N, 0.0).rgb, 1.0f);
+        return;
+    }
 
     float3 R = N;
     float3 V = R;
@@ -123,7 +131,7 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001;
             float saSample = 1.0 / (float(sampleCount) * pdf + 0.0001);
             // One mip blurrier than the exact size hides what is left of the sampling pattern.
-            float mipLevel = roughness == 0.0 ? 0.0 : clamp(0.5 * log2(saSample / saTexel) + 1.0, 0.0, envMipCount - 1.0);
+            float mipLevel = clamp(0.5 * log2(saSample / saTexel) + 1.0, 0.0, envMipCount - 1.0);
 
             prefilteredColor += environmentMap.SampleLevel(linearSampler, L, mipLevel).rgb * NdotL;
             totalWeight += NdotL;
@@ -131,5 +139,5 @@ void main(uint3 DTid : SV_DispatchThreadID)
     }
 
     prefilteredColor = prefilteredColor / max(totalWeight, 0.001f);
-    specularMap[DTid] = float4(prefilteredColor, 1.0f);
+    specularMap[texel] =float4(prefilteredColor, 1.0f);
 }
