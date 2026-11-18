@@ -14,4 +14,10 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   (NVIDIA's SDK only as reference on the RTX 3070).
 - **Branch** `path-tracing` created from `origin/scene-save-load`; the handoff note about the IBL bake fix
   (`e738ba0`, from `render-graph`) was cherry-picked so the TODO is not lost.
+- **Plan additions** (same day): milestone **M5c** software coherence (wavefront + material sorting, benchmarked with
+  1/4/16/64 materials), optimization phases **O1**/**O2**, profiling after every milestone on both GPUs plus A/B checks
+  on hot-path changes, logged in `performance.md`; SER stays as a later milestone (raygen-only API). Research:
+  `research/followup_performance_optimization.md`; `knowledge.md` §10.1 profiling routine, §10.2 strategy catalogue.
+- **Working agreement**: the developer writes all logic; Claude may provide skeletons (signatures, step comments,
+  `TODO(human)` markers) and tutors with `knowledge.md`.
 - **Next**: M0 – capabilities and plumbing (written by the developer).

@@ -25,10 +25,14 @@ re-grep before quoting them.
 
 ### 0.1 Rules for the tutor
 
-1. **The developer writes all code** (learning project, "learning mode"). Claude does not write the implementation:
-   no complete functions, classes, shaders or kernels. Allowed: explanations, formulas, API names and signatures,
-   pointers to exact EV files/lines, small *reference* snippets of a few lines (always marked "reference", ideally
-   pseudo-code or the minimal API call shape), review comments, debugging help, test design.
+1. **The developer writes all logic** (learning project, Claude Code "Learning" output style). Claude does not write
+   the implementation: no function bodies, shader/kernel logic or algorithms. **Skeletons are allowed** (confirmed
+   2026-11-18): new files with header comment, includes, class/struct declarations, function signatures with a
+   comment saying what each must do, step-by-step comments inside empty bodies, and `TODO(human)` markers where the
+   developer writes the code. Note: the built-in Learning style by default lets Claude write most code and asks the
+   user for small pieces – in this project that is overridden: every body is the developer's. Also allowed:
+   explanations, formulas, API names and signatures, pointers to exact EV files/lines, small *reference* snippets of a
+   few lines (marked "reference"), review comments, debugging help, test design.
 2. **Teach before pointing.** For each step: what the concept is, why it is needed here, which EV code it touches,
    what can go wrong, and how to verify it. Ask the developer to predict results before running a test.
 3. **Review like a senior engineer**: correctness first (barriers, states, lifetimes, pdfs, units), then conventions
@@ -64,7 +68,7 @@ re-grep before quoting them.
 | 7 | GPU compute (HIP + CUDA) | Toolchains, DLL layout, interop recipe, portability header, WMMA |
 | 8 | Denoising | IDenoiser, OIDN, OptiX, temporal rules, timings, NRD/SVGF |
 | 9 | Radiance caches & NRC | SHaRC, NRC paper numbers, the math to implement, data layouts, references |
-| 10 | Milestone tutor guide M0–M11 | Per milestone: concepts, files, steps, tests, pitfalls, reading |
+| 10 | Milestone tutor guide M0–M11 | 10.1 profiling routine, 10.2 optimization catalogue; per milestone (incl. M5c, O1, O2): concepts, files, steps, tests, pitfalls, reading |
 | 11 | Learning resources | Per track, with URLs |
 | 12 | Open questions | Everything a tutor must verify before relying on it |
 | 13 | Source index | Which research file covers what |
@@ -1222,7 +1226,13 @@ differencing raster vs reference at the same camera, time and seed (D7 shots). A
   thread groups**; one live RayQuery; skip procedural/non-opaque via flags; "smaller BVHs are always better", use
   high-quality build flags, don't rebuild dynamic geometry every frame; rebuild the TLAS every frame (compute queue if
   possible); best performance from TraceRay/RayQuery in compute on a compute queue. No RDNA 4-specific RT page found
-  [U]. RDNA 4 BVH8/OBBs need no developer action.
+  [U]. RDNA 4 BVH8/OBBs need no developer action. RDNA 4 hardware facts (third-party analysis): 8 box / 2 triangle
+  tests per clock per Ray Accelerator (2× RDNA 3), 8-wide 128-B box nodes, OBBs from a table of 104 rotations,
+  compressed 128-B primitive nodes, a ray-transform block for the TLAS→BLAS step, LDS traversal stack; 192 KB VGPRs per
+  SIMD, 16 wave slots, full occupancy only at ≤ 96 VGPRs; dynamic VGPR allocation only for wave32 compute and so far
+  only seen with *indirect* RT, not inline RayQuery
+  ([C&C RT](https://chipsandcheese.com/p/rdna-4s-raytracing-improvements), [C&C dynamic VGPRs](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds)).
+  Ampere CC 8.6: 48 warps/SM, 64K regs/SM, 255 regs/thread, 100 KB shared/SM ([CUDA Ampere tuning](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html)).
 - **NVIDIA**: inline RayQuery is fine while shading is uniform; prefer `DispatchRays` once there are "multiple
   different shading models"; compute groups **8×8 or 16×8**; mark geometry opaque; any-hit only where needed.
 - → make the PT group size a compile-time define chosen per vendor at (hot-reload) compile time [I]. No 2024–2026
@@ -1242,6 +1252,9 @@ differencing raster vs reference at the same camera, time and seed (D7 shots). A
 | Nsight Systems 2026.5 | D3D12 + CUDA timeline (interop stalls) | traces CIG streams since 2026.4.1/2026.5.1 |
 | Nsight Compute 2026.4 | CUDA kernel profiling | |
 | Render Graph panel / Texture Viewer | Per-pass GPU ms, capture any texture/buffer after any pass | Block capture of AS buffers (meaningless) |
+
+How to use these tools for performance work (clock locking, which tool answers which question, RGP 2.7 "Average
+active lanes", Nsight GPU Trace on Ampere): section 10.1.
 
 **DRED op names to add to `GetBreadcrumbOpName`** (`D3D12_AUTO_BREADCRUMB_OP`,
 [Learn](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/ne-d3d12-d3d12_auto_breadcrumb_op)): DISPATCH (6),
@@ -1732,7 +1745,172 @@ Prerequisites (plan.md): persistent bindless heap (M8a), `.External()` (M6), per
 ## 10. Milestone tutor guide (M0–M11, from `plan.md`)
 
 Format per milestone: **Goal** · **Teach first** · **Files** · **Suggested order (hints, the developer decides)** ·
-**Verify** · **Pitfalls** · **Read**. Every milestone ends with a `build-log.md` entry with measurements.
+**Verify** · **Pitfalls** · **Read**. Every milestone ends with a `build-log.md` entry with measurements and a
+`performance.md` baseline row set (10.1). Order of entries follows `plan.md`: M0–M5, M5b, **M5c**, M6, M7, **O1**,
+M8a, M8b, M9, M10, **O2**, M11. Sources for 10.1/10.2/M5c/O1/O2: `research/followup_performance_optimization.md`.
+
+### 10.1 Profiling routine (every milestone, every hot-path change)
+
+**Principle.** For a progressive path tracer the target is **quality per time**, not ms alone: a change that is slower
+per sample but reaches the same error sooner wins. So every measurement has a speed part (GPU ms, samples/s) and,
+whenever the change can affect the image or the noise, a quality part (equal-time error against a fixed reference).
+Teach the developer to **predict** the result before each run ("this should cut shade ms by ~X because…").
+
+**One-time setup (part of M1–M3, extended in M5c)** [I]
+1. Benchmark shots as `.evscene` files: `helmet_ibl`, `ocean_frozen_day` (fixed seed, frozen time, camera near the
+   surface at a grazing angle), `ocean_underwater`, later `materials_1/4/16/64` (M5c). Fixed resolution (1080p, 1440p),
+   fixed spp/frame, bounce cap, sampler and RR settings stored in the scene or the command line.
+2. `--benchmark <shot> --frames N --warmup W --out file.csv`: runs W warm-up frames, then N measured frames, writes
+   one CSV row per frame with every `GpuTimer` scope, frame ms, spp so far; prints median/p95/min per scope; optional
+   `--equal-time <seconds>` that accumulates for a fixed GPU time and saves the linear HDR EXR for error metrics.
+3. `GpuTimer` facts (`source/DX12/gpu_timer.cpp`): one `D3D12_QUERY_HEAP_TYPE_TIMESTAMP` heap, begin/end `EndQuery`
+   pairs per scope (max 256 scopes/frame), 4 frames in flight, results read back 4 frames later **without history**,
+   frequency taken from the **direct** queue (line 33). Needed additions: a per-scope ring of the last N values for
+   median/p95; a second timer instance per queue once async compute exists (each queue has its own
+   `GetTimestampFrequency`; align queues with `GetClockCalibration`)
+   ([MS Learn: Timing](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing)).
+4. A **debug counter buffer** (rays traced by type, path length histogram, active paths per bounce) behind a shader
+   define – never compiled into the timed build (atomics distort timing) [I].
+5. An image-diff tool: the M6 "image difference metric" kernel and/or NVIDIA **FLIP** (v1.7: `pip install
+   flip-evaluator`, `flip -r reference.exr -t test.exr`, HDR-FLIP for linear HDR input;
+   [NVlabs/flip](https://github.com/NVlabs/flip)).
+
+**Stable timing setup**
+
+| Item | RX 9070 XT (main PC) | RTX 3070 | Source |
+|---|---|---|---|
+| Build / runtime | Release, debug layer + GBV off, vsync off, fixed window, same driver noted, AC power, other GPU apps closed | same | [I] |
+| Clock locking for A/B | Radeon Developer Panel **Device Clocks → Stable** (lower fixed clock; RDP CLI `--clock-mode stable`); note: an **RGP capture switches to peak clocks** during capture | `nvidia-smi --lock-gpu-clocks=<MHz>` + `--lock-memory-clocks=<MHz>` (admin console; "Volta+"), reset with `--reset-gpu-clocks` / `--reset-memory-clocks`; Nsight GPU Trace "Lock Clocks to Base" | [RDP manual](https://gpuopen.com/manuals/rdp_manual/system/), [NVIDIA](https://developer.nvidia.com/blog/advanced-api-performance-setstablepowerstate), [nvidia-smi](https://docs.nvidia.com/deploy/nvidia-smi/index.html) |
+| `SetStablePowerState(TRUE)` | Only behind an off-by-default `--stable-power` switch: needs Windows **Developer Mode** (else **device removal**), affects the whole system, clocks "significantly lower" than normal; NVIDIA: does **not** lock the memory clock – don't rely on it alone | same | [MS Learn](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-setstablepowerstate) |
+| Warm-up | ≥ 300 frames or ~30 s (thermals, shader caches, AS compaction readbacks done) [E] | same | [I] |
+| Sample size | ≥ 500 measured frames; report **median + p95** (and min); 3 runs, median of medians; interleave A/B (A, B, A, B) to cancel thermal drift | same | [I] |
+| Final check | Re-run the winning variant at **normal clocks** – stable-clock conclusions "should be double-checked with supporting results from real usage scenarios" | same | [MS Learn](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-setstablepowerstate) |
+
+Locked-clock numbers are lower than real ones; `performance.md` must say which mode a row was measured in. GeForce
+support of `-lgc` is not stated in NVIDIA's docs [U] (believed to work on RTX 30 [T]).
+
+**Timestamp caveats** [I unless linked]: timestamps are **bottom-of-pipe** (sampled when all preceding work is done;
+[MS Learn](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing)); two dispatches without a barrier may
+overlap, so a scope can absorb or hide its neighbour – per-pass numbers are meaningful only across the render graph's
+barriers, otherwise compare whole-frame time; copy-queue timestamps need `OPTIONS3::CopyQueueTimestampQueriesSupported`
+and a `COPY_QUEUE_TIMESTAMP` heap; GPU timestamp clocks can stop while idle (CPU↔GPU correlation drift); with async
+compute, overlapping scopes no longer sum to the frame time; divide ticks by frequency in `double`.
+
+**Metrics to record**
+
+| Metric | How | Where |
+|---|---|---|
+| Per-pass GPU ms (displace, BLAS refit/build, TLAS, trace, sort, shade, NEE/shadow, accumulate, pack, denoise, NRC) | `GpuTimer` scopes → CSV | benchmark CSV, Render Graph panel |
+| Frame ms (median, p95) | CPU frame time + GPU frame scope | CSV |
+| **Samples/s** = pixels × spp / s; **rays/s** per type (camera, extension, shadow) | debug counter buffer run (separate, untimed) + timed run | CSV |
+| Average path length, active paths per bounce | debug counters / wavefront counts (M5c) | CSV |
+| VRAM (AS, path state, accumulation, denoiser, caches) | `IDXGIAdapter3::QueryVideoMemoryInfo` + own allocation log [T] | log |
+| BVH build/refit ms and bytes/triangle | `GpuTimer` + prebuild/postbuild sizes | log |
+| Occupancy, VGPRs/registers, spills | RGP Pipeline + Wavefront occupancy tabs / Nsight GPU Trace + shader profiler | screenshots in `performance.md` |
+| Divergence | RGP 2.7 **Average active lanes** (Instruction timing; needs shader instrumentation in RDP; RX 9000+) / Nsight warp-state stats | same |
+| Traversal cost | RRA traversal-counter heatmap + histogram (box/triangle tests per pixel; > ~2000 "a likely framerate risk") | screenshots |
+| **Quality per time** | equal-time EXR → relMSE, MSE, HDR-FLIP mean vs reference; log-log error-vs-time curve | `performance.md` |
+
+Error metrics [T]: MSE; **relMSE** = mean((x − ref)² / (ref² + ε)), ε ≈ 1e-2 (stable on bright pixels); HDR-FLIP mean
+(perceptual); MC efficiency = 1 / (variance × time). For an unbiased tracer log(MSE) vs log(time) has slope −1; a flat
+floor means bias (clamping, caches, denoiser). The reference (~16k–64k spp) is rendered **once per shot by the
+unoptimised build** and kept, so an optimisation can never move its own reference.
+
+**Procedure A – per change on a hot path (quick A/B, main PC)** [I]
+1. Write down the hypothesis and the predicted delta. 2. Build Release, lock clocks (RDP Stable). 3. `--benchmark`
+the affected shot for A and B, interleaved, 3× each. 4. Accept only if the median delta exceeds the run-to-run spread
+(e.g. > 2 % or > 3× the p95−median gap). 5. If the image can change: equal-time EXR + FLIP/relMSE vs the reference
+(no regression: FLIP mean within noise of the baseline at equal spp). 6. One line in `performance.md` (change, GPU,
+clocks, before/after ms, error). 7. Keep or revert – never stack two unmeasured changes.
+
+**Procedure B – after every milestone (both GPUs)** [I]
+1. All benchmark shots at 1080p and 1440p, Release, locked **and** normal clocks. 2. Per-pass table, samples/s,
+rays/s, VRAM, AS sizes/timings. 3. Equal-time error at 10 s and 60 s. 4. One RGP + RRA capture (AMD) and one Nsight
+GPU Trace (3070) of the main PT dispatch, screenshots of occupancy/VGPRs/active lanes stored with the row. 5. Row set
+in `performance.md` = new baseline.
+
+**Procedure C – deep capture when something looks off**
+
+| Question | RX 9070 XT | RTX 3070 |
+|---|---|---|
+| Which pass is slow? | Render Graph panel / CSV; PIX timing capture (AMD counters built in) | same; PIX |
+| Why is the PT dispatch slow (occupancy, VGPRs, spills, stalls, divergence)? | **RGP 2.7**: Pipeline tab (theoretical occupancy + limiter), Wavefront occupancy, Instruction timing (+ HLSL source view if compiled with `-Zi` or `-Zs -Qsource_in_debug_module`; Average active lanes) ([GPUOpen](https://gpuopen.com/learn/radeon-developer-tool-suite-shader-source-code/)) | **Nsight Graphics GPU Trace** (Turing+; **Real-Time Shader Profiler on Ampere+** works on the 3070; Ray Tracing Live State view; the Hardware Events / Compute row is Blackwell-only) ([GPU Trace overview](https://docs.nvidia.com/nsight-graphics/UserGuide/gpu-trace-overview.html)) |
+| Is the BVH bad (overlap, empty space, refit decay)? | **RRA** traversal counters, SAH colour mode, geometry filter (1.11) ([RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra)) | Nsight / PIX AS viewer (structure only, no traversal heatmap found [U]) – use RRA results as the BVH reference |
+| HIP / CUDA kernel (M6+) | RGP **Dispatch** capture mode for pure compute ([RGP 2.4](https://gpuopen.com/learn/radeon_gpu_profiler_2-4_support_rx9000_series_pure-compute_applications/)); **rocprofv3 is not native on Windows** (WSL2 experimental, needs Linux KFD) ([rocprofv3 WSL](https://rocm.docs.amd.com/projects/rocprofiler-sdk/en/develop/how-to/using-rocprofv3-on-wsl.html)) | **Nsight Compute** (occupancy, memory, warp stalls; can lock to boost on Ampere+ [U option name]) |
+| CPU↔GPU / interop stalls, async overlap | RGP timeline (queues), PIX timing capture | Nsight Systems |
+
+Instrumented captures change timing (RGP peak clocks, shader instrumentation) – use them for *why*, the benchmark CSV
+for *how much*. Scripted AMD captures: `RadeonDeveloperPanelCLI` (RDP 3.5; flags not documented in the announcement).
+
+### 10.2 Optimization strategy catalogue (worked through in O1/O2, also used ad hoc)
+
+Impact labels are **[E]** unless a source gives a number; every row must be confirmed by Procedure A before it is
+kept. "Measure" names the main metric; quality-affecting rows also need the equal-time error check.
+
+**BVH / acceleration structures**
+
+| Strategy | Expected impact | Measure | Vendor notes | Source |
+|---|---|---|---|---|
+| Static BLAS `PREFER_FAST_TRACE \| ALLOW_COMPACTION` + compaction; TLAS rebuilt each frame | trace ms small %, BLAS memory −30–60 % | trace ms, AS bytes | both | §6.4 |
+| Frozen ocean: one `PREFER_FAST_TRACE` build, no `ALLOW_UPDATE` | trace ms vs refit-able BVH: a few % [E] | trace ms on `ocean_frozen_day` | both | §6.5 |
+| Refit-vs-rebuild interval N for the running ocean | finds the knee where refit decay > rebuild cost | trace ms over frames since rebuild + refit/build ms; RRA heatmap at frame N | refits fine for smooth motion, bad where nearby triangles tear apart; "rebuild every n frames" | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra) |
+| **Split the 513×513 ocean grid into tiles** (e.g. 8×8 tiles of 64×64 quads = 64 BLAS/instances) | tighter bounds for grazing rays, per-tile refit/rebuild, culling/LOD later; gain unknown, could be small for trace, larger for refit quality [E] | RRA traversal heatmap + trace ms (frozen), refit ms + trace decay (running) | split BLASes "with a lot of empty space", avoid overlap; tile borders must share exact vertex positions (no cracks) | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra), [NVIDIA](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/) |
+| One BLAS with several geometries (one per material) instead of one BLAS per material | fewer instances, lower traversal | RRA, TLAS ms | AMD finding | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra) |
+| Avoid instance overlap / merge overlapping instances; avoid large stretch/skew instance transforms | traversal ↓ where overlap | RRA "X-ray" view | both vendors | same + NVIDIA |
+| Instance masks (ocean / meshes / light proxies / camera-invisible) | skip irrelevant instances for shadow and underwater rays | rays/s on shadow pass | `InstanceMask = 0` = never hit (M1 pitfall) | [I] |
+| Async compute for displace + BLAS refit (O2) | hides most AS cost | frame ms, queue overlap in RGP/Nsight Systems | NVIDIA: hides "almost completely"; AMD: TLAS on compute queue | §6.4, §6.6 |
+
+**Rays**
+
+| Strategy | Expected impact | Measure | Vendor notes | Source |
+|---|---|---|---|---|
+| Shadow/NEE rays: `RAY_FLAG_ACCEPT_FIRST_HIT_AND_END_SEARCH \| SKIP_CLOSEST_HIT_SHADER` (RayQuery: just stop at first commit) + `FORCE_OPAQUE` | shadow-ray traversal ↓ (often large in shadow-heavy shots) [E] | shadow pass ms, rays/s | both recommend first-hit termination | [NVIDIA](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/) |
+| **Compile-time** RayQuery flags (`RayQuery<RAY_FLAG_...>`) instead of runtime/per-instance flags | compiler can drop unused paths | VGPRs, trace ms | AMD + NVIDIA both say so | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra), NVIDIA |
+| No face culling unless needed for correctness | slight speed-up (culled triangles still tested, can't end traversal) | trace ms | both | same |
+| Tight TMax for shadow rays (distance to light × (1 − ε)); TMin ≈ 0 with an offset origin | traversal ↓, fewer leaks | shadow ms; furnace/leak tests | [T] | – |
+| Robust self-intersection: Wächter & Binder offset along the **geometric** normal in integer ULP space (`int_scale` 256, `float_scale` 1/65536, `origin` 1/32) | removes acne without large TMin; tiny cost | image (acne, light leaks at grazing ocean angles) | same on both | [RTG1 ch. 6](https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_6.pdf) (constants as in Cycles' `ray_offset`) |
+| Fewer shadow rays (one NEE sample choosing sun/env/point by power; skip NEE on near-specular hits) | rays/s ↓ at equal error | equal-time error | – | [T] |
+
+**Shading, registers, coherence**
+
+| Strategy | Expected impact | Measure | Vendor notes | Source |
+|---|---|---|---|---|
+| **Reduce live state / VGPRs** (pack, fp16 where safe, recompute instead of keep, fewer values alive across `Proceed()`) | Indiana Jones: spills 222 → 84 B, pass −15 % | VGPRs/spills (RGP Pipeline tab, Nsight live state), trace ms | RDNA 4: full 16 waves only at ≤ 96 VGPRs; Ampere: 48 warps only at ≤ ~40 regs | [NVIDIA Indiana Jones SER](https://developer.nvidia.com/blog/path-tracing-optimization-in-indiana-jones-shader-execution-reordering-and-live-state-reductions/), [C&C](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds) |
+| Group size per vendor (8×4 AMD, 8×8/16×8 NVIDIA) as a compile-time define | few % [E] | PT ms | §6.6 | §6.6 |
+| Uber-shader branch structure: uniform branches first, evaluate shared work (frame, NEE) outside material switches, keep the switch flat | divergence ↓ | active lanes, shade ms | NVIDIA: avoid divergent shading with inline RT | [NVIDIA](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/) |
+| **Material sorting / wavefront (M5c)** | scene-dependent: 0 or negative with 1 material, positive with many divergent ones; Cycles sort 2–15 %, SER 20–50 % (RTX 40) | the M5c 1/4/16/64 benchmark | no SER reorder on either PC | M5c |
+| fp16 (`-enable-16bit-types`, `float16_t`) for throughput, pdfs, BSDF intermediates; positions/t/accumulation stay fp32 | ALU + VGPR ↓ (RDNA packed fp16 [T]) | VGPRs, shade ms, FLIP (colour shift), NaN check | RDNA 4 and Ampere both fast fp16 [T] | [I] |
+| Wave intrinsics: `WaveActiveAllTrue`/`WaveActiveAnyTrue` to skip whole-wave work, wave-aggregated atomics for counters/queues | atomics contention ↓ | pass ms | wave32 on both | [T] |
+| Occupancy is not a goal in itself: only helps latency-bound shaders; higher occupancy can thrash caches | – | measure, don't assume | RGP shows the limiter | [GPUOpen occupancy](https://gpuopen.com/learn/occupancy-explained/) |
+
+**Memory**
+
+| Strategy | Expected impact | Measure | Vendor notes | Source |
+|---|---|---|---|---|
+| Packed path/hit records (octahedral directions, fp16 where safe, bit-packed flags) and **SoA** layout in the wavefront | bandwidth ↓ (wavefront is "more likely to be bandwidth-limited") | sort/shade ms, VRAM | – | [pbr-book 15.1](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU), [Cycles](https://developer.blender.org/docs/features/cycles/kernel_scheduling/) |
+| 16-B aligned elements for single 128-bit loads | load count ↓ | shade ms | – | [Bikker](https://jacco.ompf2.com/2019/07/18/wavefront-path-tracing/) |
+| Locality-preserving sort (sort within chunks of the state index, then by material) | gathers stay cache-friendly | shade ms vs plain sort | Cycles tuned per device | [Cycles commit](https://developer.blender.org/rB523bbf70655) |
+| Material texture formats (BC-compressed, mips used for secondary hits / ray cones) | bandwidth ↓ for incoherent hits | shade ms | – | [T] |
+| Vertex fetch layout for hit attributes (separate compact position/normal/uv streams instead of the 60-B interleaved vertex) | fetch bytes ↓ | shade ms | – | [I] |
+
+**Sampling efficiency (fewer samples for the same error – judge by equal-time error only)**
+
+| Strategy | Expected impact | Measure | Source |
+|---|---|---|---|
+| Better env-map importance sampling (CDF quality, sun handled separately), MIS power heuristic everywhere | noise ↓ on sky-lit shots | equal-time relMSE | §3.4, §3.8 |
+| Russian roulette tuning (start bounce, survival from throughput × (optional) albedo, max(q) clamp) | time/sample ↓ with little variance ↑ | efficiency 1/(var × time) | §3.5 [T] |
+| Low-discrepancy sampler (Sobol + Owen scramble) and blue-noise error distribution | error ↓ at low spp, better denoiser input | equal-time relMSE/FLIP at 1–64 spp | §3.9 [T] |
+| Light selection by power / ReSTIR DI later (M11) | many-light noise ↓ | equal-time error | [T] |
+| Path guiding (e.g. Müller et al. 2017) – out of scope, mention only | large for caustic-like paths | – | [T][U] |
+
+**Spectral, denoising, frame structure, CPU**
+
+| Strategy | Expected impact | Measure | Source |
+|---|---|---|---|
+| Spectral overhead: precomputed Jakob–Hanika coefficient textures instead of runtime table (D10), analytic CMF fits, evaluate spectra once per hit | shade ms ↓ | spectral − RGB shade ms (M4 baseline) | §4 [I] |
+| Denoise every N frames or on camera stop (reference); fixed cost per frame (real time) | denoise ms amortised | denoise ms, perceived latency | §8 |
+| Resolution scaling (render 67–77 %, upscale) and spp/bounce scaling (O2) | frame ms ↓ roughly with pixel count [E] | frame budget table | [I] |
+| CPU side: record TLAS instance updates incrementally, avoid per-frame allocations, few submissions | CPU ms ↓ (rarely the bottleneck here) | PIX timing capture / Nsight Systems | [I] |
 
 ### M0 – Capabilities & plumbing
 
@@ -1908,6 +2086,99 @@ Format per milestone: **Goal** · **Teach first** · **Files** · **Suggested or
   8-bit sRGB input vs linear.
 - **Read**: Peters et al. 2019, `spectra.glsl`, `illuminant_spectra.py`, `fourier_srgb_conversion.py`.
 
+### M5c – Software coherence (wavefront + material sorting)
+
+- **Goal**: a second path tracer mode next to the compute megakernel: **wavefront** passes per bounce (generate →
+  trace → sort/bin by material → shade (+ NEE) → shadow trace → compact → next bounce), with a panel toggle
+  **megakernel / wavefront-unsorted / wavefront-sorted** producing the **same image** (same seeds → FLIP ≈ 0), and a
+  measured answer to "from how many materials on does sorting pay off, on each GPU?".
+- **Teach first**:
+  - SIMT divergence: a wave (32 lanes on both RDNA 4 wave32 and Ampere) executes every taken branch path with the other
+    lanes masked off, so a wave that hits k different material *programs* costs ≈ the sum of k shade costs. Divergence
+    comes from different **code**, not different parameters: EV's metal-roughness materials share one code path, so
+    they barely diverge [I].
+  - Laine, Karras, Aila 2013: porting a big CPU program into one equally big GPU kernel is "generally not a good
+    approach"; divergence + high register use (less latency hiding) hurt most with "multiple complex materials"
+    ([paper page](https://research.nvidia.com/publication/2013-07_megakernels-considered-harmful-wavefront-path-tracing-gpus)).
+    Design [T][U]: logic kernel, new-path kernel, one kernel per material, extension + shadow ray-cast kernels, queues
+    filled with atomics, a fixed pool of ~1M paths.
+  - The trade-off in pbrt-v4's words: wavefront kernels start converged and each gets **its own register
+    allocation**, but data leaves the chip between kernels ("more likely to be bandwidth-limited"); the megakernel keeps
+    state on chip but its registers must cover the worst case
+    ([pbr-book 15.1](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU)). pbrt-v4
+    puts hits into **queues per material type** and runs one kernel per material.
+  - Cycles: SoA `IntegratorState`, millions of states, schedule "the kernel that most active paths need next", compact
+    active paths, `shade_surface` sorts by shader
+    ([Cycles kernel scheduling](https://developer.blender.org/docs/features/cycles/kernel_scheduling/)); sort key =
+    truncated state index (locality) then shader (coherence); measured +2–3 % (local atomics) to +15 % (partitioned,
+    Apple M1/M2) overall ([commit 523bbf70655](https://developer.blender.org/rB523bbf70655)). Mitsuba 3 / Dr.Jit goes
+    the other way – one fused megakernel, 2.14× faster than pbrt-v4 on GPU
+    ([Dr.Jit](https://rgl.epfl.ch/publications/Jakob2022DrJit)) – so "wavefront always wins" is false.
+  - **Two kinds of benefit** [I]: (a) *coherence* – sorted hits + one uber shade kernel (lanes in a wave mostly run
+    one case of the `switch`); (b) *register allocation* – one dispatch **per material bin** (`ExecuteIndirect` with
+    GPU-written dispatch args), each PSO compiled for one material. (a) alone does not lower VGPRs.
+  - Counting sort for ≤ 64 keys [I]: histogram (groupshared `InterlockedAdd`, one global atomic per non-empty bin) →
+    exclusive prefix sum over bins (one wave, `WavePrefixSum`) → scatter (path index into a permutation buffer at
+    `offset[key] + atomic`) → shade reads `perm[i]`. Wave-aggregated atomics (`WavePrefixCountBits` per key) cut
+    contention. Dead-path **compaction** is the same scan with key alive/dead. Indirect dispatch sizes come from the
+    counts, never read back to the CPU.
+  - SER is the hardware version of this (reorder threads by a key before shading): 20–50 % in UE5's path tracer on RTX
+    40 ([NVIDIA](https://developer.nvidia.com/blog/improve-shader-performance-and-in-game-frame-rates-with-shader-execution-reordering/)),
+    ~40 % (RTX 4090) / ~90 % (Arc B) in the synthetic MS sample
+    ([MS SER post](https://devblogs.microsoft.com/directx/shader-execution-reordering/)), 24 % on Indiana Jones'
+    TraceMain ([NVIDIA](https://developer.nvidia.com/blog/path-tracing-optimization-in-indiana-jones-shader-execution-reordering-and-live-state-reductions/)) – but **neither EV GPU reorders**, so M5c is the only coherence experiment possible on both PCs.
+- **Files**: `header/raytracing/path_tracer.h` + source (mode enum, wavefront buffers, per-bounce pass loop in the
+  graph); new engine shaders `pt/wf_generate.hlsl`, `pt/wf_trace.hlsl` (RayQuery, writes hit records), `pt/wf_sort_*.hlsl`
+  (histogram / scan / scatter), `pt/wf_shade.hlsl` (includes the same API-agnostic BSDF/light/spectral `.hlsli` as the
+  megakernel – no copy of material code), `pt/wf_shadow.hlsl`, `pt/wf_compact.hlsl`; `render_graph.h:88`
+  `RGAccess::IndirectArgument` already maps to `INDIRECT_ARGUMENT` (`render_graph.cpp:43`) but EV has **no command
+  signature / `ExecuteIndirect` wrapper** in `CommandList` yet → new; the test scene `materials_N.evscene` +
+  synthetic material types in the material struct (debug-only); panel toggle + per-bounce timings; `GpuTimer` scopes
+  per pass and per bounce.
+- **Order (hints)**: (1) path-state + hit-record layout on paper (SoA, packed; size per path, VRAM at 1080p/1440p);
+  (2) wavefront-unsorted with only Lambert, bit-identical (or FLIP ≈ 0) to the megakernel at the same seeds; (3) add
+  NEE/shadow pass and compaction of dead paths (active count per bounce in the panel); (4) counting sort + permutation,
+  shade through `perm[]`; (5) material-test scene and synthetic materials; (6) benchmark all three modes on both GPUs;
+  (7) variant (b): per-bin `ExecuteIndirect` dispatches; (8) optional: Cycles-style locality partition (sort within
+  chunks of 64k paths); (9) write the break-even result into `performance.md` and here.
+- **Benchmark design (the 1/4/16/64-material scene)** [I]:
+  - Same geometry and camera for every N (e.g. a closed room or a sphere field so paths bounce ≥ 3 times; plus the
+    `ocean_frozen_day` shot as the "real" case: ocean water + a few meshes).
+  - N **synthetic material programs** that differ in *code*, with equal average cost: each case of a `switch(type)`
+    runs a different procedural pattern / lobe combination with a fixed instruction budget (e.g. a loop of K different
+    ALU ops + one texture fetch), so total work is constant and only divergence changes. A control set with N materials
+    that share one code path and differ only in parameters must show ~no sorting gain.
+  - Material assignment **incoherent** (hash of primitive ID → type, so neighbouring pixels differ) and **coherent**
+    (large blocks per type) – the megakernel only suffers in the incoherent case; bounce 0 is coherent anyway, so
+    report per bounce.
+  - Fixed: resolution (1080p + 1440p), 1 spp/frame, max bounces 8 with RR off for the timing runs (RR on for a final
+    check), frozen time, same seeds; ≥ 500 frames, locked clocks, median + p95 (10.1).
+  - Record per mode and N: per-pass ms (trace, sort, shade, shadow, compact) **per bounce**, total frame ms, samples/s,
+    rays/s, VGPRs/occupancy and **Average active lanes** (RGP 2.7) on the 9070 XT, warp-state / shader-profiler data on
+    the 3070, VRAM of path state + sort buffers, and FLIP vs the megakernel image (must be ≈ 0).
+  - Expected shape [E, to be replaced]: N = 1: wavefront 10–30 % slower than the megakernel; N = 4: about even; N =
+    16–64 incoherent: sorted wavefront fastest, unsorted wavefront ≈ or worse than the megakernel; variant (b) helps
+    most when one material needs far more VGPRs than the others. RDNA 4 and Ampere may cross over at different N
+    because of their different occupancy limits (RDNA 4: 16 waves/SIMD at ≤ 96 VGPRs; Ampere: 48 warps/SM at ≤ ~40
+    regs).
+- **Verify**: FLIP(megakernel, wavefront) ≈ 0 at equal seeds in every mode; active-path counts drop monotonically per
+  bounce; sort correctness check (debug view colouring by material bin, and a CPU readback test that the permutation
+  is a permutation and bins are contiguous); results table for N = 1/4/16/64 × coherent/incoherent × 3 modes × 2 GPUs
+  in `performance.md` with the break-even N per GPU; memory cost recorded.
+- **Pitfalls**: comparing modes with different seeds/sample sequences (images differ, timings meaningless); synthetic
+  materials whose cost grows with N (measures cost, not divergence); timing with debug counters compiled in; forgetting
+  a UAV barrier between histogram → scan → scatter → shade; atomics on one global counter per key (contention – use
+  wave aggregation); reading the counts on the CPU (stall); per-material queues sized W×H each (memory explodes – use
+  one permutation buffer + offsets); AoS path state (uncoalesced); state growing past ~128 B/path (VRAM on the 8 GB
+  3070 at 1440p); TDR from too many paths per dispatch on WARP; a groupshared-heavy sort inside the trace kernel
+  competes with the RDNA traversal stack in LDS (§6.6) – keep sorting in its own pass.
+- **Read**: [Laine et al. 2013](https://users.aalto.fi/~laines9/publications/laine2013hpg_paper.pdf),
+  [pbr-book ch. 15](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU) + pbrt-v4
+  `src/pbrt/wavefront/` [U path], [Cycles kernel scheduling](https://developer.blender.org/docs/features/cycles/kernel_scheduling/),
+  [Bikker: wavefront path tracing](https://jacco.ompf2.com/2019/07/18/wavefront-path-tracing/) (buffer budgets,
+  atomic compaction), PMPP chapters on scan/histogram/sort, [MS SER post](https://devblogs.microsoft.com/directx/shader-execution-reordering/),
+  `research/followup_performance_optimization.md` §1.
+
 ### M6 – GPU compute bring-up (HIP + CUDA)
 
 - **Goal**: `EV-Hip.dll` (+ the same source as `EV-Cuda.dll`), proven D3D12 ↔ HIP/CUDA buffer + fence round trip,
@@ -1952,6 +2223,57 @@ Format per milestone: **Goal** · **Teach first** · **Files** · **Suggested or
   [optix_host.h](https://raw.githubusercontent.com/NVIDIA/optix-dev/main/include/optix_host.h),
   [Falcor OptixDenoiser](https://github.com/NVIDIAGameWorks/Falcor/tree/master/Source/RenderPasses/OptixDenoiser),
   [vk_denoise](https://github.com/nvpro-samples/vk_denoise), [FLIP](https://github.com/NVlabs/flip).
+
+### O1 – Optimize the reference renderer
+
+- **Goal**: highest **quality per second** for reference mode (everything up to M7: AS, megakernel/wavefront, spectral,
+  water, NEE/MIS, accumulation, denoiser cadence) on both GPUs – measured as equal-time error against a fixed ground
+  truth, with a before/after row in `performance.md` for every kept change and no image regression.
+- **Teach first**: the optimisation loop (profile → pick the biggest cost → one change → re-measure → keep/revert,
+  Procedure A in 10.1); Amdahl (a 2× win on a 10 % pass is 5 %); MC efficiency 1/(variance × time) and why equal-time
+  error is the fair test; reading RGP (occupancy limiter, VGPRs, Instruction timing hot spots, Average active lanes)
+  and Nsight GPU Trace (throughput units, shader profiler, RT live state); RRA traversal heatmaps; occupancy is not a
+  goal in itself ([GPUOpen](https://gpuopen.com/learn/occupancy-explained/)); occupancy arithmetic for both GPUs
+  (RDNA 4: 1536 VGPRs per SIMD lane-column → 16 waves ≤ 96, 12 at 128, 8 at 192 VGPRs; Ampere: 64K regs/SM → 48 warps
+  ≤ ~40, 32 at 64, 16 at 128 regs/thread) ([C&C RDNA 4](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds),
+  [CUDA Ampere tuning](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html)).
+- **Files**: whatever the profile points at – typically `pt/*.hlsli` (path loop, BSDFs, NEE, spectral), the PT entry
+  shaders (ray flags, group size define), `acceleration_structure.*` (flags, compaction, ocean tiling, rebuild
+  interval), the ocean geometry provider (tiles), `path_tracer.cpp` (permutation defines, denoise cadence),
+  `gpu_timer.*` (history/median), the benchmark mode in the app's `main.cpp`/`ocean_scene.cpp`, `performance.md`.
+- **Order (hints)** – cheapest-and-surest first, each one through Procedure A:
+  1. Baseline: Procedure B on both GPUs; capture RGP + RRA (AMD) and GPU Trace (3070) of the PT dispatch; write the
+     top-3 costs and the occupancy limiter down.
+  2. Ray flags: shadow rays first-hit + opaque, compile-time RayQuery flags, no culling, tight TMax (10.2 Rays).
+  3. Self-intersection: Wächter & Binder offset instead of a large TMin (correctness + speed; check grazing ocean
+     angles and the water interface from below).
+  4. BVH: frozen-ocean `PREFER_FAST_TRACE` build, compaction of static BLASes, RRA review of overlap/empty space, then
+     the ocean tiling experiment (8×8 tiles) and the rebuild interval N (log trace ms vs frames since rebuild).
+  5. Registers / live state: read VGPRs and spills; shrink path state in registers (fp16 for throughput/pdfs where
+     FLIP allows, recompute instead of carry, fewer values alive across the RayQuery loop); group-size define per vendor.
+  6. Coherence: apply the M5c verdict (keep megakernel, or sorted wavefront for the ocean shot if it won there).
+  7. Memory: compact vertex streams for hit attributes, texture formats/mips for secondary hits.
+  8. Sampling efficiency: RR tuning, sampler (Sobol + Owen / blue noise), light selection, env CDF quality – judged
+     only by equal-time error.
+  9. Spectral cost: coefficient textures vs runtime table, CMF fit; measure (spectral − RGB) shade ms before/after.
+  10. Denoiser cadence (every N frames / on camera stop) and pack/unpack cost.
+- **Verify**: every kept change has a `performance.md` row (GPU, clocks mode, before/after median + p95 ms, samples/s,
+  equal-time relMSE / HDR-FLIP vs the unoptimised reference at 10 s and 60 s); FLIP at equal spp shows no regression
+  (except intended sampling changes, which must lower equal-time error); log-log error-vs-time slope stays ≈ −1 (no
+  bias floor); both GPUs measured; the final summary lists the speed-up per shot per GPU at normal clocks.
+- **Pitfalls**: optimising without a profile; changing two things at once; trusting one run (thermal drift) or locked
+  clocks only; rendering the reference with the optimised build; comparing spp instead of equal time; fp16 causing
+  colour shifts or NaNs in deep water (absorption e^-σd underflows); "faster" because a bug skips work (furnace and
+  slab tests from M3/M5 must still pass); optimising for one vendor only (always re-check the other PC); occupancy
+  chasing that thrashes caches; forgetting that RGP captures run at peak clocks.
+- **Read**: 10.1, 10.2; [NVIDIA RTX best practices (updated)](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/);
+  [GPUOpen: improving RT performance with RRA](https://gpuopen.com/learn/improving-rt-perf-with-rra);
+  [GPUOpen: occupancy explained](https://gpuopen.com/learn/occupancy-explained/);
+  [RDNA performance guide](https://gpuopen.com/learn/rdna-performance-guide/);
+  [Indiana Jones SER + live state](https://developer.nvidia.com/blog/path-tracing-optimization-in-indiana-jones-shader-execution-reordering-and-live-state-reductions/);
+  [RTG1 ch. 6](https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_6.pdf);
+  [Chips and Cheese: RDNA 4 RT](https://chipsandcheese.com/p/rdna-4s-raytracing-improvements); pbr-book on MC
+  efficiency [T].
 
 ### M8a – Persistent bindless heap
 
@@ -2016,15 +2338,68 @@ Format per milestone: **Goal** · **Teach first** · **Files** · **Suggested or
   [GPUOpen RDNA 4 matrix cores](https://gpuopen.com/learn/using_matrix_core_amd_rdna4/), Karpathy micrograd [U],
   Adam paper [U].
 
+### O2 – Optimize the real-time renderer
+
+- **Goal**: real-time mode (M8b) + SHaRC (M9) + own NRC (M10) inside a **frame budget per GPU** – e.g. 16.6 ms and
+  33.3 ms targets at 1080p (and 1440p where reachable) on the RX 9070 XT and the RTX 3070 – with a per-pass budget
+  table in `performance.md` and before/after rows for every change; quality checked against the frozen-time reference.
+- **Teach first**: frame budgets (a budget table per pass, p95 not just median – stutter matters); latency vs
+  throughput; async compute (independent work on a second queue overlaps when the direct queue leaves units idle;
+  needs fences + resource ownership; overlapped scopes no longer sum to the frame time); resolution / spp / bounce
+  scaling and what the denoiser needs at 1 spp; cache costs (SHaRC update ~4 % of pixels, NRC query + train) vs the
+  error they remove; GPU timelines in RGP / Nsight Systems; kernel optimisation basics for NRC (memory-bound vs
+  compute-bound, fp16, fusing layers, WMMA / Tensor Cores; §7.9, §9).
+- **Files**: `command_queue.*` (compute queue use, `Signal/Wait`), `render_graph.*` (queue assignment per pass, cross-
+  queue barriers; `GpuTimer` instance per queue with its own `GetTimestampFrequency` + `GetClockCalibration`),
+  `path_tracer.cpp` (real-time permutations: bounce count, resolution scale), ocean displace + BLAS refit passes (move to
+  compute), SHaRC passes, NRC `.External()` pass and kernels in the shared GPU source, denoiser integration (M8b).
+- **Order (hints)**:
+  1. Budget table: Procedure B in real-time mode at 1080p/1440p on both GPUs; fill measured ms per pass next to a
+     target ms; pick the passes that are furthest over.
+  2. Async compute for ocean displace + BLAS refit + TLAS (and later NRC training), overlapping the G-buffer/raster
+     part; verify overlap in RGP (queue timeline) and Nsight Systems; NVIDIA reports async AS work "in many cases hides
+     the cost almost completely" (§6.4), AMD recommends the TLAS on the compute queue (§6.6).
+  3. Resolution scaling (internal 67–77 % + upscale) and bounce/spp scaling – pick the cheapest setting whose error vs
+     the reference (after the denoiser) stays below a chosen FLIP threshold.
+  4. Denoiser cost: resolution of the denoiser inputs, number of passes/iterations, half-res guides; check ghosting on
+     crests.
+  5. SHaRC: update fraction, voxel size (`sceneScale` for a 1024 m ocean), resolve cost; measure bias vs reference.
+  6. NRC kernels: (a) naive → (b) fp16 → (c) fused layers in shared memory/LDS → (d) WMMA (RDNA 4) / Tensor Cores
+     (3070); profile with RGP Dispatch capture (HIP) and Nsight Compute (CUDA); training batch size vs cache quality.
+  7. Re-apply O1 items that matter more at 1 spp (shadow-ray flags, live state, ray offsets) and the M5c verdict.
+  8. CPU side: command recording, TLAS instance updates, submission count (PIX timing capture / Nsight Systems).
+- **Verify**: budget table per GPU with median and p95 per pass, at normal clocks (final) and locked clocks (A/B);
+  async overlap visible in a timeline capture and total frame time lower (not just moved); equal-time / equal-frame
+  error vs the frozen reference after the denoiser (FLIP), ghosting checks on moving crests; NRC query+train ms and
+  cache error vs SHaRC and plain PT at the same frame time; VRAM within the 3070's 8 GB (§1.4).
+- **Pitfalls**: summing overlapped async scopes as if serial; using the direct queue's timestamp frequency for compute
+  queue timestamps; cross-queue hazards (refit on compute while the graphics queue still reads the old positions);
+  more async work making the graphics work slower (shared units/bandwidth) – always compare whole-frame time;
+  optimising median while p95 stutters (BLAS rebuild frames, NRC training spikes); resolution scaling that breaks
+  denoiser history/motion vectors; tuning on the 9070 XT and missing the 3070 budget (8 GB, fewer RT cores);
+  measuring NRC kernels with the debug runtime or a cold cache.
+- **Read**: 10.1, 10.2; §6.4/6.6 (async AS work), §7.9 (WMMA), §8.4, §9; [Indiana Jones PT optimizations](https://developer.nvidia.com/blog/path-tracing-optimizations-in-indiana-jones-opacity-micromaps-and-compaction-of-dynamic-blass);
+  [MS Learn: Timing](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing);
+  [Nsight GPU Trace](https://docs.nvidia.com/nsight-graphics/UserGuide/gpu-trace-overview.html);
+  [CUDA Ampere tuning guide](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html);
+  [GPUOpen WMMA guides](https://gpuopen.com/learn/wmma-guide-amd-rdna-4-gpus-part-1/).
+
 ### M11 (optional) – DXR pipeline, SER, ReSTIR DI, spectral sky, cluster-template ocean, caustics
 
 - **DXR pipeline**: new state-object + SBT class (`CD3DX12_STATE_OBJECT_DESC`), global root signature only (local root
   args are awkward with per-list dynamic heaps), `SetPipelineState1`/`DispatchRays` wrappers resetting the PSO cache
   (`command_list.cpp:1261-1274`), `ReadShaderTarget` (`shader.cpp:65-76`) + no `-E` for `lib_6_x` hot reload
   (`PipelineShaders::Update` can rebuild the state object). Reuse the API-agnostic `.hlsli`.
-- **SER**: `dx::HitObject` + `dx::MaybeReorderThread(hitObject, coherenceHint, numHintBits)` from raygen (names from
-  training knowledge [U]) – **no reorder on either PC** (RX 9070 XT accepts the API, RTX 30 no-op) → speed-up measurable
-  only on RTX 40+ / Intel Arc B / WARP 1.0.21+; verify "no regression".
+- **SER**: `dx::HitObject` + `dx::MaybeReorderThread(hitObject, coherenceHint, numHintBits)`. `MaybeReorderThread`
+  is **raygen-only** ([HLSL proposal 0027](https://microsoft.github.io/hlsl-specs/proposals/0027-shader-execution-reordering),
+  [MS SER post](https://devblogs.microsoft.com/directx/shader-execution-reordering/)), so SER needs `DispatchRays`, not
+  a compute pass. `HitObject::FromRayQuery` wraps a RayQuery's committed hit (NOP-HitObject if none), so a raygen
+  shader can keep inline RayQuery + uber-shader shading and still reorder; which stages allow `FromRayQuery` is [U]
+  (check the proposal's stage table). **No reorder on either PC** (RX 9070 XT accepts the API, RTX 30 no-op) → speed-up
+  measurable only on RTX 40+ / Intel Arc B; WARP 1.0.21+ really reorders (CPU, correctness only); verify "no regression".
+  Measurable on both PCs instead: **software coherence** – sort/bin hits by material (or by ray direction) in compute
+  before shading (wavefront path tracing); teaches the same divergence problem SER solves – now its own milestone
+  **M5c**; compare an SER run on any RTX 40+ machine against M5c's numbers if one becomes available.
 - **ReSTIR DI**: [Gentle Introduction to ReSTIR](https://intro-to-restir.cwyman.org/) [U], RTXDI ([repo](https://github.com/NVIDIA-RTX/RTXDI) [U]).
 - **Spectral sky**: Hosek–Wilkie 2012 ([project](https://cgg.mff.cuni.cz/projects/SkylightModelling/) [U]) or Bruneton
   precomputed scattering ([repo](https://github.com/ebruneton/precomputed_atmospheric_scattering) [U]); note
@@ -2123,6 +2498,29 @@ before M10b; tiny-cuda-nn "learn an image" as the first NVIDIA ML reference run.
 38. RayQuery vs DispatchRays on RDNA 4 / Ampere for this tracer.
 39. Spectral overhead in EV (Peters' figures are on an RTX 5070 Ti).
 
+**Performance / profiling (added 2026-11-18, `followup_performance_optimization.md`)**
+40. Laine et al. 2013 internal numbers (paths in flight, bytes of state per path, per-scene speed-ups, GPU) – the PDF
+    text could not be extracted; the design summary in M5c is [T]. Re-read the paper before quoting numbers.
+41. Megakernel vs wavefront (sorted/unsorted) break-even number of materials on RDNA 4 and Ampere – no published
+    benchmark; M5c measures it. Expected shape in M5c is [E].
+42. Whether `nvidia-smi --lock-gpu-clocks` / `--lock-memory-clocks` work on GeForce RTX 30 under Windows (docs say
+    "Volta+", admin; GeForce not stated); exact Nsight Graphics "Lock Clocks to Base" semantics vs SetStablePowerState.
+43. RDP Stable-clock frequency on the RX 9070 XT and whether RGP's "peak during capture" holds under thermal load.
+44. Cost of EV's forced DRED auto-breadcrumbs in Release timings (keep constant across A/B runs until measured).
+45. RGP 2.7 "Average active lanes" requirements (shader instrumentation in RDP) and its overhead on timings; the
+    `RadeonDeveloperPanelCLI` flags for scripted captures.
+46. Whether Nsight Graphics on RTX 30 exposes RT-core traversal metrics / any traversal heatmap (none found; RRA is the
+    BVH reference).
+47. Ocean tiling (e.g. 8×8 tiles) gain for trace and refit quality – no source, measure in O1.
+48. Wächter & Binder constants (`int_scale` 256, `float_scale` 1/65536, `origin` 1/32) were taken from Cycles' code
+    via a search snippet – check against RTG1 ch. 6; and what replaced ray offsetting in Cycles ("remove ray
+    offsetting" commit not read).
+49. FLIP default pixels-per-degree (believed 67) and HDR-FLIP exposure settings for EV's linear EXRs.
+50. Ampere GA102 2nd-gen RT core figures (~2× triangle rate vs Turing) – whitepaper not re-fetched.
+51. Real VGPR/register counts of EV's spectral megakernel on both GPUs (O1 occupancy estimates 100–160 are [E]).
+52. rocprofv3 / ROCm Compute Profiler on native Windows – only WSL2 (experimental) found; RGP Dispatch capture is the
+    Windows HIP route.
+
 ---
 
 ## 13. Source index
@@ -2144,4 +2542,5 @@ supersedes the report.
 | `followup_rtx3070_optix.md` | OptiX on Ampere (timing estimates), **world-space normals**, tiny-cuda-nn on sm_86, NRC SDK on Ampere (617.42 unverified), SER/OMM on RTX 30, CUDA 13.5 flags, simpleD3D12 sequence (no GPU Wait), 8 GB VRAM budget | 1, 7.6, 8.3, 9.5 |
 | `followup_spectral_details.md` | HWSS equations from the full paper, pbrt VolPath rules + simple water scheme, **rgb2spec λ in nm**, table format/lookup, CMF/D65 data, Wyman coefficients, Planck, water data (Pope & Fry to 727.5 nm, Segelstein, Morel phase + sampling, Quan & Fry 10 coefficients), Peters code, test ladder | 4, 5 |
 | `followup_dx12_dxr_practical.md` | Agility 1.620.2 integration + static-lib pitfall, DXC versions, RayQuery API, driver floors, vendor RT guidance, AS alignment/barriers, ocean BLAS recipe, **WARP DXR since 1.0.8**, tools, DRED ops, TDR keys, SM 6.10 status, local samples | 1, 6 |
+| `followup_performance_optimization.md` | Megakernel vs wavefront (Laine 2013, pbrt-v4 queues, Cycles SoA state + sort-by-shader numbers, Dr.Jit megakernel, Bikker buffer budgets), counting sort / compaction recipe, path-state memory estimate, SER results (NVIDIA, MS, Indiana Jones); profiling methodology (D3D12 timestamps, SetStablePowerState caveats, RDP Stable clocks, nvidia-smi locks, equal-time error metrics, FLIP); tools (RGP 2.4/2.7 Dispatch capture + Average active lanes, RRA traversal counters, Nsight GPU Trace on Ampere, rocprofv3 WSL-only); optimization catalogue with sources; RDNA 4 RT hardware (BVH8, OBB, ray transform, 192 KB VGPRs/SIMD, dynamic VGPRs) and Ampere occupancy limits | 10.1, 10.2, M5c, O1, O2, 12 |
 

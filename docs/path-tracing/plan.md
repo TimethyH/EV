@@ -16,6 +16,7 @@ explains, points to files, reviews and helps debug, using `knowledge.md` as its 
 | `plan.md` | This file: hardware, the 18 decisions, the roadmap |
 | `knowledge.md` | Tutor reference: theory, formulas, APIs, EV specifics, pitfalls, per-milestone guidance, sources |
 | `build-log.md` | What was done in each step, with results and measurements |
+| `performance.md` | Performance log: milestone baselines on both GPUs and before/after tables for every optimization |
 | `research/00_report_2026-11-18.md` | The full research report (industry survey, theory primer, options per decision) |
 | `research/*.md` | Raw research notes with sources (see `research/README.md`) |
 
@@ -70,13 +71,44 @@ Every milestone ends in something visible and checkable. M0–M5 need no HIP/CUD
 | **M4** Spectral (HWSS) | `SampledWavelengths` (float4), `SampleVisible`, Jakob–Hanika table lookup behind the swappable RGB→spectrum interface, D65 illuminant, CMFs, XYZ → linear sRGB; RGB/spectral toggle | Grey/white round-trip neutral; colour chart ≈ RGB mode; overhead measured; compare to Mitsuba 3 `scalar_spectral` |
 | **M5** Spectral water | Water dielectric with n(λ), rough BTDF, absorption + scattering medium (hero-wavelength distance sampling + spectral MIS), foam layer, optional dispersion, optional seafloor | 10 m slab ≈ 94/58/11/1 % at 440/550/600/680 nm; TIR ≈ 48.6°; RGB vs spectral deep-water A/B; tune the raster SSS fake against it |
 | M5b (optional, any time after M4) | Peters' Fourier method as a second RGB→spectrum implementation | A/B vs Jakob–Hanika on the same frozen shot (colour difference, noise, cost) |
+| **M5c** Software coherence (wavefront) | A second path tracer mode next to the single compute "megakernel": **wavefront** passes per bounce – trace (write hit records: position, material ID, path state) → **sort/bin by material** (counting sort / prefix sum in compute) → shade → next bounce. Toggle megakernel / wavefront-unsorted / wavefront-sorted in the panel. Teaches the divergence problem that SER solves in hardware, measurable on both PCs | **Profile and compare** all three modes on both GPUs, with **different numbers of materials** (a test scene with 1, 4, 16 and 64 distinct materials, plus the ocean shot): per-pass GPU time, total frame time, rays/s, wave occupancy and divergence in RGP (AMD) / Nsight (3070), record memory cost. Find the break-even point where sorting pays off |
 | **M6** GPU compute bring-up | Choose the AMD toolchain (open choice, see `knowledge.md` §7: legacy HIP SDK 7.2 with VS plugin + ROCgdb, or ROCm Core SDK 10.1); `EV-Hip.dll` project (kernels built with `hipcc --genco` into a fatbin, loaded with `hipModuleLoadData`) + portability header; **spike: D3D12 → HIP → D3D12 buffer + shared fence round trip**; `CommandQueue::Signal/Wait(fence, value)`; render-graph `.External()` pass; same source built as `EV-Cuda.dll` on the RTX 3070; first kernels (image difference metric, Jakob–Hanika coefficient baker) | Bit-exact round trip; timeline in RGP/Nsight Systems without CPU stalls; resize/teardown ×100 without leaks; identical results HIP vs CUDA |
 | **M7** Denoising | `IDenoiser`; pack/unpack passes (texture ↔ linear buffers); **OIDN** (HIP on AMD, CUDA on NVIDIA) with albedo + normal guides (RGB albedo, not per-wavelength); **OptiX AOV** on NVIDIA; denoise every N frames or when the camera stops | FLIP/MSE vs ~16k-spp ground truth at 1/4/16/64 spp; timings after warm-up; OIDN vs OptiX on the 3070; WARP accumulate-only |
+| **O1** Optimize the reference renderer | Dedicated optimization phase over everything up to M7 (strategy list below): profile → pick the biggest cost → change one thing → re-measure → keep or revert. Goal: highest quality per second (error vs ground truth at equal time), not just higher spp | Before/after table per optimization in `performance.md`, both GPUs; no image regression (FLIP vs reference) |
 | **M8a** Persistent bindless heap | One shader-visible heap (static + per-frame ring), frame-based deferred release, SM 6.6 `ResourceDescriptorHeap[]` | All raster passes pixel-identical (CI screenshot diff); no descriptor leaks |
 | **M8b** Real-time mode | G-buffer primaries + motion vectors (incl. ocean), 1–2 bounces at 1 spp, temporal denoiser (NRD or own SVGF), firefly clamp, ocean time running | Frame budget on both GPUs; ghosting on crests; error vs frozen reference |
 | **M9** SHaRC | Update (~4 % of pixels) / resolve / query; spectral → RGB at the cache boundary | Cache debug view; bias vs reference; performance both PCs |
 | **M10** Own NRC | (a) CPU MLP fitting an image (backprop + Adam by hand); (b) same in HIP/CUDA; (c) offline fit of radiance records dumped from the tracer; (d) online NRC in EV via `.External()` (query + self-training records); (e) speed: fp16, fused layers, WMMA (RDNA 4) / Tensor Cores (3070); (f) compare against NVIDIA NRC SDK + tiny-cuda-nn on the 3070; (g) optional `dx::linalg` port | Loss curves; cache converges in ~8 frames; query+train ms; equal-time error vs SHaRC and plain path tracing |
-| M11 (optional) | DXR pipeline (+ SER, only reorders on RTX 40+); ReSTIR DI; spectral sky; cluster-template ocean; caustics (photon pass / MNEE) | Speed-up per GPU; no regression |
+| **O2** Optimize the real-time renderer | Second optimization phase over real-time mode, SHaRC and NRC: frame budget per pass (e.g. 16.6 ms / 33 ms targets at 1080p per GPU), async compute for the BLAS refit / NRC training, resolution and spp scaling, denoiser cost, NRC kernel speed | Frame-time budget table per GPU in `performance.md`; before/after per change |
+| M11 (optional) | DXR pipeline (+ SER via `HitObject::FromRayQuery` + `MaybeReorderThread` in raygen, only reorders on RTX 40+; compare with M5c's software sorting); ReSTIR DI; spectral sky; cluster-template ocean; caustics (photon pass / MNEE) | Speed-up per GPU; no regression |
+
+## Profiling and performance (every milestone)
+
+Performance is measured all the way through, not only at the end. Results go in `performance.md`.
+
+- **Benchmark setup first** (part of M1–M3): fixed benchmark shots saved as `.evscene` files (camera, models,
+  environment), ocean with **frozen time and a fixed seed** (M2), fixed resolution (1080p, and 1440p), fixed spp and
+  bounce counts, Release build, same driver noted per run. A `--benchmark <shot>` command-line mode that runs N frames
+  and writes per-pass GPU times (EV's `GpuTimer` / Render Graph panel) to a CSV makes every later measurement a
+  one-command job.
+- **When to profile**:
+  1. **After every milestone** – a full run on **both GPUs**, one row set in `performance.md` (baseline for the next).
+  2. **Before and after every change to a hot path** (path loop, BSDFs, BVH flags, sorting, denoiser, NRC kernels) – a
+     quick A/B on the main PC, so regressions are caught the day they happen, not one milestone later.
+  3. **Deep captures when something looks off**: RGP / Radeon Raytracing Analyzer on the RX 9070 XT, PIX on both,
+     Nsight Graphics / Systems / Compute on the RTX 3070.
+- **What to record**: per-pass GPU time, frame time, rays per second, samples per second, BVH build/refit times and
+  sizes, VRAM use, and **quality per time** (FLIP or MSE against a high-spp ground truth after a fixed number of
+  seconds). The last one matters most for a path tracer: a change that is slower per sample but converges faster wins.
+- **Optimization strategy list** (worked through in O1/O2, also used ad hoc; details in `knowledge.md` §10):
+  BVH (build flags, compaction, refit vs rebuild interval, splitting the ocean into tiles, instance culling) ·
+  rays (ray flags such as accept-first-hit and skip-closest-hit for shadow rays, tight TMin/TMax, culling, fewer
+  shadow rays) · shading (divergence and branch structure, register pressure and occupancy, fp16 math, wave intrinsics,
+  material sorting from M5c) · memory (packed path/hit records, texture formats, bandwidth, cache-friendly layouts) ·
+  sampling efficiency (better importance sampling, MIS weights, Russian roulette tuning, blue-noise / low-discrepancy
+  samplers – fewer samples for the same quality) · spectral cost (lookup table vs analytic CMFs, coefficient textures
+  vs runtime table) · frame structure (async compute for refit/training, denoise every N frames, resolution scaling)
+  · CPU side (command recording, TLAS instance updates).
 
 Cross-cutting risks: TDR (keep per-dispatch work small, progressive); the debug layer breaks on warnings (keep DXR
 validation clean); refit quality (log refit vs rebuild timings, tune N from data); 8 GB VRAM on the 3070.
