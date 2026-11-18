@@ -9,6 +9,10 @@ not re-fetched; **[I]** inference; **[E]** estimate; **[U]** unverified. Note on
 interrupted by a usage limit; the full text of Laine et al. 2013 could not be extracted (PDF is compressed, no local
 PDF tooling: no Python, no poppler), so the paper's internal numbers are marked [T]/[U].
 
+> **Corrected later the same day** by `followup_gaps_completion.md` (which read the Laine PDF, the GA102 whitepaper
+> and AMD's RDNA 4 slides). The two corrections are marked inline below: Laine's real numbers, and fp16 on Ampere
+> (same rate as fp32, no 2× gain). `knowledge.md` already uses the corrected facts.
+
 Already covered in `knowledge.md` §6.4–6.7 and not repeated here: AS flag recipes, compaction, AS budget ~2 ms, async
 compute hides AS cost (NVIDIA), RDNA group size 8×4 / NVIDIA 8×8–16×8, little groupshared memory in RT shaders on AMD,
 tool versions (PIX, RRA 1.8+/1.11.1, RGP 2.7.1, Nsight 2026.x), DRED op names.
@@ -36,6 +40,10 @@ measure coherence effects on both PCs.
   kernels; work passed through queues of path indices filled with atomic counters; a fixed pool of ~1M paths in
   flight with ~200 B of state per path; the test scenes included a complex car-paint material where the megakernel
   suffered most. Exact numbers must be checked in the PDF before quoting.
+  **Correction (verified from the PDF, see `followup_gaps_completion.md` §1):** 1M paths × 212 B = 212 MB of state;
+  separate kernels only for expensive materials (cheap ones merged); queues of 4 MB with one atomic counter each;
+  SoA vs AoS +80 %, warp-aggregated atomics +40 %; megakernel → wavefront on a Tesla K20: CARPAINT 42.99 → 58.38
+  Mpaths/s (+36 %), CITY 5.41 → 9.70 (+79 %), CONFERENCE 2.71 → 8.71 (+221 %).
 - pbrt-v4 GPU: separate kernels pass work through queues; "rays that hit surfaces go into queues partitioned by
   material type", other queues for escaped rays, emitter hits and media; each material type is evaluated "in its own
   kernel" (builds the BSDF and samples a light); media/subsurface kernels skipped when unused — [pbr-book 4ed 15.1](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU).
@@ -115,7 +123,8 @@ measure coherence effects on both PCs.
 
 ### Gaps
 - Laine et al. exact numbers (paths in flight, bytes per path, speedups per scene, GPU) – PDF text not extractable this
-  session; re-read the PDF before quoting.
+  session; re-read the PDF before quoting. **Resolved** later the same day: numbers in `followup_gaps_completion.md` §1
+  (and in the correction above).
 - No published Cycles benchmark of sort-by-shader on CUDA/OptiX/HIP alone (only Metal figures).
 - No 2024–2026 megakernel-vs-wavefront benchmark on RDNA 4 or Ampere found (search budget exhausted by the limit).
 - pbrt-v4 GPU performance numbers vs a megakernel: none on the page.
@@ -329,7 +338,9 @@ Guiding") is a larger project — references [U] in knowledge.md §11. Async com
 - [I] Instance masks: give the ocean, meshes, light proxies and "invisible to camera" objects separate mask bits so
   shadow rays can skip light-proxy spheres and underwater rays can skip above-water-only geometry.
 - [I] fp16: DXC `-enable-16bit-types` + `min16float`/`float16_t` for throughput/wavelength pdfs/BSDF intermediates
-  (RDNA packed math: 2 ops per lane per instruction [T]; Ampere has 2× fp16 rate on ALU paths [T]); keep positions,
+  (RDNA packed math: 2 ops per lane per instruction [T]; ~~Ampere has 2× fp16 rate on ALU paths [T]~~ **corrected:
+  on Ampere non-tensor FP16 runs at the same rate as FP32 (RTX 3070: 20.3 TFLOPS for both, GA102 whitepaper, see
+  `followup_gaps_completion.md` §3), so on the 3070 fp16 only saves registers and bandwidth**); keep positions,
   t values and accumulation fp32. Verify no colour shift (FLIP) and no NaN.
 - [I] Spectral cost: 4 lanes in a float4 multiplies the per-hit math for spectra (rgb2spec eval, Fresnel(λ), absorption)
   but not traversal; measure the M4 overhead as (spectral − RGB) shade ms, and consider precomputed coefficient
@@ -373,6 +384,8 @@ warps/SM, 64K registers/SM, 255 registers/thread, 100 KB shared memory/SM, no SE
   for sm_86) — [CUDA Ampere tuning guide](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html).
 - [T][U] Ampere 2nd-gen RT cores: ~2× triangle-intersection throughput vs Turing and hardware motion-blur
   interpolation — GA102 whitepaper (https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf [U]).
+  **Now verified** in `followup_gaps_completion.md` §3 (2× triangle intersection rate, no faster box tests claimed;
+  RT work runs concurrently with graphics/compute in the same SM; motion blur HW is OptiX-only).
 - SER reorders on RTX 40+ only (plan.md hardware table); MS post names RTX 4090 and Arc B — [MS SER post](https://devblogs.microsoft.com/directx/shader-execution-reordering/).
 
 ### Inferences
