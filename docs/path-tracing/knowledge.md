@@ -60,7 +60,7 @@ re-grep before quoting them.
 | § | Topic | Use it for |
 |---|---|---|
 | 1 | Hardware & capability matrix | "Does X work on the 9070 XT / 3070 / WARP?", driver floors, VRAM |
-| 2 | EV engine reference | Where to hook in, gaps, ocean specifics, scene files, conventions |
+| 2 | EV engine reference | Where to hook in, gaps, ocean specifics, scene files, conventions; 2.9 developer background (BUas / Bikker voxel ray tracer – anchor new concepts to it) |
 | 3 | Path tracing theory | Rendering equation, MC, NEE, MIS, RR, GGX/VNDF, Fresnel, env sampling, samplers |
 | 4 | Spectral rendering | HWSS equations, pbrt constants, Jakob–Hanika lookup, CMF/D65 data, Peters, tests |
 | 5 | Water optics & media | Absorption/scattering/IOR data, phase function, VolPath rules, caustics |
@@ -68,10 +68,10 @@ re-grep before quoting them.
 | 7 | GPU compute (HIP + CUDA) | Toolchains, DLL layout, interop recipe, portability header, WMMA |
 | 8 | Denoising | IDenoiser, OIDN, OptiX, temporal rules, timings, NRD/SVGF |
 | 9 | Radiance caches & NRC | SHaRC, NRC paper numbers, the math to implement, data layouts, references |
-| 10 | Milestone tutor guide M0–M11 | 10.1 profiling routine, 10.2 optimization catalogue; per milestone (incl. M5c, O1, O2): concepts, files, steps, tests, pitfalls, reading |
+| 10 | Milestone tutor guide M0–M11 | 10.1 profiling routine, 10.2 optimization catalogue; per milestone (incl. M1b hand-built SAH BVH, M3-ref CPU reference bench, M5c, O1, O2): concepts, files, steps, tests, pitfalls, reading; "Ideas not (yet) chosen" (M5d) |
 | 11 | Learning resources | Per track, with URLs |
 | 12 | Open questions | Everything a tutor must verify before relying on it |
-| 13 | Source index | Which research file covers what |
+| 13 | Source index | Which research file covers what (incl. `followup_gaps_completion.md`, `followup_bikker_tinybvh.md`) |
 
 ### 0.3 The 18 decisions in one breath (from `plan.md`)
 
@@ -100,7 +100,7 @@ sampling + sun disk (NEE+MIS) + point lights · D18 branch from `scene-save-load
 | Role | Daily development, everything except CUDA/OptiX | CUDA/OptiX builds, NVIDIA references, comparisons | Build + smoke test |
 | Wave/warp | wave32 for HIP (wave64 unsupported for HIP on gfx10+) ([HIP lang ext](https://rocm.docs.amd.com/projects/HIP/en/latest/how-to/hip_cpp_language_extensions.html)) | warp 32 | – |
 | Shared memory | 64 KB per workgroup, 128 KB LDS per WGP (query `sharedMemPerBlock`, expected 65536 [U]) ([ROCm specs](https://rocm.docs.amd.com/en/latest/reference/gpu-arch-specs.html)) | 48 KB default, 99 KB per block opt-in, 100 KB per SM ([CUDA CC tables](https://docs.nvidia.com/cuda/cuda-programming-guide/05-appendices/compute-capabilities.html)) | – |
-| Other | 64 CUs, VGPR file 768 KiB, L2 8 MiB, Infinity Cache 64 MiB, GFXIP 12.0; RT: BVH8 nodes + oriented bounding boxes in hardware, ~10 % traversal gain from OBBs (geometry dependent) ([Hot Chips 2025](https://hc2025.hotchips.org/assets/program/conference/day1/8_amd_pomianowski_final.pdf), [RRA 1.8](https://gpuopen.com/learn/radeon_raytracing_analyzer_v1-8_support_for_rx9000_series_gpus_and_more/)) | 184 3rd-gen Tensor Cores, 1536 threads/SM, 64K regs/SM, 255 regs/thread | – |
+| Other | 64 CUs, VGPR file 768 KiB, L2 8 MiB, Infinity Cache 64 MiB, GFXIP 12.0; RT: Ray Accelerator with 8 ray/box + 2 ray/triangle tests per clock (2× RDNA 3), dedicated hardware instance transform, hardware traversal-stack management, BVH8 nodes, compressed primitive nodes (up to 8 triangles per node instead of 2), oriented bounding boxes (~10 % traversal gain, geometry dependent), out-of-order memory returns; traversal itself is a shader loop on the WGP (LDS stack) ([Hot Chips 2025](https://hc2025.hotchips.org/assets/program/conference/day1/8_amd_pomianowski_final.pdf), [RRA 1.8](https://gpuopen.com/learn/radeon_raytracing_analyzer_v1-8_support_for_rx9000_series_gpus_and_more/)) | 46 SMs, 5888 CUDA cores, boost 1725 MHz, **20.3 TFLOPS FP32 = 20.3 TFLOPS non-tensor FP16** (no 2× fp16 ALU rate on GA10x), 448 GB/s, L2 4 MB, 128 KB L1/shared + 256 KB registers per SM; **46 2nd-gen RT cores**: 2× ray/triangle rate vs Turing (box rate not claimed to change), RT work concurrent with graphics/compute in the same SM, instance-transform acceleration; 184 3rd-gen Tensor Cores, 1536 threads/SM, 64K regs/SM, 255 regs/thread ([GA102 whitepaper](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf)) | – |
 
 ### 1.2 Capability matrix
 
@@ -498,6 +498,37 @@ calls into the module.
   running handoff notes in `docs/editor-handoff.md`.
 - Commits: small, imperative, area prefix ("RenderGraph: …", "Raytracing: …", "OceanRenderer: …", "Docs: …").
 
+### 2.9 Developer background (tutor hooks)
+
+Source: `research/followup_bikker_tinybvh.md` §5 (local folders read-only, 2026-11-18).
+
+- The developer is a **BUas student** (Breda University of Applied Sciences). **Jacco Bikker** is senior lecturer at
+  BUas **CMGT** (formerly IGAD), which he founded in 2006 with Frank Peters; he teaches "game development, graphics,
+  and software optimization" ([BUas Pure](https://pure.buas.nl/en/persons/dr-jacco-bikker/),
+  [about](https://jacco.ompf2.com/about-me/)). He wrote the Arauna and Brigade real-time ray/path tracers, Lighthouse 2
+  and TinyBVH, and his blog (§11) is a beginner-to-intermediate curriculum that maps onto M1–M5c.
+- Local folders (his templates; **read, never edit**):
+  - `T:\Projects\Buas\Y1C\voxpopuli-main` and `T:\Projects\Buas\Y1C\RubiksCube\voxpopuli-main` – Bikker's
+    **voxpopuli** template ("intended for students of Breda University", public domain; companion text = his "Ray
+    Tracing with Voxels in C++" series parts 1–6).
+  - `T:\Projects\Buas\Y1C\JaccoBase\WrldTmpl8` – his 2021 **Voxel World template** (software voxel traversal, claims
+    "up to 2 billion rays per second … on a RTX3080Ti – but without using RTX"; includes `template\bluenoise.h`).
+- The developer's own **RubiksCube** renderer (`RubiksCube\voxpopuli-main\renderer.h`) already has: Whitted-style
+  recursion (`float3 Trace(Ray&, int reflectAmount, ...)`), **diffuse / mirror / glass** materials (`DiffuseRender`,
+  `MirrorRender`, `GlassRender`), a `float4* accumulator`, a skydome, spot/point lights, **Hable filmic tonemapping**
+  (`TmoHableFilmic`) and **mouse picking** via `scene.FindNearest(mouseRay)`. So Whitted recursion, Fresnel/refraction,
+  accumulation, stochastic AA/soft shadows and probably blue noise and first path-tracing steps are known ground [I].
+- **Anchor new concepts to that code** (tutor phrasing suggestions [I]):
+  - "your `GlassRender` is the Fresnel/refraction of §3.7 – the path tracer picks reflect *or* refract at random
+    instead of recursing into both";
+  - "your `accumulator` is §3.10 (sum + count, reset on change)";
+  - "your `FindNearest` grid walk is exactly what the BVH (M1/M1b) and `RayQuery` replace";
+  - "your `Trace` recursion becomes a loop with a throughput variable (§3.1, §3.5)";
+  - "the blue noise from voxel part 4 / `bluenoise.h` is a valid M3 sampler step (§3.9)";
+  - "your Hable tonemapper is the same job as EV's `Tonemap` pass – the PT writes linear HDR into it";
+  - "WrldTmpl8's 2-billion-rays/s claim is software traversal; EV's DXR traversal runs in RT hardware (§6.6)".
+- Ask the developer what was taught in which BUas block before assuming – no public syllabus was found [U].
+
 ---
 
 ## 3. Path tracing theory primer
@@ -645,6 +676,13 @@ Keep a hard bounce cap too (TDR budget, section 6.8).
   ([pbrt-v4 sampling.h](https://raw.githubusercontent.com/mmp/pbrt-v4/master/src/pbrt/util/sampling.h)).
 - Reference pcg3d (Jarzynski & Olano) [T]: `v = v*1664525u + 1013904223u; v.x += v.y*v.z; v.y += v.z*v.x; v.z += v.x*v.y;
   v ^= v >> 16u; v.x += v.y*v.z; v.y += v.z*v.x; v.z += v.x*v.y;` then `float(v >> 8) * (1/16777216.0)`.
+- **Developer-known stepping stone** (§2.9): blue-noise texture (Christoph Peters' 64×64 `LDR_RG01_0.png`, indexed
+  `(x & 63) + (y & 63) * 64`, R and G channels) + per-frame **golden-ratio offset** `frac(v + frame · 0.61803399)` so
+  the pattern changes every frame but keeps its blue-noise property (source: RTG II ch. 24, Alan Wolfe), as in
+  [Bikker voxel part 4](https://jacco.ompf2.com/2024/05/15/ray-tracing-with-voxels-in-c-series-part-4/) / WrldTmpl8
+  `bluenoise.h`. Good for **low dimensions** (pixel jitter, NEE light sample, first-bounce direction); higher
+  dimensions still need Sobol/Owen or hashing. The same post shows the pattern artifacts caused by correlated
+  stratification across pixels – a good "why scrambling" example.
 - Seed from `(pixel.xy, frameIndex/sampleIndex)` – **needs the frame counter** (M0) and a fixed scene seed for
   reproducible shots. Correlation bugs show as structured noise; test with a constant-colour scene.
 
@@ -1211,6 +1249,18 @@ differencing raster vs reference at the same camera, time and seed (D7 shots). A
    (in place) → global UAV barrier → TLAS rebuild (`PREFER_FAST_TRACE`) → UAV barrier on TLAS → path-trace dispatch.
 3. Full rebuild every **N frames (start ~60)** or when wave height/choppiness parameters change; tune N from logged
    refit vs rebuild trace times (RRA/PIX). Choppy XZ displacement inflates node bounds.
+   **Why refit degrades, and a CPU proxy** (informs N): refit keeps the tree topology and only recomputes boxes, so
+   quality drops as triangles move away from the node they were grouped into and sibling boxes start to overlap
+   (Bikker, [BVH part 4](https://jacco.ompf2.com/2022/04/26/how-to-build-a-bvh-part-4-animation/): "refit several
+   frames, then rebuild periodically"; his example: ~20.9k triangles, rebuild ~30 ms vs refit ~0.5 ms on the CPU; no
+   numbers for the quality loss). Ocean waves **oscillate rather than drift**, so degradation should be bounded and
+   roughly stationary – N can probably be large [I/E, to measure]. The DXR AS is opaque, so a CPU proxy is possible:
+   build a SAH BVH of the read-back grid, refit it over K frames and compare its SAH cost with a fresh rebuild per
+   frame (**folded into M1b**, own builder checked against TinyBVH `SAHCost()`). The GPU rays/s is still decisive:
+   "SAH is a good metric for CPU performance, while RRS [representative ray set] seems to predict GPU performance
+   better" ([Bikker 2025](https://jacco.ompf2.com/2025/05/20/bvh-quality-beyond-sbvh/)). TinyBVH reference figures:
+   CPU refit < 1 ms per 200k triangles, build ~200k triangles < 10 ms; refit impossible on spatial-split (SBVH) trees
+   and when the triangle count changes ([TinyBVH manual](https://jacco.ompf2.com/2025/01/24/tinybvh-manual-basic-use/)).
 4. **Frozen time** (reference mode): build once with `PREFER_FAST_TRACE` (no update needed) for the best trace speed.
 5. Position buffer format: `float3` (12 B stride) or `float4`/`R16G16B16A16_FLOAT` (16-bit loses precision at 512 m
    from the origin – keep fp32) [I]. Reuse the static R32 index buffer of the plane.
@@ -1225,14 +1275,36 @@ differencing raster vs reference at the same camera, time and seed (D7 shots). A
   possible; traversal runs on the WGP and **uses LDS extensively → little groupshared memory** in RT shaders; **8×4
   thread groups**; one live RayQuery; skip procedural/non-opaque via flags; "smaller BVHs are always better", use
   high-quality build flags, don't rebuild dynamic geometry every frame; rebuild the TLAS every frame (compute queue if
-  possible); best performance from TraceRay/RayQuery in compute on a compute queue. No RDNA 4-specific RT page found
-  [U]. RDNA 4 BVH8/OBBs need no developer action. RDNA 4 hardware facts (third-party analysis): 8 box / 2 triangle
-  tests per clock per Ray Accelerator (2× RDNA 3), 8-wide 128-B box nodes, OBBs from a table of 104 rotations,
-  compressed 128-B primitive nodes, a ray-transform block for the TLAS→BLAS step, LDS traversal stack; 192 KB VGPRs per
-  SIMD, 16 wave slots, full occupancy only at ≤ 96 VGPRs; dynamic VGPR allocation only for wave32 compute and so far
-  only seen with *indirect* RT, not inline RayQuery
-  ([C&C RT](https://chipsandcheese.com/p/rdna-4s-raytracing-improvements), [C&C dynamic VGPRs](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds)).
-  Ampere CC 8.6: 48 warps/SM, 64K regs/SM, 255 regs/thread, 100 KB shared/SM ([CUDA Ampere tuning](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html)).
+  possible); best performance from TraceRay/RayQuery in compute on a compute queue; "**Always have just 1 active
+  RayQuery object in scope in your shader at any time**" → for NEE, end the shadow `RayQuery`'s scope before the
+  extension query begins (or reuse one object), otherwise both objects' state is live [I]. The guide is from 2023 and
+  has no RDNA 4 section; no RDNA 4-specific GPUOpen RT best-practices page or GDC 2025/2026 AMD RT talk was found
+  (searched again 2026-11-18). RDNA 4 BVH8/OBBs need no developer action (driver-built, invisible to the API).
+- **RDNA 4 RT hardware, AMD primary sources** (Hot Chips 2025): Ray Accelerator 8 ray/box + 2 ray/triangle per clock
+  (2×), dedicated hardware instance transform, hardware traversal-stack management, BVH8, compressed primitive nodes
+  (RRA 1.8: up to 8 triangles per node instead of 2), OBBs (traversal ≈ 10 % faster, geometry-dependent), out-of-order
+  memory returns (an uncached leaf fetch no longer holds up other waves), ≈ 2× traversal vs RDNA 3 at equal
+  clock/bandwidth; dynamic VGPRs are an *option* for wave32 compute used with chained shader calls (LLVM `cs.chain` /
+  `amdgpu-dynamic-vgpr`) – **not for an inline-RayQuery megakernel**, whose VGPRs are fixed by its worst case
+  ([HC 2025 slides](https://hc2025.hotchips.org/assets/program/conference/day1/8_amd_pomianowski_final.pdf),
+  [RRA 1.8](https://gpuopen.com/learn/radeon_raytracing_analyzer_v1-8_support_for_rx9000_series_gpus_and_more/),
+  [LLVM](https://llvm.googlesource.com/llvm-project/+/e17b3cdfb3626e03cdefaad42db1e2374da9e9ca)). Third-party detail
+  ([C&C RT](https://chipsandcheese.com/p/rdna-4s-raytracing-improvements), [C&C dynamic VGPRs](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds)):
+  8-wide 128-B box nodes, OBBs from a table of 104 rotations, compressed 128-B primitive nodes, a ray-transform block
+  for the TLAS→BLAS step, LDS traversal stack; 192 KB VGPRs per SIMD, 16 wave slots, full occupancy only at ≤ 96
+  VGPRs; dynamic VGPRs only seen with *indirect* RT. Consequences [I]: live-state reduction stays the main occupancy
+  lever for EV's megakernel; OBBs help rotated/diagonal meshes more than EV's axis-aligned ocean grid (RRA on the 9070
+  XT shows the per-node rotation – check whether ocean nodes got identity); out-of-order returns may shrink the gain of
+  material sorting on RDNA 4 – measure, don't assume.
+- **Ampere (RTX 3070) RT hardware** ([GA102 whitepaper](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf)):
+  2nd-gen RT cores do all BVH traversal + triangle tests and return hit/no-hit to the SM; **2× ray/triangle
+  intersection rate** vs Turing (box-test rate not claimed to change → box-dominated scenes such as grazing rays over
+  the ocean grid gain less [I]); RT core work **concurrent with graphics or compute in the same SM** (Turing: no) –
+  that is what lets an inline-RayQuery kernel overlap traversal with other warps' ALU work, so occupancy still matters
+  [I]; instance-transform acceleration on both generations; motion-blur unit (OptiX only, irrelevant for DXR).
+  46 RT cores on the 3070. Ampere CC 8.6: 48 warps/SM, 64K regs/SM, 255 regs/thread, 100 KB shared/SM ([CUDA Ampere tuning](https://docs.nvidia.com/cuda/ampere-tuning-guide/index.html)).
+  **fp16 on GA10x runs at the FP32 rate** (non-tensor; RTX 3070: 20.3 TFLOPS both; Turing had 2×) → `float16_t` in EV
+  shaders saves registers and bandwidth on the 3070, **not ALU time**; packed fp16 on RDNA 4 may also save ALU [T].
 - **NVIDIA**: inline RayQuery is fine while shading is uniform; prefer `DispatchRays` once there are "multiple
   different shading models"; compute groups **8×8 or 16×8**; mark geometry opaque; any-hit only where needed.
 - → make the PT group size a compile-time define chosen per vendor at (hot-reload) compile time [I]. No 2024–2026
@@ -1651,7 +1723,7 @@ code. HIP RT is AMD's separate ray-tracing library – irrelevant to the DXR tra
 | b | Same in **HIP and CUDA** from one source (naive kernels, fp32) | Bit-near-identical results HIP vs CUDA vs CPU |
 | c | **Offline fit** of radiance records dumped from the tracer (position, normal, direction, albedo, roughness, radiance) | ML bugs isolated from rendering bugs; compare with tiny-cuda-nn/PyTorch on the 3070 |
 | d | **Online NRC** in EV via `.External()`: query records + self-training records written from HLSL, inference + training per frame, resolve pass | `DirectCacheView`-style debug view; converges in ~8 frames |
-| e | **Speed**: fp16, fused layers (weights in LDS/shared), WMMA (RDNA 4) / Tensor Cores (3070) via `ev_mma16` | query+train ms vs the paper's 1.59 + 1.11 ms (different GPU) |
+| e | **Speed**: fp16, fused layers (weights in LDS/shared), WMMA (RDNA 4) / Tensor Cores (3070) via `ev_mma16`. On the 3070 plain (non-tensor) fp16 runs at the FP32 rate, so fp16 alone saves only memory/bandwidth there; the ALU gain needs Tensor Cores ([GA102 whitepaper](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf)) | query+train ms vs the paper's 1.59 + 1.11 ms (different GPU) |
 | f | **Compare** with NVIDIA NRC SDK + tiny-cuda-nn on the 3070 | equal-time error vs SHaRC and plain PT |
 | g | Optional `dx::linalg` port (SM 6.10, experiment branch) | runs in HLSL on both PCs, no interop |
 
@@ -1746,8 +1818,10 @@ Prerequisites (plan.md): persistent bindless heap (M8a), `.External()` (M6), per
 
 Format per milestone: **Goal** · **Teach first** · **Files** · **Suggested order (hints, the developer decides)** ·
 **Verify** · **Pitfalls** · **Read**. Every milestone ends with a `build-log.md` entry with measurements and a
-`performance.md` baseline row set (10.1). Order of entries follows `plan.md`: M0–M5, M5b, **M5c**, M6, M7, **O1**,
-M8a, M8b, M9, M10, **O2**, M11. Sources for 10.1/10.2/M5c/O1/O2: `research/followup_performance_optimization.md`.
+`performance.md` baseline row set (10.1). Order of entries follows `plan.md`: M0, M1, **M1b** (optional), M2, M3,
+**M3-ref**, M4, M5, M5b, **M5c**, M6, M7, **O1**, M8a, M8b, M9, M10, **O2**, M11, then "Ideas not (yet) chosen".
+Sources for 10.1/10.2/M5c/O1/O2: `research/followup_performance_optimization.md` + `research/followup_gaps_completion.md`
+(measured Laine/Cycles/Ampere/RDNA 4 facts); for M1b/M3-ref and the Bikker material: `research/followup_bikker_tinybvh.md`.
 
 ### 10.1 Profiling routine (every milestone, every hot-path change)
 
@@ -1773,7 +1847,11 @@ Teach the developer to **predict** the result before each run ("this should cut 
    define – never compiled into the timed build (atomics distort timing) [I].
 5. An image-diff tool: the M6 "image difference metric" kernel and/or NVIDIA **FLIP** (v1.7: `pip install
    flip-evaluator`, `flip -r reference.exr -t test.exr`, HDR-FLIP for linear HDR input;
-   [NVlabs/flip](https://github.com/NVlabs/flip)).
+   [NVlabs/flip](https://github.com/NVlabs/flip)). Defaults: 67 ppd (0.7 m viewing distance, 3840 px across a 0.7 m
+   wide monitor), HDR tone mapper ACES, start/stop exposure and number of exposures computed automatically when not
+   given – log the values FLIP prints and reuse them for all variants of a shot
+   ([FLIP.h](https://raw.githubusercontent.com/NVlabs/flip/main/src/cpp/FLIP.h)); option names via `flip -h` (the
+   exposure flags are believed to be `--start-exposure/--stop-exposure` [U]).
 
 **Stable timing setup**
 
@@ -1787,7 +1865,11 @@ Teach the developer to **predict** the result before each run ("this should cut 
 | Final check | Re-run the winning variant at **normal clocks** – stable-clock conclusions "should be double-checked with supporting results from real usage scenarios" | same | [MS Learn](https://learn.microsoft.com/en-us/windows/win32/api/d3d12/nf-d3d12-id3d12device-setstablepowerstate) |
 
 Locked-clock numbers are lower than real ones; `performance.md` must say which mode a row was measured in. GeForce
-support of `-lgc` is not stated in NVIDIA's docs [U] (believed to work on RTX 30 [T]).
+support of `-lgc` is not stated in NVIDIA's docs [U] (believed to work on RTX 30 [T]; only third-party/user reports –
+Zivid: "not all NVIDIA GPUs support the --lock-gpu-clocks and/or --lock-memory-clocks options"
+([Zivid](https://support.zivid.com/support/unstable-capture-time-windows.html)); test on the 3070 and record the result
+in §12 Q42). The RDP CLI offers only `normal|stable` clock modes (no peak switch); the stable frequency is not
+documented – read it from an RGP capture or a monitoring tool.
 
 **Timestamp caveats** [I unless linked]: timestamps are **bottom-of-pipe** (sampled when all preceding work is done;
 [MS Learn](https://learn.microsoft.com/en-us/windows/win32/direct3d12/timing)); two dispatches without a barrier may
@@ -1840,7 +1922,13 @@ in `performance.md` = new baseline.
 | CPU↔GPU / interop stalls, async overlap | RGP timeline (queues), PIX timing capture | Nsight Systems |
 
 Instrumented captures change timing (RGP peak clocks, shader instrumentation) – use them for *why*, the benchmark CSV
-for *how much*. Scripted AMD captures: `RadeonDeveloperPanelCLI` (RDP 3.5; flags not documented in the announcement).
+for *how much*. Scripted AMD captures: `RadeonDeveloperPanelCLI` (RDP 3.5.1 manual): `-p <process>`, `--clock-mode
+normal|stable`, `-a dispatch:<start>:<count>` or `frame:<N>` (N ≥ 5), `--rgp-capture-mode dispatch`,
+`--rgp-shader-instrumentation` (needed for Average active lanes), `--rgp-auto-capture-delay <ms>`, `-o <file>`; RRA:
+`-m raytracing`, `--rra-marker-capture --rra-marker-begin/-end` (driver 26.20+), `--rra-collect-ray-dispatch-data`;
+no launch flag documented ([RDP CLI](https://gpuopen.com/manuals/rdp_manual/radeon_developer_panel_cli/)). Example
+for the PT dispatch (flags from the manual, combination untested [I]): `RadeonDeveloperPanelCLI -p EV --clock-mode
+stable -a dispatch:<index>:1 --rgp-capture-mode dispatch --rgp-shader-instrumentation -o pt.rgp`.
 
 ### 10.2 Optimization strategy catalogue (worked through in O1/O2, also used ad hoc)
 
@@ -1853,7 +1941,7 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 |---|---|---|---|---|
 | Static BLAS `PREFER_FAST_TRACE \| ALLOW_COMPACTION` + compaction; TLAS rebuilt each frame | trace ms small %, BLAS memory −30–60 % | trace ms, AS bytes | both | §6.4 |
 | Frozen ocean: one `PREFER_FAST_TRACE` build, no `ALLOW_UPDATE` | trace ms vs refit-able BVH: a few % [E] | trace ms on `ocean_frozen_day` | both | §6.5 |
-| Refit-vs-rebuild interval N for the running ocean | finds the knee where refit decay > rebuild cost | trace ms over frames since rebuild + refit/build ms; RRA heatmap at frame N | refits fine for smooth motion, bad where nearby triangles tear apart; "rebuild every n frames" | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra) |
+| Refit-vs-rebuild interval N for the running ocean | finds the knee where refit decay > rebuild cost | trace ms over frames since rebuild + refit/build ms; RRA heatmap at frame N; CPU proxy: SAH cost refit vs rebuild over K frames (M1b) | refits fine for smooth motion, bad where nearby triangles tear apart; "rebuild every n frames"; SAH predicts CPU better than GPU speed – GPU rays/s decides | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra), [Bikker part 4](https://jacco.ompf2.com/2022/04/26/how-to-build-a-bvh-part-4-animation/), §6.5 |
 | **Split the 513×513 ocean grid into tiles** (e.g. 8×8 tiles of 64×64 quads = 64 BLAS/instances) | tighter bounds for grazing rays, per-tile refit/rebuild, culling/LOD later; gain unknown, could be small for trace, larger for refit quality [E] | RRA traversal heatmap + trace ms (frozen), refit ms + trace decay (running) | split BLASes "with a lot of empty space", avoid overlap; tile borders must share exact vertex positions (no cracks) | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra), [NVIDIA](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/) |
 | One BLAS with several geometries (one per material) instead of one BLAS per material | fewer instances, lower traversal | RRA, TLAS ms | AMD finding | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra) |
 | Avoid instance overlap / merge overlapping instances; avoid large stretch/skew instance transforms | traversal ↓ where overlap | RRA "X-ray" view | both vendors | same + NVIDIA |
@@ -1868,18 +1956,19 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 | **Compile-time** RayQuery flags (`RayQuery<RAY_FLAG_...>`) instead of runtime/per-instance flags | compiler can drop unused paths | VGPRs, trace ms | AMD + NVIDIA both say so | [RRA guide](https://gpuopen.com/learn/improving-rt-perf-with-rra), NVIDIA |
 | No face culling unless needed for correctness | slight speed-up (culled triangles still tested, can't end traversal) | trace ms | both | same |
 | Tight TMax for shadow rays (distance to light × (1 − ε)); TMin ≈ 0 with an offset origin | traversal ↓, fewer leaks | shadow ms; furnace/leak tests | [T] | – |
-| Robust self-intersection: Wächter & Binder offset along the **geometric** normal in integer ULP space (`int_scale` 256, `float_scale` 1/65536, `origin` 1/32) | removes acne without large TMin; tiny cost | image (acne, light leaks at grazing ocean angles) | same on both | [RTG1 ch. 6](https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_6.pdf) (constants as in Cycles' `ray_offset`) |
+| Robust self-intersection: Wächter & Binder offset along the **geometric** normal in integer ULP space (`int_scale` 256, `float_scale` 1/65536, `origin` 1/32) | removes acne without large TMin; tiny cost | image (acne, light leaks at grazing ocean angles) | same on both; Cycles 2022 removed most offsetting in favour of skipping the origin's prim+object ID ([74afc86](https://api.github.com/repos/blender/blender/commits/74afc86d4bf1a559e5b7a0cf5cea29cb508a3e99); trade-off: overlapping primitives handled poorly); in DXR this needs non-opaque geometry (candidate test in `Proceed()`, slower traversal), so for EV's opaque geometry the offset stays the default [I] | [RTG1 ch. 6](https://link.springer.com/content/pdf/10.1007/978-1-4842-4427-2_6.pdf) (PDF behind a login, not read); Cycles `ray_offset()` uses these constants and cites RTG ch. 6 ([util.h](https://raw.githubusercontent.com/blender/blender/main/intern/cycles/kernel/bvh/util.h)) |
+| **One RayQuery object in scope at a time** (end the shadow query's scope before the extension query) | VGPRs ↓ | VGPRs, trace ms | AMD rule | [RDNA performance guide](https://gpuopen.com/learn/rdna-performance-guide/) |
 | Fewer shadow rays (one NEE sample choosing sun/env/point by power; skip NEE on near-specular hits) | rays/s ↓ at equal error | equal-time error | – | [T] |
 
 **Shading, registers, coherence**
 
 | Strategy | Expected impact | Measure | Vendor notes | Source |
 |---|---|---|---|---|
-| **Reduce live state / VGPRs** (pack, fp16 where safe, recompute instead of keep, fewer values alive across `Proceed()`) | Indiana Jones: spills 222 → 84 B, pass −15 % | VGPRs/spills (RGP Pipeline tab, Nsight live state), trace ms | RDNA 4: full 16 waves only at ≤ 96 VGPRs; Ampere: 48 warps only at ≤ ~40 regs | [NVIDIA Indiana Jones SER](https://developer.nvidia.com/blog/path-tracing-optimization-in-indiana-jones-shader-execution-reordering-and-live-state-reductions/), [C&C](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds) |
+| **Reduce live state / VGPRs** (pack, fp16 where safe, recompute instead of keep, fewer values alive across `Proceed()`) | Indiana Jones: spills 222 → 84 B, pass −15 % | VGPRs/spills (RGP Pipeline tab, Nsight live state), trace ms | RDNA 4: full 16 waves only at ≤ 96 VGPRs; Ampere: 48 warps only at ≤ ~40 regs; RDNA 4 dynamic VGPRs do not apply to inline RayQuery [I from AMD/LLVM sources, §6.6] | [NVIDIA Indiana Jones SER](https://developer.nvidia.com/blog/path-tracing-optimization-in-indiana-jones-shader-execution-reordering-and-live-state-reductions/), [C&C](https://chipsandcheese.com/p/dynamic-register-allocation-on-amds) |
 | Group size per vendor (8×4 AMD, 8×8/16×8 NVIDIA) as a compile-time define | few % [E] | PT ms | §6.6 | §6.6 |
 | Uber-shader branch structure: uniform branches first, evaluate shared work (frame, NEE) outside material switches, keep the switch flat | divergence ↓ | active lanes, shade ms | NVIDIA: avoid divergent shading with inline RT | [NVIDIA](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/) |
-| **Material sorting / wavefront (M5c)** | scene-dependent: 0 or negative with 1 material, positive with many divergent ones; Cycles sort 2–15 %, SER 20–50 % (RTX 40) | the M5c 1/4/16/64 benchmark | no SER reorder on either PC | M5c |
-| fp16 (`-enable-16bit-types`, `float16_t`) for throughput, pdfs, BSDF intermediates; positions/t/accumulation stay fp32 | ALU + VGPR ↓ (RDNA packed fp16 [T]) | VGPRs, shade ms, FLIP (colour shift), NaN check | RDNA 4 and Ampere both fast fp16 [T] | [I] |
+| **Material sorting / wavefront (M5c)** | scene-dependent: 0 or negative with 1 cheap material, positive with many divergent ones; Cycles sort *refinements* 0–25 % (partitioning, local atomics; device-dependent); Laine 2013 wavefront +36–221 % (Kepler, software traversal); SER 20–50 % (RTX 40) | the M5c 1/4/16/64 benchmark | no SER reorder on either PC | M5c |
+| fp16 (`-enable-16bit-types`, `float16_t`) for throughput, pdfs, BSDF intermediates; positions/t/accumulation stay fp32 | VGPR + bandwidth ↓ on both; ALU ↓ only where packed fp16 is faster (RDNA [T]) | VGPRs, shade ms, FLIP (colour shift), NaN check | Ampere GA10x: non-tensor FP16 = FP32 rate (RTX 3070: 20.3 TFLOPS both; Turing was 2×) → gain on the 3070 is registers/bandwidth only ([GA102 whitepaper](https://www.nvidia.com/content/PDF/nvidia-ampere-ga-102-gpu-architecture-whitepaper-v2.pdf)); RDNA 4 packed fp16 [T] | [I] |
 | Wave intrinsics: `WaveActiveAllTrue`/`WaveActiveAnyTrue` to skip whole-wave work, wave-aggregated atomics for counters/queues | atomics contention ↓ | pass ms | wave32 on both | [T] |
 | Occupancy is not a goal in itself: only helps latency-bound shaders; higher occupancy can thrash caches | – | measure, don't assume | RGP shows the limiter | [GPUOpen occupancy](https://gpuopen.com/learn/occupancy-explained/) |
 
@@ -1889,7 +1978,8 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 |---|---|---|---|---|
 | Packed path/hit records (octahedral directions, fp16 where safe, bit-packed flags) and **SoA** layout in the wavefront | bandwidth ↓ (wavefront is "more likely to be bandwidth-limited") | sort/shade ms, VRAM | – | [pbr-book 15.1](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU), [Cycles](https://developer.blender.org/docs/features/cycles/kernel_scheduling/) |
 | 16-B aligned elements for single 128-bit loads | load count ↓ | shade ms | – | [Bikker](https://jacco.ompf2.com/2019/07/18/wavefront-path-tracing/) |
-| Locality-preserving sort (sort within chunks of the state index, then by material) | gathers stay cache-friendly | shade ms vs plain sort | Cycles tuned per device | [Cycles commit](https://developer.blender.org/rB523bbf70655) |
+| SoA path state + wave-aggregated queue atomics (wavefront) | Laine 2013: SoA **+80 %** total, warp-coalesced atomics **+40 %** total (Kepler) | sort/shade ms | both | [Laine 2013](https://users.aalto.fi/~laines9/publications/laine2013hpg_paper.pdf) |
+| Locality-preserving sort (sort within chunks of the state index, then by material) | gathers stay cache-friendly; "up to 15 %" on Apple M1-family, 0–12 % on OptiX/RTX A6000 | shade ms vs plain sort | Cycles: 65536-state partitions, only with < 300 shaders; generalized to all GPUs 2022 (OptiX A6000: 0–12 %) | [4b1d315](https://api.github.com/repos/blender/blender/commits/4b1d315017e), [523bbf7](https://api.github.com/repos/blender/blender/commits/523bbf70655) |
 | Material texture formats (BC-compressed, mips used for secondary hits / ray cones) | bandwidth ↓ for incoherent hits | shade ms | – | [T] |
 | Vertex fetch layout for hit attributes (separate compact position/normal/uv streams instead of the 60-B interleaved vertex) | fetch bytes ↓ | shade ms | – | [I] |
 
@@ -1899,7 +1989,7 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 |---|---|---|---|
 | Better env-map importance sampling (CDF quality, sun handled separately), MIS power heuristic everywhere | noise ↓ on sky-lit shots | equal-time relMSE | §3.4, §3.8 |
 | Russian roulette tuning (start bounce, survival from throughput × (optional) albedo, max(q) clamp) | time/sample ↓ with little variance ↑ | efficiency 1/(var × time) | §3.5 [T] |
-| Low-discrepancy sampler (Sobol + Owen scramble) and blue-noise error distribution | error ↓ at low spp, better denoiser input | equal-time relMSE/FLIP at 1–64 spp | §3.9 [T] |
+| Low-discrepancy sampler (Sobol + Owen scramble) and blue-noise error distribution (first step: blue-noise texture + golden-ratio offset per frame, developer-known from Bikker voxel part 4) | error ↓ at low spp, better denoiser input | equal-time relMSE/FLIP at 1–64 spp | §3.9 [T], [Bikker voxel 4](https://jacco.ompf2.com/2024/05/15/ray-tracing-with-voxels-in-c-series-part-4/) |
 | Light selection by power / ReSTIR DI later (M11) | many-light noise ↓ | equal-time error | [T] |
 | Path guiding (e.g. Müller et al. 2017) – out of scope, mention only | large for caustic-like paths | – | [T][U] |
 
@@ -1947,8 +2037,12 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 ### M1 – Acceleration structures
 
 - **Goal**: BLAS per `Mesh` (cached), TLAS per frame from a visitor, AS build pass in the render graph with timing.
-- **Teach first**: BVH concepts (Bikker's BVH series), BLAS vs TLAS, instance transforms, prebuild info, scratch,
-  AS state rules (never transitioned, UAV barriers only), build vs update vs compaction, flag recipes (6.4).
+- **Teach first**: BVH concepts (Bikker's BVH series parts 1–6: basics → SAH → binning → refit → TLAS/BLAS; the
+  developer's `FindNearest` grid walk from the BUas voxel renderer is the "before" picture, §2.9), BLAS vs TLAS,
+  instance transforms, prebuild info, scratch, AS state rules (never transitioned, UAV barriers only), build vs update
+  vs compaction, flag recipes (6.4). **Concept check** (optional, = M1b): build a binned-SAH BVH2 on the CPU by hand
+  and compare its SAH cost with TinyBVH's `SAHCost()` on the helmet – this makes `PREFER_FAST_TRACE` vs `FAST_BUILD`
+  and "why refit degrades" tangible.
 - **Files**: new `header/raytracing/acceleration_structure.h` + source; `header/resources/resource.h` /
   `source/resources/resource.cpp` (new creation path: initial state + flags; or a dedicated AS buffer type);
   `application.*` (`CreateAccelerationStructureBuffer`-style factory); `render_graph.h` (`RGAccess` 76-91),
@@ -1968,8 +2062,104 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   needs one instance per light; destroying a BLAS still referenced by an in-flight TLAS (defer release ~3 frames).
 - **Read**: [DXR spec](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html) (AS sections),
   [NVIDIA RTX best practices](https://developer.nvidia.com/blog/rtx-best-practices/),
-  [Bikker BVH series](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/) [U],
+  [Bikker BVH series](https://jacco.ompf2.com/articles/) parts 1–6 (start at
+  [part 1](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)),
   HelloWorld sample, [RRA quickstart](https://gpuopen.com/manuals/rra_manual/quickstart/).
+
+### M1b – Hand-built SAH BVH (optional)
+
+Chosen by the developer on 2026-11-18 as an optional extra next to M1 (`plan.md`). Source:
+`research/followup_bikker_tinybvh.md` §2, §4 (c)/(g). EV keeps DXR for rendering – this is a CPU learning and
+measurement tool, not a second traversal path.
+
+- **Goal**: a small C++ **binned-SAH BVH builder + refit** on the CPU, written by the developer following Bikker's "How
+  to build a BVH" series; tree quality checked against TinyBVH's `SAHCost()` on the same meshes (Sponza, the helmet,
+  the 513×513 ocean grid); plus a measurement of how the SAH cost degrades over refits of the displaced ocean, which
+  informs D6's rebuild interval N (this is the ocean-refit check, folded in here instead of being a separate M2 item).
+- **Teach first** (plain words):
+  - **BVH (bounding volume hierarchy)**: a tree of boxes. The root box encloses the whole mesh; each node's box encloses
+    its two children; leaves hold a few triangles. A ray first tests a box: if it misses, everything inside is skipped
+    in one test. That turns "test every triangle" (O(n)) into roughly O(log n) box tests plus a few triangle tests.
+    Traversal = a small stack: pop a node, test its box, push the children (nearer child visited first so the closest
+    hit is found early and farther boxes can be skipped against the current `t`). This is what the developer's voxel
+    `FindNearest` grid walk did with a grid instead of a tree (§2.9), and what DXR's driver builds and RT hardware walks.
+  - **SAH (surface area heuristic)**: a formula that estimates how expensive a tree is to trace, so the builder can
+    choose good splits. For random rays, the chance that a ray that hits the parent box also hits a child box is about
+    `area(child) / area(parent)`. So splitting a node into L and R costs about
+    `C_trav + (A_L/A_P)·N_L·C_tri + (A_R/A_P)·N_R·C_tri` (N = triangle count, C = cost of one box step / one triangle
+    test), and the builder picks the split with the lowest value – or makes a leaf when no split beats `N·C_tri`. The
+    **SAH cost of a whole tree** sums `area(node)/area(root)` × (C_trav for interior nodes, N·C_tri for leaves) – one
+    number to compare two trees of the same mesh [T]. Smaller = fewer expected tests per ray. TinyBVH's exact
+    constants in `SAHCost()` must be read from `tiny_bvh.h` before comparing absolute numbers [U].
+  - **Binning**: trying every triangle centroid as a split plane is slow. Binning drops the centroids into e.g. 8–32
+    equal-width bins along an axis (over the *centroid* bounds), keeps a box and a count per bin, then sweeps once from
+    the left and once from the right to evaluate all `bins − 1` planes. Cost per level is O(n) instead of a sort; the
+    tree is only slightly worse than a full sweep ([Bikker part 3](https://jacco.ompf2.com/2022/04/21/how-to-build-a-bvh-part-3-quick-builds/)).
+  - **Refit**: when vertices move but the triangle count and the tree shape stay, just recompute every box bottom-up:
+    leaves from their triangles, interior nodes from their two children. Walking nodes "from the last allocated node
+    back to the first" works because a child's index is always greater than its parent's. Refit is very fast but the
+    tree was optimized for the *old* positions: as triangles move away from their group, boxes grow and overlap and
+    traces get slower – hence "refit several frames, then rebuild periodically"
+    ([Bikker part 4](https://jacco.ompf2.com/2022/04/26/how-to-build-a-bvh-part-4-animation/)).
+  - Link to DXR (6.4): `PREFER_FAST_TRACE` ≈ spend more build time on a lower-SAH tree, `PREFER_FAST_BUILD` ≈ cheaper
+    builder, `ALLOW_UPDATE` + `PERFORM_UPDATE` = refit. The driver's tree is opaque, so the CPU tree is the only place
+    the developer can *see* these trade-offs as numbers [I].
+- **Files / project** (suggestions, the developer decides):
+  - A standalone console project, e.g. `EV-Engine/Tools/BvhLab/` (own `.vcxproj`, added to `EV-Engine.slnx` but not a
+    dependency of the apps), with `bvh.h/.cpp` (node struct, builder, refit, traversal), `sah.cpp` (tree cost),
+    `main.cpp` (load mesh, build, compare, CSV output).
+  - A **pinned TinyBVH copy** shared with M3-ref, e.g. `EV-Engine/third_party/tinybvh/` (`tiny_bvh.h` + the five
+    `tiny_bvh_*.h` headers it now needs, its MIT `LICENSE`, a `VERSION.txt` with the commit hash; never track `main` –
+    1.9.2 removed flags and the week before added layouts/C API). `#define TINYBVH_IMPLEMENTATION` in exactly one .cpp;
+    wrap the include in `#pragma warning(push, 0)` if EV's warning level complains [I].
+  - Mesh input: the helmet EV already loads (via assimp, already an EV dependency) or a triangle dump written from EV;
+    Sponza (any OBJ/glTF copy, or TinyBVH's `testdata/cryteksponza.bin`); the ocean grid as a **read-back of the M2
+    displace buffer** at a series of frames (debug-only dump to a binary file – simpler and exact compared with
+    re-implementing the FFT displacement on the CPU).
+- **Order (hints)**:
+  1. Triangle soup loader → `std::vector` of triangles + centroids; print counts and bounds.
+  2. Node struct (Bikker part 1: 32 B – `aabbMin`, `leftFirst`, `aabbMax`, `triCount`), midpoint-split builder, a
+     simple traversal, and a **brute-force check** (nearest hit over all triangles) for a few thousand random rays.
+  3. SAH split evaluation (part 2) with ordered child traversal; the whole-tree SAH cost function.
+  4. Binned SAH (part 3) with a bin-count parameter (8 / 16 / 32); time the build.
+  5. TinyBVH on the same triangles (16-B aligned `bvhvec4` vertices, three per triangle): its binned-SAH build and,
+     as "best case" references, SBVH (`useSpatialSplits`) and `Optimize()`; print both `SAHCost()` values next to
+     yours. Check which builder TinyBVH's default `Build()` uses (README: Bonsai) and compare like with like [U].
+  6. Refit (part 4), reverse node order; identity test first.
+  7. Ocean experiment: build at frame 0, then for K frames (e.g. 600 = 10 s at 60 Hz) refit to the new positions *and*
+     build fresh; log `SAH(refit_k) / SAH(rebuild_k)` and build/refit ms per frame; repeat for calm and choppy
+     settings. Plot the ratio over k.
+  8. Write the numbers into `build-log.md`, the proposed N into §6.5 / D6 discussion, and the curve into
+     `performance.md`; later compare with the GPU's trace ms over frames since rebuild (O1 step 4).
+- **Verify** (expected results):
+  - Traversal: identical nearest `prim` and `t` (within ~1e-5 relative) as brute force on ≥ 10k random rays; every
+    triangle in exactly one leaf; every node box contains its children (assert in Debug).
+  - SAH: binned SAH clearly below midpoint split (tens of % on Sponza [E]); own binned SAH within a few % of TinyBVH's
+    binned builder with matching bins/constants [E]; more bins → slightly lower cost with diminishing returns
+    (Bikker 2025: tuned bins beat 8 bins by 1.6 % on Sponza to 9.6 % on Conference on his ray-set metric); SBVH lower
+    still ("25 % or more" SAH reduction in many scenes,
+    [Bikker 2025](https://jacco.ompf2.com/2025/05/20/bvh-quality-beyond-sbvh/)).
+  - Refit identity: refit with unchanged vertices gives exactly the built SAH cost; frozen ocean → ratio 1.
+  - Ocean: ratio rises over the first frames and then **plateaus/oscillates** (waves oscillate, don't drift) [I/E – the
+    magnitude is the measurement]; choppier settings → higher plateau. A ratio that keeps growing means something
+    drifts (time base, accumulated positions).
+  - Speed sanity: refit ≪ build (Bikker: ~0.5 ms vs ~30 ms for ~20.9k triangles; TinyBVH: < 1 ms refit, < 10 ms build
+    per ~200k triangles on the CPU) – own code may be slower than TinyBVH, that's fine.
+- **Pitfalls**: binning over triangle bounds instead of centroid bounds; empty bins (infinite/negative box → area must
+  count as 0); zero centroid extent on an axis (can't split → leaf or other axis); infinite recursion when all
+  centroids coincide; comparing SAH numbers with different `C_trav`/`C_tri` constants or full vs half surface area
+  (compare ratios, or match TinyBVH's definition); refitting an SBVH (impossible – spatial splits) or after the
+  triangle count changed; assuming child index > parent index with a different allocation order; float precision at
+  ~512 m from the origin; reading back the ocean buffer every frame in a timed build (debug mode only); expecting SAH to
+  predict GPU speed ("SAH is a good metric for CPU performance, while RRS seems to predict GPU performance better") –
+  GPU rays/s decides N in the end; tracking TinyBVH `main` instead of a pinned commit.
+- **Read**: [Bikker BVH series parts 1–4](https://jacco.ompf2.com/articles/) (+ 5–6 for TLAS/BLAS),
+  [BVH Quality: Beyond SBVH](https://jacco.ompf2.com/2025/05/20/bvh-quality-beyond-sbvh/),
+  [TinyBVH README](https://raw.githubusercontent.com/jbikker/tinybvh/main/README.md) +
+  [Basic Use](https://jacco.ompf2.com/2025/01/24/tinybvh-manual-basic-use/) /
+  [Advanced](https://jacco.ompf2.com/2025/01/25/tinybvh-manual-advanced/) manuals,
+  [pbr-book 4ed BVHs](https://pbr-book.org/4ed/Primitives_and_Intersection_Acceleration/Bounding_Volume_Hierarchies) [U URL],
+  Bikker's OPT#1 profiling post for timing discipline ([OPT#1](https://jacco.ompf2.com/2020/03/18/opt1profiling/)).
 
 ### M2 – RayQuery debug views + ocean BLAS
 
@@ -1997,7 +2187,11 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   Permute 3` finished (declare graph reads); fp16 positions losing precision; thread-group size 8×4 (AMD) vs 8×8/16×8
   (NVIDIA).
 - **Read**: DXR spec TraceRayInline examples; [AMD RDNA guide](https://gpuopen.com/learn/rdna-performance-guide/);
-  `D3D12RaytracingSimpleLighting` (VB/IB fetch from barycentrics); RTG1 ch. 6 (self-intersection); section 2.4, 6.5.
+  `D3D12RaytracingSimpleLighting` (VB/IB fetch from barycentrics); RTG1 ch. 6 (self-intersection); section 2.4, 6.5;
+  [Bikker BVH part 4](https://jacco.ompf2.com/2022/04/26/how-to-build-a-bvh-part-4-animation/) (refit vs rebuild). The
+  M2 displace buffer read-back is also the input of M1b's ocean refit-degradation measurement (informs N); a
+  [flipcode Beer's law post](https://www.flipcode.com/archives/Raytracing_Topics_Techniques-Part_3_Refractions_and_Beers_Law.shtml)
+  by Bikker is a gentle pre-read for M5 absorption.
 
 ### M3 – RGB reference path tracer
 
@@ -2014,7 +2208,10 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 - **Order**: (1) camera rays + miss = env lookup (should look like the skybox); (2) accumulation + reset logic; (3)
   Lambert-only with BSDF sampling (no NEE) → white furnace; (4) env importance sampling + MIS; (5) sun disk + point
   lights (NEE); (6) GGX VNDF + lobe selection, material textures through the staged table; (7) RR + bounce cap; (8)
-  sampler upgrade (hash → Sobol/Owen); (9) panel: spp/frame, max bounces, sample count, reset, freeze, debug view.
+  sampler upgrade (hash → blue noise + golden-ratio offset for the low dimensions, the step the developer knows from
+  Bikker voxel part 4, §3.9 → Sobol/Owen); (9) panel: spp/frame, max bounces, sample count, reset, freeze, debug view.
+  Side track from step (3) on: **M3-ref** (CPU BSDF/pdf tests + tiny CPU tracer) – write each BSDF's tests there before
+  trusting it on the GPU.
 - **Verify**: **white furnace** (albedo-1 Lambert sphere in a uniform env disappears at any bounce count); MSE vs spp
   slope −1 against a long reference; helmet under IBL vs raster (expect differences from shadows/interreflection and
   Smith-Schlick vs Smith-GGX, not from colour/brightness scale); simple scene vs Mitsuba 3 `scalar_rgb` / pbrt-v4 with
@@ -2026,7 +2223,105 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   1 spp/dispatch; `MaterialProperties` stride 140.
 - **Read**: pbr-book 4ed chapters on Monte Carlo, sampling, reflection models, light transport I (path tracing)
   ([pbr-book](https://pbr-book.org/4ed/)); Veach thesis ch. 9 (MIS) [U]; Heitz 2018 VNDF [U]; *Ray Tracing in One
-  Weekend* series ([raytracing.github.io](https://raytracing.github.io/)) [U]; RTXPT source for structure.
+  Weekend* series ([raytracing.github.io](https://raytracing.github.io/)) [U]; RTXPT source for structure; Bikker
+  (the developer's own teacher, §2.9): [Probability theory for PBR 1](https://jacco.ompf2.com/2019/12/11/probability-theory-for-physically-based-rendering/)
+  / [2](https://jacco.ompf2.com/2019/12/13/probability-theory-for-physically-based-rendering-part-2/) (MC, pdfs,
+  importance sampling, light picking ∝ power·solid angle; no MIS/RR), voxel series
+  [part 3](https://jacco.ompf2.com/2024/05/08/ray-tracing-with-voxels-in-c-series-part-3/) (stochastic AA/soft
+  shadows), [part 4](https://jacco.ompf2.com/2024/05/15/ray-tracing-with-voxels-in-c-series-part-4/) (blue noise),
+  [part 6](https://jacco.ompf2.com/2024/05/29/ray-tracing-with-voxels-in-c-series-part-6/) (cosine sampling, equal
+  total energy check), Utrecht INFOMAGR 2022/23 slides
+  [lecture 04 path tracing](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2004%20-%20path%20tracing.pdf)
+  and [lecture 13 bidirectional](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2013%20-%20bidirectional.pdf)
+  (MIS; PDFs not opened by the research [U contents]).
+
+### M3-ref – CPU reference bench
+
+Chosen by the developer on 2026-11-18, next to M3 (`plan.md`). Source: `research/followup_bikker_tinybvh.md` §4 (a).
+Starts once M3 step (3) (Lambert + white furnace) exists; grows with M4 (spectral round-trip) and M5 (water numbers).
+
+- **Goal**: (a) a **CPU test bench for the BSDF/pdf maths** – per BSDF: energy conservation / white furnace, pdf
+  integrates to 1, sampling matches the pdf (chi-square or histogram test), sample/eval consistency, reciprocity; (b) a
+  **tiny multi-threaded CPU path tracer** on a pinned TinyBVH copy that renders small test images of EV scenes to
+  compare with the GPU tracer, and runs **in CI without a GPU**. Mitsuba 3 / pbrt-v4 remain the **independent**
+  reference: a CPU tracer that shares EV's maths also shares its bugs.
+- **Teach first** (plain words):
+  - **BSDF** (bidirectional scattering distribution function) `f(ω_o, ω_i)`: at one surface point, how much of the
+    light arriving from direction ω_i leaves towards ω_o (per unit solid angle, so it can be larger than 1 for shiny
+    surfaces). Lambert is the constant `albedo/π`; GGX is the microfacet formula of §3.6; the water dielectric is §3.7.
+    The path tracer only ever needs three operations per BSDF: `eval` (the value f), `sample` (pick a new direction),
+    `pdf` (how likely `sample` was to pick that direction).
+  - **pdf** (probability density function): the sampling routine's "how often per unit solid angle". Over the whole
+    sphere of directions it **integrates to 1** (it must pick *some* direction); its values are densities, not
+    probabilities, so they can exceed 1 for peaked lobes. The estimator divides by it: `f · cos θ / pdf` (§3.2). If
+    `pdf()` and the real behaviour of `sample()` disagree, the image is **biased** – too bright or too dark in a way
+    no amount of samples fixes. That is why these maths are tested on their own, where every number can be printed.
+  - The tests, each with its expected value [T]:
+    - *White furnace / energy*: for many ω_o, estimate the directional albedo `ρ(ω_o) = ∫ f cos θ_i dω_i` by averaging
+      `f · cos / pdf` over samples from `sample()`. White Lambert → 1; any BSDF → ≤ 1; smooth dielectric R + T = 1
+      (before the η² radiance scaling); single-scatter rough GGX loses energy at high roughness (expected, §3.6).
+    - *pdf integrates to 1*: integrate `pdf(ω_o, ω)` over the sphere with uniform sphere samples (or a fine θ/φ grid)
+      → 1; for GGX reflection the result is 1 minus the fraction of microfacet samples that reflect below the horizon
+      (and are rejected) – the test teaches where that fraction goes.
+    - *Sampling matches the pdf* (chi-square): split the sphere into θ/φ cells, draw N directions with `sample()`,
+      count per cell, compare with the counts the integrated `pdf()` predicts; a χ² statistic with a significance
+      level (Mitsuba uses this approach for its BSDF tests [T]) passes or fails. A simpler first version: render both
+      histograms as small images side by side.
+    - *Sample/eval consistency*: the `f` and `pdf` that `sample()` returns must equal `eval()` and `pdf()` called for
+      the sampled direction.
+    - *Reciprocity*: `f(ω_o, ω_i) = f(ω_i, ω_o)` for reflection (Lambert, GGX); refraction is reciprocal only after
+      dividing by η² on each side (§3.7) [T].
+    - Specular (Dirac) lobes cannot be histogrammed – test them deterministically (exact mirror/refraction direction,
+      weight = F or 1 − F).
+  - **Shared maths** [I]: the cheapest way to test the *real* GPU code is to compile the BSDF/sampling `.hlsli` as C++
+    too, with a small shim header (`float3`, `dot`, `normalize`, `lerp`, `saturate`, `frac`, `asuint`, `mul`, …). That
+    is a lesson in HLSL vs C++ semantics in itself (HLSL `lerp`/`frac`/`mul` order/`asuint`, double literals in C++).
+    It is also why an external reference stays necessary.
+  - **TinyBVH** ([repo](https://github.com/jbikker/tinybvh), MIT, v1.9.2 merged 2026-11-14): `bvh.Build(verts, count)`
+    with 16-B `bvhvec4` vertices (three per triangle), `tinybvh::Ray ray(O, D); bvh.Intersect(ray)` → `ray.hit.t`
+    (`1e30f` on a miss), `hit.prim`, `hit.u/v`; `IsOccluded` for shadow rays (~30 % faster); `BVH4_CPU` layout ≈ 3.5×
+    the rays/s of the base layout but needs AVX2 (`/arch:AVX2`), otherwise a scalar fallback runs
+    ([Basic Use manual](https://jacco.ompf2.com/2025/01/24/tinybvh-manual-basic-use/)). Bikker's own
+    `tiny_bvh_pt.cpp` ("multi-threaded path tracer") is a reference to read, not to copy.
+- **Files / project** (suggestions): a console project, e.g. `EV-Engine/Tests/PtReference/` (own `.vcxproj` in
+  `EV-Engine.slnx`), with `bsdf_tests.cpp`, `cpu_tracer.cpp`, `main.cpp` (`--tests`, `--render <scene> --spp N --out
+  x.exr`; non-zero exit code on any failed test); `pt_cpp_shim.h` that lets the engine's `pt/bsdf.hlsli`,
+  `pt/sampling.hlsli` (and later `pt/spectrum.hlsli`, `pt/water.hlsli`) compile as C++; the **pinned TinyBVH copy** shared
+  with M1b (`third_party/tinybvh/` + MIT `LICENSE` + commit hash, never track `main`, `/arch:AVX2` in this project);
+  scene input from `.evscene` + the same mesh loader (assimp) or a geometry dump written by EV; the frozen ocean patch
+  from the M2 displace buffer read-back; a new CI step in the workflow (§2.7) that runs `PtReference --tests` (and a
+  small render + image compare against a stored reference) after the msbuild step.
+- **Order (hints)**:
+  1. Shim header + compile `bsdf.hlsli`/`sampling.hlsli` as C++; one trivial test (Lambert eval = albedo/π).
+  2. Lambert: furnace, pdf integral, histogram, consistency, reciprocity.
+  3. CI: run `--tests` on the CI runner (`windows-2025-vs2026`, no GPU needed); a failing test must turn CI red.
+  4. GGX VNDF (M3 step 6): same five tests per roughness (e.g. 0.05, 0.3, 0.7, 1.0) and several ω_o incl. grazing.
+  5. TinyBVH vendored; CPU camera rays → nearest hit → normal debug image; compare with the M2 GPU normal view.
+  6. CPU path loop (Lambert + env, then NEE/MIS like the GPU) multi-threaded; furnace sphere; helmet under a constant
+     env; small resolution (128²–256²).
+  7. CPU vs GPU image compare at equal (high) spp: relMSE / FLIP; same seeds + same hash RNG make per-pixel path
+     debugging possible (print every pdf, MIS weight and throughput in the debugger – impossible in HLSL).
+  8. M4/M5 growth: HWSS round-trip and CMF integral tests (§4.8), TIR angle, 10 m slab transmittance (§5), frozen ocean
+     patch render.
+- **Verify** (expected results): white Lambert ρ = 1 within MC error (≈ 1e-3 with ~1M samples [E]); every BSDF
+  ρ ≤ 1 + error; pdf integral 1 within ~1e-3 (GGX: 1 − below-horizon fraction); χ² tests pass at the chosen
+  significance for all tested roughness/angle pairs; sample/eval and reciprocity agree to ~1e-5 relative; CPU furnace
+  sphere invisible; CPU vs GPU image: relMSE/FLIP at equal spp within the noise level (no structured difference
+  image); `--tests` runs in CI in well under a minute [E]; M5: slab ≈ **94/58/11/1 %** at 440/550/600/680 nm, TIR at
+  `asin(1/n)`.
+- **Pitfalls**: the CPU tracer drifting from the GPU code when the maths is *not* shared; shared bugs when it *is*
+  shared (keep Mitsuba/pbrt comparisons); HLSL vs C++ differences (`lerp` argument order is the same but `frac` ≠
+  `std::modf` for negatives, `mul(v, M)` vs `mul(M, v)`, `asuint` → `std::bit_cast`, double literals, integer
+  division); χ² with too few samples or cells whose expected count is < ~5 (merge them); testing a pdf on directions
+  below the horizon; histogram tests on Dirac lobes; TinyBVH API churn (pinned commit), missing `/arch:AVX2` (slow, but
+  works), VS 2026 + EV warning flags not verified [U]; 16-B vertex alignment for TinyBVH's SIMD builders; spending
+  M4/M5 time on a second full renderer instead of a test bench (keep the CPU tracer *tiny*).
+- **Read**: Bikker [probability 1](https://jacco.ompf2.com/2019/12/11/probability-theory-for-physically-based-rendering/)
+  / [2](https://jacco.ompf2.com/2019/12/13/probability-theory-for-physically-based-rendering-part-2/) and
+  [voxel part 6](https://jacco.ompf2.com/2024/05/29/ray-tracing-with-voxels-in-c-series-part-6/) (equal-energy check);
+  [pbr-book 4ed](https://pbr-book.org/4ed/) chapters on Monte Carlo and reflection models; Mitsuba 3 BSDF χ² tests and
+  pbrt-v4's BSDF tests in its source tree [U paths]; [TinyBVH README](https://raw.githubusercontent.com/jbikker/tinybvh/main/README.md),
+  [Basic Use](https://jacco.ompf2.com/2025/01/24/tinybvh-manual-basic-use/) and `examples/tiny_bvh_pt.cpp`.
 
 ### M4 – Spectral (HWSS)
 
@@ -2100,8 +2395,26 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   - Laine, Karras, Aila 2013: porting a big CPU program into one equally big GPU kernel is "generally not a good
     approach"; divergence + high register use (less latency hiding) hurt most with "multiple complex materials"
     ([paper page](https://research.nvidia.com/publication/2013-07_megakernels-considered-harmful-wavefront-path-tracing-gpus)).
-    Design [T][U]: logic kernel, new-path kernel, one kernel per material, extension + shadow ray-cast kernels, queues
-    filled with atomics, a fixed pool of ~1M paths.
+    Design (from the paper): pool of **1M paths** always alive, **212 B of state per path** (incl. extension + shadow
+    rays and ray results) = 212 MB in DRAM (8M paths: only ≈ 5 % faster); stages **logic** (one kernel over all paths,
+    no queue) → **material** (new-path kernel + one kernel per *expensive* material, cheap materials merged into one
+    kernel) → **ray cast** (separate extension and shadow kernels); queues = preallocated index buffers (4 MB each) with
+    one atomic counter. SoA instead of AoS: **+80 %** total; warp-coalesced queue atomics: **+40 %** total (ray casts
+    +32 % from coherence alone). Tesla K20 (Kepler), software traversal: megakernel vs wavefront 42.99 vs 58.38 Mpaths/s
+    (CARPAINT, 1 material, **+36 %**), 5.41 vs 9.70 (CITY, 3 complex materials, **+79 %**), 2.71 vs 8.71 (CONFERENCE,
+    3 very uneven materials, **+221 %**; thread utilisation 23 % vs 53 %); ray casts are 44–56 % of the wavefront's time.
+    The single-material gain came from register-lean traversal kernels – with RT-core traversal (3070) it should shrink,
+    with shader-loop traversal (9070 XT) less so [I]
+    ([paper PDF](https://users.aalto.fi/~laines9/publications/laine2013hpg_paper.pdf)). The paper never measures a case
+    where the megakernel wins; these are Kepler-era numbers, not an expectation for EV.
+  - Bikker's version ([Wavefront PT, 2019](https://jacco.ompf2.com/2019/07/18/wavefront-path-tracing/), Lighthouse 2):
+    four kernels **Generate** (primary rays + count) → **Extend** (nearest hit) → **Shade** (writes continuation rays
+    *and* NEE shadow rays to separate buffers, survivors appended with atomic counters = compaction, counters stay on
+    the GPU) → **Connect** (any-hit shadow test, shadow rays traced as one separate batch); 32-B rays (origin and
+    direction padded to 16 B for single 128-bit loads); ≈ 224 MB of buffers at 1080p. A reader comment warns that
+    per-material queues sized to the full image explode memory → sort one buffer (EV's counting sort) instead. No
+    benchmark numbers and no MIS in the post. A good starting structure; TinyBVH's `kernels/wavefront.cl` /
+    `wavefront2.cl` are concrete OpenCL references [not read].
   - The trade-off in pbrt-v4's words: wavefront kernels start converged and each gets **its own register
     allocation**, but data leaves the chip between kernels ("more likely to be bandwidth-limited"); the megakernel keeps
     state on chip but its registers must cover the worst case
@@ -2110,8 +2423,22 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   - Cycles: SoA `IntegratorState`, millions of states, schedule "the kernel that most active paths need next", compact
     active paths, `shade_surface` sorts by shader
     ([Cycles kernel scheduling](https://developer.blender.org/docs/features/cycles/kernel_scheduling/)); sort key =
-    truncated state index (locality) then shader (coherence); measured +2–3 % (local atomics) to +15 % (partitioned,
-    Apple M1/M2) overall ([commit 523bbf70655](https://developer.blender.org/rB523bbf70655)). Mitsuba 3 / Dr.Jit goes
+    truncated state index (locality) then shader (coherence); measured gains are for *how* to sort, not sorting
+    on/off: chunked/partitioned sort (65536 states per partition) "up to 15 %" on Apple M1-family
+    ([4b1d315](https://api.github.com/repos/blender/blender/commits/4b1d315017e)); the same heuristic on OptiX/RTX
+    A6000: 0–12 % less time per sample over 12 scenes, barbershop +0.4 % slower
+    ([523bbf7](https://api.github.com/repos/blender/blender/commits/523bbf70655)); local-atomic per-partition sort 2–3 %
+    ([654e1e9](https://api.github.com/repos/blender/blender/commits/654e1e9)); Intel Arc B570, local partitioned instead of
+    global sort: 25 % in Barbershop, Arc A770 2 % (commit 2df163a, 2025); CUDA/OptiX got local partitioned sorting in
+    2026-09 (bfb5775). (Correction 2026-11-18: the "+15 %" was earlier attributed to 523bbf7 – it is from 4b1d315.)
+    Current rule: partitions only if the scene has < 300 shaders; states = 16 × max resident threads; new work is
+    fetched when < 1/4 of states are busy
+    ([queue.h](https://raw.githubusercontent.com/blender/blender/main/intern/cycles/device/queue.h),
+    [cuda/queue.cpp](https://raw.githubusercontent.com/blender/blender/main/intern/cycles/device/cuda/queue.cpp),
+    [path_trace_work_gpu.cpp](https://raw.githubusercontent.com/blender/blender/main/intern/cycles/integrator/path_trace_work_gpu.cpp)).
+    On the 3070 that rule gives 46 SMs × 1536 threads × 16 ≈ **1.13M states** – Laine and Cycles both converge on ~1M
+    paths in flight [I]; with EV's ≤ 64 material programs a partitioned counting sort is in the regime where Cycles keeps
+    partitioning on [I]. Mitsuba 3 / Dr.Jit goes
     the other way – one fused megakernel, 2.14× faster than pbrt-v4 on GPU
     ([Dr.Jit](https://rgl.epfl.ch/publications/Jakob2022DrJit)) – so "wavefront always wins" is false.
   - **Two kinds of benefit** [I]: (a) *coherence* – sorted hits + one uber shade kernel (lanes in a wave mostly run
@@ -2135,10 +2462,12 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   signature / `ExecuteIndirect` wrapper** in `CommandList` yet → new; the test scene `materials_N.evscene` +
   synthetic material types in the material struct (debug-only); panel toggle + per-bounce timings; `GpuTimer` scopes
   per pass and per bounce.
-- **Order (hints)**: (1) path-state + hit-record layout on paper (SoA, packed; size per path, VRAM at 1080p/1440p);
+- **Order (hints)**: (1) path-state + hit-record layout on paper (SoA, packed; size per path, VRAM at 1080p/1440p;
+  pool of ~1M paths – Laine 1M, Cycles ≈ 16 × resident threads ≈ 1.13M on the 3070 – instead of one path per pixel at
+  1440p; Laine measured +80 % for SoA and +40 % for wave-aggregated atomics alone);
   (2) wavefront-unsorted with only Lambert, bit-identical (or FLIP ≈ 0) to the megakernel at the same seeds; (3) add
   NEE/shadow pass and compaction of dead paths (active count per bounce in the panel); (4) counting sort + permutation,
-  shade through `perm[]`; (5) material-test scene and synthetic materials; (6) benchmark all three modes on both GPUs;
+  shade through `perm[]` (wave-aggregated atomics from the start – Laine: +40 %, incl. +32 % ray coherence); (5) material-test scene and synthetic materials; (6) benchmark all three modes on both GPUs;
   (7) variant (b): per-bin `ExecuteIndirect` dispatches; (8) optional: Cycles-style locality partition (sort within
   chunks of 64k paths); (9) write the break-even result into `performance.md` and here.
 - **Benchmark design (the 1/4/16/64-material scene)** [I]:
@@ -2156,7 +2485,9 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   - Record per mode and N: per-pass ms (trace, sort, shade, shadow, compact) **per bounce**, total frame ms, samples/s,
     rays/s, VGPRs/occupancy and **Average active lanes** (RGP 2.7) on the 9070 XT, warp-state / shader-profiler data on
     the 3070, VRAM of path state + sort buffers, and FLIP vs the megakernel image (must be ≈ 0).
-  - Expected shape [E, to be replaced]: N = 1: wavefront 10–30 % slower than the megakernel; N = 4: about even; N =
+  - Expected shape [E, to be replaced]: N = 1 *cheap* material (Lambert): wavefront 10–30 % slower than the megakernel;
+    N = 1 *expensive* material: possibly faster already (Laine 2013: +36 % on Kepler, from lean trace kernels – likelier
+    on the 9070 XT, whose traversal is a shader loop, than on the 3070, whose traversal runs in the RT core [I]); N = 4: about even; N =
     16–64 incoherent: sorted wavefront fastest, unsorted wavefront ≈ or worse than the megakernel; variant (b) helps
     most when one material needs far more VGPRs than the others. RDNA 4 and Ampere may cross over at different N
     because of their different occupancy limits (RDNA 4: 16 waves/SIMD at ≤ 96 VGPRs; Ampere: 48 warps/SM at ≤ ~40
@@ -2176,8 +2507,11 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   [pbr-book ch. 15](https://pbr-book.org/4ed/Wavefront_Rendering_on_GPUs/Mapping_Path_Tracing_to_the_GPU) + pbrt-v4
   `src/pbrt/wavefront/` [U path], [Cycles kernel scheduling](https://developer.blender.org/docs/features/cycles/kernel_scheduling/),
   [Bikker: wavefront path tracing](https://jacco.ompf2.com/2019/07/18/wavefront-path-tracing/) (buffer budgets,
-  atomic compaction), PMPP chapters on scan/histogram/sort, [MS SER post](https://devblogs.microsoft.com/directx/shader-execution-reordering/),
-  `research/followup_performance_optimization.md` §1.
+  atomic compaction, four-kernel split), Utrecht INFOMAGR 2022/23
+  [lecture 10 "GPU ray tracing (2)"](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2010%20-%20GPU%20ray%20tracing%20(2)%20v2.pdf)
+  (Bikker, wavefront; contents not opened [U]), TinyBVH `kernels/wavefront.cl` / `wavefront2.cl` [not read], PMPP
+  chapters on scan/histogram/sort, [MS SER post](https://devblogs.microsoft.com/directx/shader-execution-reordering/),
+  `research/followup_performance_optimization.md` §1, `research/followup_gaps_completion.md` §1–2 (measured numbers).
 
 ### M6 – GPU compute bring-up (HIP + CUDA)
 
@@ -2250,7 +2584,9 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   4. BVH: frozen-ocean `PREFER_FAST_TRACE` build, compaction of static BLASes, RRA review of overlap/empty space, then
      the ocean tiling experiment (8×8 tiles) and the rebuild interval N (log trace ms vs frames since rebuild).
   5. Registers / live state: read VGPRs and spills; shrink path state in registers (fp16 for throughput/pdfs where
-     FLIP allows, recompute instead of carry, fewer values alive across the RayQuery loop); group-size define per vendor.
+     FLIP allows – on the 3070 this saves registers/bandwidth only, fp16 ALU runs at the FP32 rate on GA10x; recompute
+     instead of carry, fewer values alive across the RayQuery loop, one RayQuery object in scope at a time); group-size
+     define per vendor.
   6. Coherence: apply the M5c verdict (keep megakernel, or sorted wavefront for the ocean shot if it won there).
   7. Memory: compact vertex streams for hit attributes, texture formats/mips for secondary hits.
   8. Sampling efficiency: RR tuning, sampler (Sobol + Owen / blue noise), light selection, env CDF quality – judged
@@ -2365,7 +2701,8 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
      crests.
   5. SHaRC: update fraction, voxel size (`sceneScale` for a 1024 m ocean), resolve cost; measure bias vs reference.
   6. NRC kernels: (a) naive → (b) fp16 → (c) fused layers in shared memory/LDS → (d) WMMA (RDNA 4) / Tensor Cores
-     (3070); profile with RGP Dispatch capture (HIP) and Nsight Compute (CUDA); training batch size vs cache quality.
+     (3070) – on the 3070 step (b) only saves memory/bandwidth (non-tensor fp16 = FP32 rate on GA10x), the arithmetic
+     speed-up comes from (d); profile with RGP Dispatch capture (HIP) and Nsight Compute (CUDA); training batch size vs cache quality.
   7. Re-apply O1 items that matter more at 1 spp (shadow-ray flags, live state, ray offsets) and the M5c verdict.
   8. CPU side: command recording, TLAS instance updates, submission count (PIX timing capture / Nsight Systems).
 - **Verify**: budget table per GPU with median and p95 per pass, at normal clocks (final) and locked clocks (A/B);
@@ -2409,6 +2746,23 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   Microsoft sample on RX 9070: 788 ms → 3.11 ms build, 7.5 GiB → 774 MiB (rebuild comparison, not refit).
 - **Caustics**: photon pass / MNEE (5.8).
 
+### Ideas not (yet) chosen
+
+Proposed in `research/followup_bikker_tinybvh.md` §4 on 2026-11-18; the developer chose **M1b** and **M3-ref** only.
+Not separate items:
+
+- **Ocean refit-only check as its own M2 addition** – not chosen separately; the measurement (SAH of refit vs rebuild
+  over K frames of the read-back grid) is **folded into M1b** step 7.
+- **M5d – software BVH traversal in compute vs DXR hardware** (un-chosen idea, may be picked up after M5c): the
+  developer's own HLSL compute traversal of a CPU-built BVH2 (TinyBVH `BVH_GPU` layout as input, or the M1b BVH;
+  stretch BVH4_GPU / CWBVH), a panel toggle RayQuery / compute-BVH2, rays/s for primary, NEE-shadow and bounce-2+ rays
+  on both GPUs plus RGP/Nsight occupancy and divergence, cross-checked against TinyBVH's
+  [`external/dx12rt`](https://github.com/jbikker/tinybvh/tree/main/external/dx12rt) benchmark (D3D12 program that
+  compares DXR `TraceRay`, inline RayQuery and TinyBVH compute traversal `BVH_GPU`/`BVH4_GPU`/CWBVH on Crytek Sponza
+  with precomputed – probably coherent primary [I] – rays and prints MRays/s as % of DXR; no published numbers).
+  Value: learning only (WARP and both GPUs already do DXR 1.1, so no fallback role). Expected [E]: hardware wins on both
+  GPUs by ~1.5–4× for secondary rays. If picked up, ask the developer and add a full milestone entry here.
+
 ---
 
 ## 11. Learning resources (per track)
@@ -2423,7 +2777,11 @@ Unverified URLs are marked [U] (known canonical locations, not fetched by the re
 | | Heitz 2018 VNDF [jcgt 0007/04/01](https://jcgt.org/published/0007/04/01/) [U]; Eto & Tokuyoshi 2023 bounded VNDF [U]; Burley 2020 Owen [jcgt 0009/04/01](https://jcgt.org/published/0009/04/01/) [U]; Jarzynski & Olano 2020 GPU hashes [jcgt 0009/03/02](https://jcgt.org/published/0009/03/02/) [U] | Sampling |
 | | [Ray Tracing Gems I/II](https://www.realtimerendering.com/raytracinggems/) [U] | RTG1 ch. 6 self-intersection, RTG2 ch. 30 caustics, ch. 42 GPU spectral |
 | | [NVIDIA RTXPT](https://github.com/NVIDIA-RTX/RTXPT), [Capsaicin](https://github.com/GPUOpen-LibrariesAndSDKs/Capsaicin), [kajiya](https://github.com/EmbarkStudios/kajiya) (archived) | Production/research DX12/Vulkan path tracers |
-| | [Jacco Bikker BVH series](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/) [U] | BVH quality, why refits degrade |
+| | Jacco Bikker (BUas CMGT founder, §2.9): [How to build a BVH, 10 parts (1–9b)](https://jacco.ompf2.com/articles/) (basics → SAH → binning → **refit** → TLAS → TLAS+BLAS → shading → Whitted → OpenCL GPU ×2; [part 1](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)), [Probability theory for PBR 1](https://jacco.ompf2.com/2019/12/11/probability-theory-for-physically-based-rendering/)/[2](https://jacco.ompf2.com/2019/12/13/probability-theory-for-physically-based-rendering-part-2/) (MC, pdfs, importance sampling, light picking; no MIS/RR), voxel series [3](https://jacco.ompf2.com/2024/05/08/ray-tracing-with-voxels-in-c-series-part-3/)/[4](https://jacco.ompf2.com/2024/05/15/ray-tracing-with-voxels-in-c-series-part-4/)/[5](https://jacco.ompf2.com/2024/05/22/ray-tracing-with-voxels-in-c-series-part-5/)/[6](https://jacco.ompf2.com/2024/05/29/ray-tracing-with-voxels-in-c-series-part-6/) (stochastic AA/soft shadows, stratification + **blue noise + golden-ratio offset**, reprojection, path tracing with cosine sampling), [Wavefront PT](https://jacco.ompf2.com/2019/07/18/wavefront-path-tracing/), [BVH Quality: Beyond SBVH](https://jacco.ompf2.com/2025/05/20/bvh-quality-beyond-sbvh/) (SAH predicts CPU, ray sets predict GPU) | The developer's own BUas teacher; matches M1–M5c, M1b, M3-ref |
+| | Bikker optimization series: [OPT#1 Profiling](https://jacco.ompf2.com/2020/03/18/opt1profiling/), [OPT#2 Low-level](https://jacco.ompf2.com/2020/03/24/opt2lowlevel/), [OPT#3 SIMD 1](https://jacco.ompf2.com/2020/05/12/opt3simd-part-1-of-2/), [OPT#4 SIMD 2](https://jacco.ompf2.com/2020/05/18/opt4simd-part-2-of-2/) | Profiling discipline (O1), SIMD for the CPU side (M1b, M3-ref) |
+| | Utrecht INFOMAGR "Advanced Graphics" 2022/23 slides by Bikker ([course](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/index.html)): [04 path tracing](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2004%20-%20path%20tracing.pdf), [10 GPU ray tracing (2)](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2010%20-%20GPU%20ray%20tracing%20(2)%20v2.pdf) (wavefront), [13 bidirectional](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2013%20-%20bidirectional.pdf) (MIS), [15 filtering](https://ics-websites.science.uu.nl/docs/vakken/magr/2022-2023/slides/lecture%2015%20-%20filtering.pdf) (PDFs found via search, not opened [U contents]) | Lecture-style M3/M5c/M7 material |
+| | [Lighthouse 2](https://github.com/jbikker/lighthouse2) (Apache 2.0; OptiX 7 wavefront, OptiX Prime, Vulkan and BDPT cores; SVGF + specular SVGF) | Research framework; wavefront + denoiser reference (M5c, M8b) |
+| BVH / software traversal | [TinyBVH](https://github.com/jbikker/tinybvh) (MIT, no dependencies, C++17; v1.9.2 merged 2026-11-14 – pin a commit): binned SAH / SBVH / Bonsai builders, `Refit`, `Optimize`, `SAHCost()`, `BVH4_CPU` (AVX2), GPU layouts `BVH_GPU`/`BVH4_GPU`/CWBVH, AMD HW BVH formats; [Basic](https://jacco.ompf2.com/2025/01/24/tinybvh-manual-basic-use/) / [Advanced](https://jacco.ompf2.com/2025/01/25/tinybvh-manual-advanced/) manuals; **[`external/dx12rt/`](https://github.com/jbikker/tinybvh/tree/main/external/dx12rt)** = D3D12 benchmark of DXR `TraceRay` vs inline RayQuery vs compute BVH2/BVH4/CWBVH (`tiny.hlsl`, `tiny4.hlsl`, `tiny8.hlsl`, `tinyrq.hlsl`; prints MRays/s as % of DXR, no published numbers) | M1b answer key (`SAHCost`), M3-ref CPU traversal, reference design for the un-chosen M5d |
 | DX12/DXR | [DXR spec](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing.html), [DXR Part 2](https://microsoft.github.io/DirectX-Specs/d3d/Raytracing2.html), [Agility downloads](https://devblogs.microsoft.com/directx/directx12agility/), [getting started](https://devblogs.microsoft.com/directx/gettingstarted-dx12agility/) | API |
 | | [NVIDIA RTX best practices](https://developer.nvidia.com/blog/rtx-best-practices/) + [updated](https://developer.nvidia.com/blog/best-practices-for-using-nvidia-rtx-ray-tracing-updated/), [AMD RDNA performance guide](https://gpuopen.com/learn/rdna-performance-guide/) | Vendor guidance |
 | | Local `T:\Projects\DX12\Samples\DirectX-Graphics-Samples\Samples\Desktop\D3D12Raytracing\src\` (HelloWorld, SimpleLighting, ProceduralGeometry, LibrarySubobjects, MiniEngine, RealTimeDenoisedAmbientOcclusion, HelloShaderExecutionReordering, SakuraForestSER, OpacityMicromaps) – **none uses inline RayQuery** | AS code, SER/OMM APIs, RTAO denoiser |
@@ -2443,7 +2801,9 @@ Unverified URLs are marked [U] (known canonical locations, not fetched by the re
 
 Suggested interleaving (from the report): pbr-book sampling/MIS/microfacets with M3, chapter 4 with M4; PMPP 1–6 +
 simpleD3D12/Orochi before M6; Falcor OptixDenoiser + OIDN docs before M7; CPU MLP with hand-written backprop and Adam
-before M10b; tiny-cuda-nn "learn an image" as the first NVIDIA ML reference run.
+before M10b; tiny-cuda-nn "learn an image" as the first NVIDIA ML reference run. Bikker track (added 2026-11-18): BVH
+parts 1–6 with M1/M1b; probability 1–2 + voxel 3/4/6 + INFOMAGR lectures 04/13 with M3/M3-ref; wavefront post +
+lecture 10 with M5c; OPT#1–4 before O1.
 
 ---
 
@@ -2495,31 +2855,54 @@ before M10b; tiny-cuda-nn "learn an image" as the first NVIDIA ML reference run.
 35. Ocean BLAS refit/build timings on RX 9070 XT and RTX 3070 (estimates 0.5/5 ms).
 36. D3D12 ↔ HIP/CUDA fence round-trip cost; texture↔buffer pack cost at 1080p/1440p.
 37. OIDN and OptiX denoise times at 1080p/1440p on both GPUs.
-38. RayQuery vs DispatchRays on RDNA 4 / Ampere for this tracer.
+38. RayQuery vs DispatchRays on RDNA 4 / Ampere for this tracer. On RDNA 4 DispatchRays can use dynamic VGPRs
+    (traversal stage small, shading stage large) while RayQuery cannot – a concrete reason the answer may differ per
+    vendor [I] (§6.6).
 39. Spectral overhead in EV (Peters' figures are on an RTX 5070 Ti).
 
 **Performance / profiling (added 2026-11-18, `followup_performance_optimization.md`)**
-40. Laine et al. 2013 internal numbers (paths in flight, bytes of state per path, per-scene speed-ups, GPU) – the PDF
-    text could not be extracted; the design summary in M5c is [T]. Re-read the paper before quoting numbers.
-41. Megakernel vs wavefront (sorted/unsorted) break-even number of materials on RDNA 4 and Ampere – no published
-    benchmark; M5c measures it. Expected shape in M5c is [E].
+40. ~~Laine et al. 2013 internal numbers~~ – **resolved 2026-11-18** (`followup_gaps_completion.md` §1): 1M paths,
+    212 B/path, +36/+79/+221 %, Tesla K20, SoA +80 %, atomics +40 % – now in M5c.
+41. Megakernel vs wavefront break-even on RDNA 4 / Ampere – still unpublished; M5c measures it. Laine 2013 (Kepler,
+    software traversal) found the wavefront faster even with one expensive material (+36 %); no study shows the
+    megakernel winning except with cheap materials (Dr.Jit/Mitsuba 3 fused kernel). Expected shape in M5c stays [E].
 42. Whether `nvidia-smi --lock-gpu-clocks` / `--lock-memory-clocks` work on GeForce RTX 30 under Windows (docs say
     "Volta+", admin; GeForce not stated); exact Nsight Graphics "Lock Clocks to Base" semantics vs SetStablePowerState.
+    Only third-party/user reports (Zivid: not all GPUs support `-lgc/-lmc`); test on the 3070 (`nvidia-smi -lgc` in an
+    admin console, then `--query-gpu=clocks.sm`) and record the result here.
 43. RDP Stable-clock frequency on the RX 9070 XT and whether RGP's "peak during capture" holds under thermal load.
+    Narrowed 2026-11-18: the CLI offers only `normal|stable` clock modes (no peak switch); the frequency is not
+    documented – read it from an RGP capture or a monitoring tool.
 44. Cost of EV's forced DRED auto-breadcrumbs in Release timings (keep constant across A/B runs until measured).
-45. RGP 2.7 "Average active lanes" requirements (shader instrumentation in RDP) and its overhead on timings; the
-    `RadeonDeveloperPanelCLI` flags for scripted captures.
+45. Overhead of RGP shader instrumentation (`--rgp-shader-instrumentation`, needed for Average active lanes) on
+    timings – measure once. (Partly resolved 2026-11-18: the CLI flags are documented, §10.1 Procedure C.)
 46. Whether Nsight Graphics on RTX 30 exposes RT-core traversal metrics / any traversal heatmap (none found; RRA is the
     BVH reference).
 47. Ocean tiling (e.g. 8×8 tiles) gain for trace and refit quality – no source, measure in O1.
-48. Wächter & Binder constants (`int_scale` 256, `float_scale` 1/65536, `origin` 1/32) were taken from Cycles' code
-    via a search snippet – check against RTG1 ch. 6; and what replaced ray offsetting in Cycles ("remove ray
-    offsetting" commit not read).
-49. FLIP default pixels-per-degree (believed 67) and HDR-FLIP exposure settings for EV's linear EXRs.
-50. Ampere GA102 2nd-gen RT core figures (~2× triangle rate vs Turing) – whitepaper not re-fetched.
+48. ~~Wächter & Binder constants / what replaced offsetting in Cycles~~ – **resolved 2026-11-18**
+    (`followup_gaps_completion.md` §5): constants confirmed in Cycles' `kernel/bvh/util.h` (cites RTG ch. 6); commit
+    74afc86 replaced most offsetting by prim+object ID skipping – see §10.2 Rays. (The RTG1 PDF itself is still behind a
+    login.)
+49. ~~FLIP defaults~~ – **resolved 2026-11-18**: 67 ppd, ACES, automatic exposure range (§10.1 setup item 5). Exact
+    exposure flag names: check `flip -h` [U].
+50. ~~Ampere GA102 RT core figures~~ – **resolved 2026-11-18** (GA102 whitepaper read): §1.1, §6.6. Also corrected:
+    non-tensor fp16 = FP32 rate on GA10x (no 2× ALU gain on the 3070).
 51. Real VGPR/register counts of EV's spectral megakernel on both GPUs (O1 occupancy estimates 100–160 are [E]).
 52. rocprofv3 / ROCm Compute Profiler on native Windows – only WSL2 (experimental) found; RGP Dispatch capture is the
     Windows HIP route.
+
+**RDNA 4 / Bikker / TinyBVH (added 2026-11-18, `followup_gaps_completion.md` §4, `followup_bikker_tinybvh.md`)**
+53. Whether the AMD driver ever applies dynamic VGPRs to inline RayQuery (no evidence that it does); exact RDNA 4 BVH
+    memory reduction factor (slide chart not legible); still no RDNA 4-specific GPUOpen RT best-practices page.
+54. TinyBVH (pinned 1.9.x) compiling warning-free under VS 2026 / MSVC 14.5x with EV's warning flags (M1b, M3-ref);
+    fall back to `#pragma warning(push, 0)` around the include. Which builder `Build()` uses by default and the exact
+    `C_trav`/`C_int` constants in `SAHCost()` (read `tiny_bvh.h` before comparing M1b numbers).
+55. Compute-BVH vs RayQuery rays/s ratio on RDNA 4 / Ampere for primary vs incoherent rays – no published numbers
+    (TinyBVH `external/dx12rt` prints but publishes none); only relevant if the un-chosen M5d is picked up.
+56. Whether the Utrecht INFOMAGR "Variance reduction" / "Resampling" slides cover firefly clamping, blue noise or
+    ReSTIR (slides not opened); what BUas courses actually taught the developer (ask them, §2.9).
+57. The real refit-degradation curve of EV's ocean (SAH ratio refit/rebuild over frames, M1b) and how well it predicts
+    the GPU trace ms over frames since rebuild (SAH predicts CPU better than GPU – Bikker 2025).
 
 ---
 
@@ -2543,4 +2926,6 @@ supersedes the report.
 | `followup_spectral_details.md` | HWSS equations from the full paper, pbrt VolPath rules + simple water scheme, **rgb2spec λ in nm**, table format/lookup, CMF/D65 data, Wyman coefficients, Planck, water data (Pope & Fry to 727.5 nm, Segelstein, Morel phase + sampling, Quan & Fry 10 coefficients), Peters code, test ladder | 4, 5 |
 | `followup_dx12_dxr_practical.md` | Agility 1.620.2 integration + static-lib pitfall, DXC versions, RayQuery API, driver floors, vendor RT guidance, AS alignment/barriers, ocean BLAS recipe, **WARP DXR since 1.0.8**, tools, DRED ops, TDR keys, SM 6.10 status, local samples | 1, 6 |
 | `followup_performance_optimization.md` | Megakernel vs wavefront (Laine 2013, pbrt-v4 queues, Cycles SoA state + sort-by-shader numbers, Dr.Jit megakernel, Bikker buffer budgets), counting sort / compaction recipe, path-state memory estimate, SER results (NVIDIA, MS, Indiana Jones); profiling methodology (D3D12 timestamps, SetStablePowerState caveats, RDP Stable clocks, nvidia-smi locks, equal-time error metrics, FLIP); tools (RGP 2.4/2.7 Dispatch capture + Average active lanes, RRA traversal counters, Nsight GPU Trace on Ampere, rocprofv3 WSL-only); optimization catalogue with sources; RDNA 4 RT hardware (BVH8, OBB, ray transform, 192 KB VGPRs/SIMD, dynamic VGPRs) and Ampere occupancy limits | 10.1, 10.2, M5c, O1, O2, 12 |
+| `followup_gaps_completion.md` | Closes the gaps of the interrupted performance run: **Laine 2013 measured numbers** (K20, 1M paths × 212 B, +36/+79/+221 %, SoA +80 %, warp atomics +40 %); **Cycles sorting figures** (4b1d315 "up to 15 %" on Apple M1 – corrects the earlier 523bbf7 attribution; 523bbf7 OptiX A6000 0–12 %; local atomics 2–3 %; Arc B570 25 %; current < 300-shader / 16× resident-threads rules); **Ampere GA102 whitepaper** (2× ray/triangle, concurrent RT + shading, RTX 3070 specs, **non-tensor FP16 = FP32 rate** – corrects "fast fp16 on Ampere"); **RDNA 4 RT from AMD sources** (8 box/2 tri per clock, BVH8, 8 tris/node, OBB ~10 %, HW instance transform + stack, dynamic VGPRs only for wave32 chained calls, 1 RayQuery in scope); Q48 Cycles ray offset + ID skipping, Q49 FLIP defaults, Q45/Q43 RDP CLI flags | 1.1, 6.6, 9.3, 10.1, 10.2, M5c, O1, O2, 12 |
+| `followup_bikker_tinybvh.md` | Jacco Bikker and TinyBVH: TinyBVH 1.9.2 (MIT, builders, refit, layouts, GPU kernels, `external/dx12rt` DXR vs compute benchmark); blog curriculum (BVH series 10 parts, probability 1–2, voxel series incl. blue noise + golden ratio, wavefront post, OPT series, BVH Quality: Beyond SBVH); Arauna/Brigade/Lighthouse 2, Utrecht INFOMAGR slides; options for EV (chosen: M1b, M3-ref; not chosen: M5d, separate ocean refit check); the developer's BUas background (voxpopuli, WrldTmpl8, RubiksCube renderer) | 2.9, 3.9, 6.5, 10.2, M1, M1b, M2, M3, M3-ref, M5c, Ideas not chosen, 11, 12 |
 
