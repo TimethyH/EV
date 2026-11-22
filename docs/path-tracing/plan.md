@@ -15,6 +15,34 @@ plan but are no longer on the critical path.
 **Who writes the code:** from M0 on, all code is written by the developer (learning project). Claude acts as tutor: it
 explains, points to files, reviews and helps debug, using `knowledge.md` as its reference.
 
+## NEXT SESSION: build the Patroni board first (requested 2026-11-22)
+
+Before continuing with M0 (#989 is re-issued and waiting), Claude builds a **Patroni version of this plan**: one
+place that makes it visually easy to see **where we are, where we're going, and everything needed to know** for each
+step. Patroni = the developer's own visual workspace (patroni.abodi.nl), built through its MCP tools. Read its
+`get_guide` first.
+
+What the board must contain:
+1. **Roadmap overview**: every milestone (M0 … M11, O1/O2, the GI track, side tracks) as a flow with dependencies and
+   a clear **"you are here"** marker (done / current / next / later). Updated after every step.
+2. **Per milestone (nested nodes)**:
+   - goal and why;
+   - the knowledge: Claude's explanations from `knowledge.md` and `research/`, plus **links to the exact paper or
+     article sections** to read;
+   - **visualizations that explain the concepts** (diagrams, graphs, e.g. noise vs spp, cascade sizes, the
+     reservoir merge, probe layouts);
+   - the **tasks** as checklists, in the same order as the "what / knowledge / tasks" step format.
+3. **How the systems work together**: an architecture board showing the modules and the data flowing between them
+   (render graph, acceleration structures, path tracer passes, spectral code, denoiser interface, HIP/CUDA DLLs + fence
+   interop, radiance-cache interface, harness). Things are marked *planned* vs *built*. It is drawn ahead of
+   development and refined as each part gets built.
+4. **Decisions**: D1–D18 and G1–G6, with the chosen option and a short reason.
+5. **GI techniques track**: the techniques, how they compare, and the comparison harness and metrics.
+
+Rule from then on: **Claude keeps the board up to date on its own, without being asked**. After every step, every new
+decision and every plan change, it updates the status marker, ticks the tasks, adds the next step's knowledge and
+tasks, and marks architecture parts as built, along with `build-log.md`.
+
 ## Documents
 
 | File | What it is |
