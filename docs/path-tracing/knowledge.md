@@ -1118,7 +1118,10 @@ differencing raster vs reference at the same camera, time and seed (D7 shots). A
   clamping tiers to the targeted SDK version** (→ use 620 to see the newest tiers), RayQuery OMM opt-in flags for
   pre-SM 6.9 shaders.
 - Integration without NuGet ([getting started](https://devblogs.microsoft.com/directx/gettingstarted-dx12agility/)):
-  1. Rename `.nupkg` → `.zip`, extract (internal path for the DLLs believed to be `build/native/bin/x64` [U]).
+  1. Rename `.nupkg` → `.zip`, extract. Verified 2026-11-19 on 1.620.2: DLLs in `build/native/bin/x64/`, headers in
+     `build/native/include/` (+ a `d3dx12/` subfolder); `d3d12.h` defines `D3D12_SDK_VERSION 620`. **EV vendors a
+     trimmed copy in `EV-Engine/EV-Engine/thirdparty/agility/`** (`include/` + flat `redist/` with D3D12Core.dll and
+     d3d12SDKLayers.dll – flat because `.gitignore` ignores `bin/` and `x64/`); see its README.
   2. Agility `include` **before** the Windows SDK includes (else FL 12_2 / new SM defines are missing); keep linking
      `d3d12.lib` from the Windows SDK. Use the Agility `d3d12.h` consistently in engine and apps (the vendored d3dx12
      enhanced-barrier code is guarded by `D3D12_SDK_VERSION >= 608`).
@@ -1128,7 +1131,9 @@ differencing raster vs reference at the same camera, time and seed (D7 shots). A
   4. Export from **the .exe**:
      `extern "C" { __declspec(dllexport) extern const UINT D3D12SDKVersion = 620; }`
      `extern "C" { __declspec(dllexport) extern const char* D3D12SDKPath = u8".\\D3D12\\"; }` (relative to the exe,
-     **trailing slash required**; the article's example uses 4 – use 620). Alternative: a `.def` file
+     **trailing slash required**; the article's example uses 4 – use 620). **EV is C++20: drop the `u8` prefix**
+     (`u8"..."` is `const char8_t[]` since C++20 → error C2440 into `const char*`; the ASCII path is byte-identical
+     without it; hit in M0, 2026-11-19). Alternative: a `.def` file
      (`EXPORTS D3D12SDKVersion DATA PRIVATE` …).
 - **Static-library pitfall (EV!)** [I, standard MSVC behaviour]: the engine is a static lib; the linker only pulls an
   object out of a `.lib` if something references it → exports defined in the engine are **silently dropped** and the

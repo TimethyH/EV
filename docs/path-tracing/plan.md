@@ -6,6 +6,12 @@ Goal: a spectral path tracer (hero wavelength sampling) as a **toggleable core-e
 OceanRenderer, denoised with OIDN and the OptiX denoiser, using GPU compute (HIP on AMD, CUDA on NVIDIA) where it fits,
 and growing into a self-written **Neural Radiance Cache** (NRC).
 
+**Scope update 2026-11-22:** the ocean is **no longer the main target**. The developer will build proper test
+environments later. A second goal was added: **learn and fairly compare real-time global illumination techniques**
+(SHaRC, NRC, DDGI probes, surfels, radiance cascades, ReSTIR) on performance *and* visual fidelity, with one
+measurement harness. See "GI techniques track" below. Ocean-specific items (D6, M2 ocean BLAS, M5 water) stay in the
+plan but are no longer on the critical path.
+
 **Who writes the code:** from M0 on, all code is written by the developer (learning project). Claude acts as tutor: it
 explains, points to files, reviews and helps debug, using `knowledge.md` as its reference.
 
@@ -68,21 +74,112 @@ Every milestone ends in something visible and checkable. M0–M5 need no HIP/CUD
 | **M1** Acceleration structures | AS buffer creation path (RT-AS state, never transitioned); BLAS per `Mesh`; TLAS per frame from a scene visitor; render-graph access kinds for AS build/read (UAV barriers); scratch buffers; upload path > 2 MB | PIX / Radeon Raytracing Analyzer (AMD) / Nsight (NVIDIA) show correct BLAS/TLAS; build pass + timing in Render Graph panel |
 | M1b (extra, next to M1) Hand-built SAH BVH | On the CPU in plain C++: a small binned-SAH BVH builder + refit, following Jacco Bikker's "How to build a BVH" series. Learning what DXR builds in hardware; EV keeps DXR for rendering | Tree quality (SAH cost) close to TinyBVH's `SAHCost()` on Sponza / helmet / ocean grid; SAH cost of the displaced ocean after 1…N refits vs a rebuild (data for D6's rebuild interval N) |
 | **M2** RayQuery debug views + ocean BLAS | "Ocean Displace Vertices" compute pass; ocean BLAS refit + periodic rebuild; compute pass writing primary-hit depth/normal/instance/barycentrics; freeze-time toggle; make the ocean reproducible (ocean time is a function-local static, the spectrum seed comes from `std::random_device`, `ResizeViewport` resets the FOV to 45°); fix the copy-queue `GenerateH0` sync; fix the ocean object-vs-world uv mismatch | Traced depth − raster depth ≈ 0; wave silhouettes match at frozen time; refit/build timings on both GPUs |
-| **M3** RGB reference path tracer | Camera rays; RGBA32F accumulation + reset (scene-version counter); GPU material struct + staged texture table; Lambert + GGX (VNDF); NEE to sun disk + point lights; env-map importance sampling; MIS; Russian roulette; sampler; reuse Tonemap | White furnace test; noise ∝ 1/√spp; helmet vs raster; simple scene vs Mitsuba 3 / pbrt-v4 |
+| **M3** RGB reference path tracer | Camera rays; RGBA32F accumulation + reset (scene-version counter); GPU material struct + staged texture table; Lambert + GGX (VNDF); NEE to sun disk + point lights; env-map importance sampling; MIS; Russian roulette; sampler = **counter-based, replayable RNG** keyed by pixel / frame / bounce / dimension (G5); reuse Tonemap | White furnace test; noise ∝ 1/√spp; helmet vs raster; simple scene vs Mitsuba 3 / pbrt-v4 |
 | M3-ref (next to M3) CPU reference bench | (a) CPU test bench for the BSDF/pdf maths (energy conservation, pdf integrates to 1, samples follow the pdf, reciprocity); (b) a tiny CPU path tracer on a pinned TinyBVH copy (MIT, `/arch:AVX2`) rendering small test images, also in CI without a GPU. Mitsuba 3 / pbrt-v4 stay the independent reference | All BSDF tests pass before the GPU uses them; CPU and GPU images of the test scenes agree within noise (FLIP / MSE) |
 | **M4** Spectral (HWSS) | `SampledWavelengths` (float4), `SampleVisible`, Jakob–Hanika table lookup behind the swappable RGB→spectrum interface, D65 illuminant, CMFs, XYZ → linear sRGB; RGB/spectral toggle | Grey/white round-trip neutral; colour chart ≈ RGB mode; overhead measured; compare to Mitsuba 3 `scalar_spectral` |
 | **M5** Spectral water | Water dielectric with n(λ), rough BTDF, absorption + scattering medium (hero-wavelength distance sampling + spectral MIS), foam layer, optional dispersion, optional seafloor | 10 m slab ≈ 94/58/11/1 % at 440/550/600/680 nm; TIR ≈ 48.6°; RGB vs spectral deep-water A/B; tune the raster SSS fake against it |
 | M5b (optional, any time after M4) | Peters' Fourier method as a second RGB→spectrum implementation | A/B vs Jakob–Hanika on the same frozen shot (colour difference, noise, cost) |
 | **M5c** Software coherence (wavefront) | A second path tracer mode next to the single compute "megakernel": **wavefront** passes per bounce – trace (write hit records: position, material ID, path state) → **sort/bin by material** (counting sort / prefix sum in compute) → shade → next bounce. Toggle megakernel / wavefront-unsorted / wavefront-sorted in the panel. Teaches the divergence problem that SER solves in hardware, measurable on both PCs | **Profile and compare** all three modes on both GPUs, with **different numbers of materials** (a test scene with 1, 4, 16 and 64 distinct materials, plus the ocean shot): per-pass GPU time, total frame time, rays/s, wave occupancy and divergence in RGP (AMD) / Nsight (3070), record memory cost. Find the break-even point where sorting pays off |
 | **M6** GPU compute bring-up | Choose the AMD toolchain (open choice, see `knowledge.md` §7: legacy HIP SDK 7.2 with VS plugin + ROCgdb, or ROCm Core SDK 10.1); `EV-Hip.dll` project (kernels built with `hipcc --genco` into a fatbin, loaded with `hipModuleLoadData`) + portability header; **spike: D3D12 → HIP → D3D12 buffer + shared fence round trip**; `CommandQueue::Signal/Wait(fence, value)`; render-graph `.External()` pass; same source built as `EV-Cuda.dll` on the RTX 3070; first kernels (image difference metric, Jakob–Hanika coefficient baker) | Bit-exact round trip; timeline in RGP/Nsight Systems without CPU stalls; resize/teardown ×100 without leaks; identical results HIP vs CUDA |
-| **M7** Denoising | `IDenoiser`; pack/unpack passes (texture ↔ linear buffers); **OIDN** (HIP on AMD, CUDA on NVIDIA) with albedo + normal guides (RGB albedo, not per-wavelength); **OptiX AOV** on NVIDIA; denoise every N frames or when the camera stops | FLIP/MSE vs ~16k-spp ground truth at 1/4/16/64 spp; timings after warm-up; OIDN vs OptiX on the 3070; WARP accumulate-only |
+| **M7** Denoising | `IDenoiser`; pack/unpack passes (texture ↔ linear buffers); **OIDN** (HIP on AMD, CUDA on NVIDIA) with albedo + normal guides (RGB albedo, not per-wavelength); **OptiX AOV** on NVIDIA; denoise every N frames or when the camera stops; GI harness steps 1–3 (EXR dump, two-seed reference mode, `metrics.py`, G3) | FLIP/MSE vs ~16k-spp ground truth at 1/4/16/64 spp; timings after warm-up; OIDN vs OptiX on the 3070; WARP accumulate-only |
 | **O1** Optimize the reference renderer | Dedicated optimization phase over everything up to M7 (strategy list below): profile → pick the biggest cost → change one thing → re-measure → keep or revert. Goal: highest quality per second (error vs ground truth at equal time), not just higher spp | Before/after table per optimization in `performance.md`, both GPUs; no image regression (FLIP vs reference) |
 | **M8a** Persistent bindless heap | One shader-visible heap (static + per-frame ring), frame-based deferred release, SM 6.6 `ResourceDescriptorHeap[]` | All raster passes pixel-identical (CI screenshot diff); no descriptor leaks |
-| **M8b** Real-time mode | G-buffer primaries + motion vectors (incl. ocean), 1–2 bounces at 1 spp, temporal denoiser (NRD or own SVGF), firefly clamp, ocean time running | Frame budget on both GPUs; ghosting on crests; error vs frozen reference |
-| **M9** SHaRC | Update (~4 % of pixels) / resolve / query; spectral → RGB at the cache boundary | Cache debug view; bias vs reference; performance both PCs |
-| **M10** Own NRC | (a) CPU MLP fitting an image (backprop + Adam by hand); (b) same in HIP/CUDA; (c) offline fit of radiance records dumped from the tracer; (d) online NRC in EV via `.External()` (query + self-training records); (e) speed: fp16, fused layers, WMMA (RDNA 4) / Tensor Cores (3070); (f) compare against NVIDIA NRC SDK + tiny-cuda-nn on the 3070; (g) optional `dx::linalg` port | Loss curves; cache converges in ~8 frames; query+train ms; equal-time error vs SHaRC and plain path tracing |
+| **M8b** Real-time mode | G-buffer primaries + motion vectors (incl. ocean), 1–2 bounces at 1 spp, temporal denoiser (NRD or own SVGF), firefly clamp, ocean time running; **R2 temporal ReSTIR DI** (moved here from M11, G2) | Frame budget on both GPUs; ghosting on crests; error vs frozen reference |
+| **M8c** GI comparison harness | See "GI techniques track". EXR dumps, reference mode (two seeds), Python metrics, `.evscene` v2 (lights, camera paths, events, seed), `--benchmark` CLI, temporal + bias scripts, test scenes + loader fixes | Same cell twice → same metrics; PT relMSE slope −1 vs spp; one full report from one `run_matrix.py` call per PC |
+| M8d RC screen-space (SPWI) | Radiance cascades with screen probes + ray-traced world intervals as hybrid diffuse GI (see GI track) | Equal-time vs M8b's 1-spp bounce + denoiser, M8c rows |
+| M8e ReSTIR GI (R3) | Reuse of secondary-bounce samples (see GI track) | Equal-time vs 1–2 bounce PT; lag after sun jump, M8c rows |
+| **M9** SHaRC | Update (~4 % of pixels) / resolve / query; spectral → RGB at the cache boundary; behind the shared `RadianceCache` interface (GI track) | Cache debug view; M8c row set (static, path, event shots), terminator + hybrid mode, both PCs |
+| M9b DDGI probes | Probe volume (see GI track) | M8c rows; leak box |
+| **M9c** Surfel GI (GIBS-lite) | Surfel cache (see GI track) | M8c rows; leak box vs DDGI |
+| M9r Split radiance cascades | Sparse world-space RC (see GI track) | M8c rows; penumbra/AO vs DDGI |
+| **M9x** Cache bake-off | All caches and GI techniques built so far, same scenes, terminator + hybrid, RGB vs spectral storage, both GPUs | One comparison report; becomes the baseline M10 must beat |
+| **M10** Own NRC | (a) CPU MLP fitting an image (backprop + Adam by hand); (b) same in HIP/CUDA; (c) offline fit of radiance records dumped from the tracer; (d) online NRC in EV via `.External()` (query + self-training records); (e) speed: fp16, fused layers, WMMA (RDNA 4) / Tensor Cores (3070); (f) compare against NVIDIA NRC SDK + tiny-cuda-nn on the 3070; (g) optional `dx::linalg` port | Loss curves; cache converges in ~8 frames; query+train ms; M8c row set vs every M9x technique and plain path tracing |
 | **O2** Optimize the real-time renderer | Second optimization phase over real-time mode, SHaRC and NRC: frame budget per pass (e.g. 16.6 ms / 33 ms targets at 1080p per GPU), async compute for the BLAS refit / NRC training, resolution and spp scaling, denoiser cost, NRC kernel speed | Frame-time budget table per GPU in `performance.md`; before/after per change |
-| M11 (optional) | DXR pipeline (+ SER via `HitObject::FromRayQuery` + `MaybeReorderThread` in raygen, only reorders on RTX 40+; compare with M5c's software sorting); ReSTIR DI; spectral sky; cluster-template ocean; caustics (photon pass / MNEE) | Speed-up per GPU; no regression |
+| M11 (optional) | DXR pipeline (+ SER via `HitObject::FromRayQuery` + `MaybeReorderThread` in raygen, only reorders on RTX 40+; compare with M5c's software sorting); ReSTIR PT (R4/R5, GI track); spectral sky; cluster-template ocean; caustics (photon pass / MNEE) | Speed-up per GPU; no regression |
+
+## GI techniques track (added 2026-11-22)
+
+Goal: build several real-time global illumination (GI) techniques yourself, understand how each works, and compare
+them **fairly** on performance and visual fidelity. Research notes (all 2026-11-22, with sources):
+
+| Note | Covers |
+|---|---|
+| `research/followup_gi_world_caches.md` | Surfels (EA SEED GIBS), kajiya irradiance cache, DDGI / RTXGI probes, AMD GI-1.0/1.1 (Capsaicin), Lumen (reference only), spectral storage in caches |
+| `research/followup_restir.md` | RIS → ReSTIR DI → ReSTIR GI → ReSTIR PT (GRIS, Enhanced 2026), spectral ReSTIR with 4 hero wavelengths, ladder R0–R5 |
+| `research/followup_radiance_cascades.md` | Radiance cascades (Sannikov / PoE2), bilinear fix, 3D variants (screen-space SPWI, Split RC 2026, dense grids), "Spatium" in Black Engine, ladder RC-0 → M8d → M9r |
+| `research/followup_gi_comparison_method.md` | Metrics (relMSE, HDR-FLIP, tSMAPE flicker, lag90, bias split), equal-time protocol, test scenes + licences, EV loader gaps, the M8c harness |
+
+**Choices G1–G6, made by the developer.** G1, G2, G3 and G5 were decided on 2026-11-22. G4 and G6 still use the
+proposed default and can be changed.
+
+| # | Choice | Options | Decision |
+|---|---|---|---|
+| G1 | Which techniques are core, which optional | DDGI, surfels, SPWI RC, Split RC, ReSTIR GI, kajiya-style cache, GI-1.0 hash grid, dense RC grid, ReSTIR PT | **Decided 2026-11-22.** Core: DDGI (M9b), radiance cascades (M8d SPWI + M9r Split RC), ReSTIR GI (M8e), surfel GI (M9c). Optional: kajiya-style cache (M9d), GI-1.0 grid (M9e), dense RC grid (M9r-b), ReSTIR PT (R4/R5) |
+| G2 | Where temporal ReSTIR DI goes | M8b (real-time mode without good direct-light sampling is the plan's weak spot) or stay in M11 | **Decided 2026-11-22: M8b** (as R2) |
+| G3 | When the harness is built | All in M8c, or steps 1–3 (EXR dump, reference mode, metrics script) already in M7, where "FLIP/MSE vs 16k-spp" is needed anyway | **Decided 2026-11-22: steps 1–3 in M7**, the rest in M8c |
+| G4 | Order of the caches | DDGI before M8b (terminator-only, needs no G-buffer) or after SHaRC | Open. Default: after M9 SHaRC |
+| G5 | Random numbers | A counter-based, replayable RNG (keyed by pixel / frame / bounce / dimension); ReSTIR PT random replay needs it, and it makes runs reproducible | **Decided 2026-11-22: yes, from M3** |
+| G6 | Test scene support | Fix EV's loader gaps (no lights or cameras from files, `.evscene` has no lights, no glTF alpha mode/cutoff or emissive strength, `.glb` embedded textures fail, no EXR) inside M8c, or as its own milestone before M8c | Open. Default: inside M8c, step 7 |
+
+### Shared groundwork (built once, used by every technique)
+- **One HLSL interface** for caches: `RadianceCache_Query(x, n, ω, λ4)` + `RadianceCache_Update(...)`, and a panel toggle
+  `None / SHaRC / DDGI / Surfels / Split RC / NRC`. Every place a path ends calls the same function, so techniques swap
+  without touching the path loop.
+- **Two usage modes, measured separately**:
+  1. **Terminator** (reference mode): paths stop after N = 1 or 2 bounces and read the cache. Metric: error vs the
+     high-spp reference at equal time.
+  2. **Hybrid** (M8b real-time mode): the first diffuse bounce comes from the GI technique, specular stays traced.
+     Metric: frame time + FLIP + flicker + lag.
+- **Spectral storage**: caches store **linear RGB/XYZ at the cache boundary** (as SHaRC in M9). Never average rgb2spec
+  coefficients (they are non-linear). Optional original experiment: store Peters' Fourier moments (linear, so they
+  average like RGB; needs M5b). ReSTIR has its own spectral rules (see `followup_restir.md` §5).
+- **Debug views** per technique: cache-only view, probe/surfel/cascade visualisation, sample-count and variance heat
+  maps, memory occupancy.
+- **Test environments** (built by the developer; contents per `followup_gi_world_caches.md` §8 and
+  `followup_gi_comparison_method.md` §5): leak box (closed room, one door, sunlit outside, 5/10/20 cm walls), lag test
+  (light switching on/off, sliding coloured block), flicker test (static scene + camera), scale test (Sponza → Bistro),
+  glossy test (rough metal floor), penumbra test (small light + occluder), many-light test (for ReSTIR DI). Public
+  scenes: Cornell, RTXGI furnace + two-rooms, Crytek Sponza, Bistro interior/exterior + Kitchen (RTXPT glTF), Intel
+  Sponza + candles (BC7 textures for the 8 GB 3070), Zero Day, San Miguel (stress).
+
+### Milestones of the track (in proposed order)
+
+| M | Build | Verify / measure |
+|---|---|---|
+| RC-0 (any time, even before M1) 2D radiance cascades toy | Flatland RC in compute on a paintable 1024² canvas: c0 every 2 px with 4 directions, 6 cascades, ping-pong RGBA16F; toggles for branching factor, pre-averaging, bilinear fix, interval overlap. 3–5 days | Same time for 2, 100, 1,000 lights; ringing around a 2-px light without the fix, gone with it; vs brute-force 1,024-ray raymarch |
+| R0 (side track after M3) RIS-only direct light | Streaming RIS over M light candidates, one shadow ray, no reuse | Converges to the NEE+MIS image (unbiased check); equal-time FLIP/MSE; cost per candidate count |
+| R1 (side track after M4) Spatial reuse | Reservoirs + spatial merge (3–5 neighbours, 30 px), 1/M → pairwise MIS, biased/unbiased toggle; RGB/spectral toggle | Equal-time error vs R0; bias map (mean of 1k frames − reference); cost per pass |
+| M7 (part, G3) Harness steps 1–3 | EXR writer (tinyexr) + `--dump`; reference mode with two-seed noise-floor check; `metrics.py` (relMSE, MRSE, MAPE, HDR-FLIP) | Noise floor ≥ 10× below the smallest relMSE; PT relMSE ∝ 1/spp |
+| M8b + R2 (G2) Temporal ReSTIR DI | Temporal reuse with motion vectors, confidence cap 20, visibility reuse | Equal-time error during a 20-frame fly-through; flicker; disocclusion recovery frames; many-light scaling |
+| **M8c** GI comparison harness | `.evscene` v2 (lights, camera path with fixed dt, events, seed); `--benchmark` CLI (warm-up, per-pass CSV p50/p95/p99, VRAM, JSON run manifest); `temporal.py` + `bias.py` (tSMAPE, lag90/99, ghosting, K = 32 runs → rBias²/rVar); `run_matrix.py` + `report.py` (tables, log–log error-vs-time, Pareto plot GI-ms vs error, crop grids); test scenes + loader fixes (G6); first matrix run with PT + OIDN and PT + real-time denoiser as the baseline | Same cell twice → same metrics; reference shows ~0 light in the leak box's dark room; one full report from one call on each PC |
+| M8d SPWI radiance cascades (hybrid GI) | c0 probes every 4 px on the depth buffer, 16 octahedral directions, 5–6 cascades, intervals `0.016·4^i` m traced with RayQuery TMin/TMax, hits shaded with the path tracer's direct-light code; depth-aware merge (bilateral → bilinear 3D); cosine integration + upsample; optional bilinear fix and half-res probes. 2–4 weeks. Reference: ClaikoCode/DX12RadianceCascades (MIT, DXR) | ms per pass + rays/frame; FLIP vs path-traced 1-bounce diffuse; flicker on a slow pan; ringing near small lights; equal time vs M8b |
+| M8e ReSTIR GI (R3) | Store secondary-bounce sample points, reconnection Jacobian, validation every N frames; biased (Lambertian L_o) → unbiased (full re-evaluation); later the GI sample's radiance comes from SHaRC / NRC | Equal-time vs 1–2 bounce PT and vs PT + SHaRC; lag after a sun jump; memory (~0.3–0.5 GB at 1080p); cost of initial / reuse / validation passes |
+| M9 SHaRC | As in the roadmap, behind the shared interface; experiment: short rays (e.g. 20 m) with cache fallback | M8c rows, terminator + hybrid |
+| M9b DDGI probe volume | (1) fixed grid (e.g. 32×8×32), all probes every frame, 8×8 irradiance + 16×16 distance/distance² octahedral atlases, trace with RayQuery, blend + border-copy shaders; (2) Chebyshev visibility + self-shadow bias + backface rule; (3) probe relocation + sleeping states; (4) scrolling camera volume + 2–3 cascades; (5) terminator mode. 2–4 weeks | Leak box vs reference; timings vs the 2019 table (3070 ≈ 2080 Ti class); sleeping saves 30–50 % |
+| M9r Split radiance cascades | Per the 2026 paper (Algorithms 1–3): per-cascade hash maps (64-bit key, LOD), probe insertion from pixels, ray generation (count → prefix sum → offsets), **one ray per pixel split into every cascade it crosses** (quantised integer atomics), top-down merge with pre-averaging, 6×6 octahedral irradiance per c0 probe, sparse trilinear shading, temporal blend, secondary cache (multi-bounce + terminator). 5–8 weeks. Reference: the paper + entropylost/chandra (read only) | The paper's per-stage table on both GPUs (Sponza + foliage); VRAM fp32 vs fp16; single-frame and 10-frame FLIP; penumbra test; AO near walls vs DDGI; leak box; "Split RC as denoiser" vs OIDN |
+| **M9c** Surfel GI, GIBS-lite | (1) spawn in 16×16 tiles + camera-relative grid, naive apply, fixed rays + EMA; (2) multi-scale mean estimator + variance-driven ray counts + global ray budget; (3) 4×4 radial depth + Chebyshev; (4) surfels follow moving instances; (5) recycling + free-ID stack; (6) non-linear grid; (7) optional ray guiding, DDGI fallback. Needs the M8b G-buffer. 4–8 weeks. Reference: W298/SurfelGI (MIT) | No holes K frames after a camera cut; stable surfel count; leak box vs DDGI; VRAM within 8 GB |
+| M9r-b (optional) Dense RC cascades on the DDGI grid | 2–3 finer cascades under the DDGI spacing, trilinear fix toggle. 2–3 weeks after M9b | VRAM per added cascade; penumbra/AO gain vs plain DDGI |
+| M9d (optional) kajiya-style clipmap cache + ReSTIR GI gather | 12 × 32³ clipmap, entry pool, rank voting, octahedral reservoirs, L1 SH; half-res ReSTIR GI that reads the cache only off screen. 4–6 weeks | M8c rows vs M8e + SHaRC |
+| M9e (optional, small) GI-1.0 hash-grid variations | Direction-keyed cells, short-ray bit, tile mips, integer atomics on the M9 grid. ~1 week | A/B vs SHaRC on leak box + glossy test |
+| **M9x** Cache bake-off | Every technique built so far, same scenes and camera paths, terminator + hybrid, RGB vs spectral storage, both GPUs. RC-specific extras: single-frame error, lag (should be 0), flicker under motion, penumbra sharpness vs occluder distance | One report (tables, convergence + Pareto plots, crops); the baseline M10 must beat |
+| R4/R5 (optional, M11) ReSTIR PT | Whole-path reservoirs, reconnection shift → hybrid shift (random replay, needs G5), pairwise MIS, ReSTIR PT Enhanced tricks | Glossy/refractive scenes vs R3; replay the Enhanced paper's per-step ablation on both GPUs |
+
+Proposed order: RC-0 any time · R0/R1 next to M3/M4 · M7 (+ harness 1–3) · M8a · M8b (+ R2) · **M8c** · M8d · M8e ·
+M9 · M9b · M9r · M9c · (optional M9r-b, M9d, M9e) · **M9x** · M10 · O2 · M11 (+ R4/R5).
+
+Expectations from the research (published numbers, other GPUs; EV's numbers will be new — no RX 9070 XT or RTX 3070
+results exist for any of these):
+- DDGI 2.6 ms for 8k probes (RTX 2080 Ti); GIBS 2.5–3.2 ms (Xbox Series X, 1440p); kajiya cache ~0.55 ms (RX 6800 XT);
+  GI-1.0 1.9–3.4 ms (RX 6900 XT / RTX 3080, 1080p); SPWI RC 2.36–8.66 ms (RTX 3080, DXR, 1080p); Split RC 8.6–11.5 ms
+  (RTX 3080 Laptop, unoptimised); ReSTIR GI +8–18 ms (RTX 3090), ReSTIR PT Enhanced ~13–16 ms (RTX 5880 Ada);
+  NRC query 1.59 + train 1.11 ms (RTX 3090).
+- EV has few lights (sun, sky, some point lights), so ReSTIR DI gains less than in the papers. The many-light test scene
+  is needed to see it.
+
+"Spatium" radiance cascades (Black Engine, YouTube channel Blackline Interactive): a world-probe-based 3D RC with 7
+cascades and 4–5 bounces. The claim is Bistro at 7.4–9.9 ms on a Radeon Pro 5500M laptop GPU without RT hardware. There
+is no paper, write-up or public code, so it is not a milestone. It is kept as an inspiration and a sanity check for
+M9r's numbers (`followup_radiance_cascades.md` §6).
 
 ## Profiling and performance (every milestone)
 
@@ -102,6 +199,10 @@ Performance is measured all the way through, not only at the end. Results go in 
 - **What to record**: per-pass GPU time, frame time, rays per second, samples per second, BVH build/refit times and
   sizes, VRAM use, and **quality per time** (FLIP or MSE against a high-spp ground truth after a fixed number of
   seconds). The last one matters most for a path tracer: a change that is slower per sample but converges faster wins.
+- **GI comparisons** (from M8c on, details in `research/followup_gi_comparison_method.md`): GI cost = the sum of the
+  GI passes, reported as p50/p95/p99; equal-time GI budgets of 2 / 4 / 8 ms at 1080p plus "time to equal relMSE";
+  relMSE (ε = 0.01) + HDR-FLIP; bias split rBias² / rVar over K = 32 seeds; temporal tSMAPE (flicker) and lag90 (frames
+  until 90 % of the converged value after an event).
 - **Optimization strategy list** (worked through in O1/O2, also used ad hoc; details in `knowledge.md` §10):
   BVH (build flags, compaction, refit vs rebuild interval, splitting the ocean into tiles, instance culling) ·
   rays (ray flags such as accept-first-hit and skip-closest-hit for shadow rays, tight TMin/TMax, culling, fewer
