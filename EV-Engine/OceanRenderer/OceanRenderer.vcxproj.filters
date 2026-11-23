@@ -62,4 +62,9 @@
     <FxCompile Include="shaders\ibl_specular.hlsl" />
     <FxCompile Include="shaders\brdf_lut.hlsl" />
   </ItemGroup>
+  <ItemGroup>
+    <ResourceCompile Include="..\EV-Engine\resources\app_icon.rc">
+      <Filter>Resource Files</Filter>
+    </ResourceCompile>
+  </ItemGroup>
 </Project>

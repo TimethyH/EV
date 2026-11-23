@@ -77,10 +77,10 @@
     <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)OceanRenderer\include;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)OceanRenderer\include;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\thirdparty\agility\include;$(SolutionDir)EV-Engine\header;$(SolutionDir)OceanRenderer\include;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <PropertyGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
-    <IncludePath>$(SolutionDir)EV-Engine\header;$(SolutionDir)OceanRenderer\include;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
+    <IncludePath>$(SolutionDir)EV-Engine\thirdparty\agility\include;$(SolutionDir)EV-Engine\header;$(SolutionDir)OceanRenderer\include;$(SolutionDir)EV-Engine\thirdparty\imgui;$(SolutionDir)EV-Engine\thirdparty\DirectXTex;$(SolutionDir)EV-Engine\thirdparty\assimp\include;$(IncludePath)</IncludePath>
   </PropertyGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">
     <ClCompile>
@@ -137,6 +137,12 @@
     <FxCompile>
       <ShaderModel>6.0</ShaderModel>
     </FxCompile>
+    <PostBuildEvent>
+      <Command>xcopy /Y /I /D "$(SolutionDIr)EV-Engine\thirdparty\agility\redist\*.dll" "$(OutDir)D3D12\"</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Copy Agility SDK DLL to D3D12</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemDefinitionGroup Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
     <ClCompile>
@@ -157,6 +163,12 @@
     <FxCompile>
       <ShaderModel>6.0</ShaderModel>
     </FxCompile>
+    <PostBuildEvent>
+      <Command>xcopy /Y /I /D "$(SolutionDIr)EV-Engine\thirdparty\agility\redist\*.dll" "$(OutDir)D3D12\"</Command>
+    </PostBuildEvent>
+    <PostBuildEvent>
+      <Message>Copy Agility SDK DLL to D3D12</Message>
+    </PostBuildEvent>
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClInclude Include="include\compute_pso.h" />

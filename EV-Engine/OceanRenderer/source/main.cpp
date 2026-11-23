@@ -4,11 +4,14 @@
 #include <Shlwapi.h>
 
 #include <ocean_scene.h>
+#include <core/agility_sdk.h>
 
 #include <dxgidebug.h>
 #include <memory>
 
 #include "core/application.h"
+
+EV_AGILITY_SDK_EXPORTS(620) // Exports D3D12SDKVersion and D3D12SDKPath from the executable, so D3D12 loads EV's own D3D12Core.dll instead of the one in System32. See docs/path-tracing/knowledge.md section 6.1.
 
 void ReportLiveObjects()
 {

@@ -64,6 +64,13 @@ class ShaderLibrary;
 		void Quit(int exitCode = 0);
 
 		Microsoft::WRL::ComPtr<ID3D12Device13> GetDevice() const;
+
+		// Capability query for the whole engine (path tracing M0, debug-layer warning #989).
+		// Agility SDK 1.620+ deprecates ID3D12Device::CheckFeatureSupport in favour of
+		// ID3D12Device16::CheckFeatureSupport1, which clamps reported tiers to the SDK version EV was built against.
+		// Same arguments and return value as ID3D12Device::CheckFeatureSupport. Use this instead of calling the device.
+		HRESULT CheckFeatureSupport(D3D12_FEATURE feature, void* pFeatureSupportData, UINT featureSupportDataSize) const;
+
 		CommandQueue& GetCommandQueue(
 			D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
 		void Flush();
@@ -208,6 +215,9 @@ class ShaderLibrary;
 		HINSTANCE m_hInstance = {};
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> m_dxgiAdapter = {};
 		Microsoft::WRL::ComPtr<ID3D12Device13> m_device = {};
+		// Same device seen through ID3D12Device16 (for CheckFeatureSupport1). Stays null when the Agility runtime is not
+		// loaded (OS runtime fallback), then CheckFeatureSupport() uses the classic call.
+		Microsoft::WRL::ComPtr<ID3D12Device16> m_device16 = {};
 
 		std::shared_ptr<CommandQueue> m_DirectCommandQueue;
 		std::shared_ptr<CommandQueue> m_ComputeCommandQueue;

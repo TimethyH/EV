@@ -62,3 +62,37 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   ReSTIR DI moves into M8b; G3 harness steps 1–3 in M7; G5 counter-based replayable RNG from M3. G4 (cache order) and
   G6 (loader fixes inside M8c) keep their defaults for now.
 - **Still open**: #989 (M0), unchanged since 2026-11-19.
+
+## 2026-11-22 – Patroni board of the plan (no code)
+- **Built** (Claude): Patroni Home → `EV (Claude)` → `path-tracing`. Overview board with the "you are here" note;
+  Roadmap with all 31 milestones / side tracks as nodes in four phase rows (dependencies as arrows); one board per
+  milestone in the fixed order 1 what + why → 2 knowledge + reading links → visual → 3 tasks → 4 verify / pitfalls;
+  Architecture (built = green, planned = blue, data-flow links); Decisions D1–D18 + G1–G6 (G4, G6 marked open);
+  GI techniques track; Profiling & performance; Hardware & documents.
+- **Visuals added** (interactive where useful): SAH split cost with sliders + expected refit curve (M1b), noise vs spp
+  and MIS weights (M3), SampleVisible pdf with a draggable hero wavelength (M4), Fresnel/TIR + water transmittance
+  (M5), divergence per wave vs material count (M5c), D3D12 ↔ HIP fence sequence (M6), occupancy vs registers + Amdahl
+  (O1), log error vs log time with a bias floor (M8c), RC cascade ladder (RC-0) and reach (M8d), Chebyshev visibility
+  + atlas memory (M9b), published GI costs (M9x, GI track), async-compute timeline (O2).
+- **Status on the board**: M0 = current; task 1 (Agility) done, #989 parts A/B "doing", everything else todo.
+- From now on the board is updated together with this log after every step, decision or plan change.
+
+## 2026-11-22 – Plan change: reprojection texture in M8b (no code)
+- **Decision (developer)**: M8b gets a step right after the motion vectors: a reprojection texture (previous uv +
+  4-bit bilinear-tap validity + accuracy), shared by every temporal pass (R2, temporal denoiser, M8d, M8e, TAA).
+- **Why**: EV will have 4–5 temporal consumers; one shared validity test avoids duplicated cost and inconsistent
+  history decisions, and keeps the M9x GI comparison fair. Updated in `plan.md` (M8b row) and on the Patroni board.
+
+## 2026-11-23 – M0: warning #989 code (CheckFeatureSupport wrapper)
+- **Part A** (developer): `m_device.As(&m_device16)` right after `LogLoadedD3D12Core()` in `Application::Initialize`;
+  HRESULT ignored on purpose (OS runtime → `m_device16` stays null, commented).
+- **Part B** (developer): `Application::CheckFeatureSupport` → `m_device16->CheckFeatureSupport1(…, D3D12_SDK_VERSION)`
+  when the Device16 view exists, else classic `m_device->CheckFeatureSupport`.
+- **Call sites** (developer): root-signature check in `Initialize`, `GetMultisampleQualityLevels`, and
+  `Resource::CheckFeatureSupport` now go through the wrapper (no direct device capability query left in EV; the two
+  `IDXGIFactory5::CheckFeatureSupport` tearing checks are DXGI and not affected). Claude removed the unused
+  `d3d12Device` local in `resource.cpp`.
+- **Bumps on the way** (worth remembering): calling `CheckFeatureSupport1()` as a free function (it is a method of
+  `ID3D12Device16`, needs `m_device16->`); hardcoding `620` instead of `D3D12_SDK_VERSION`; calling `m_device16`
+  directly at a call site (crashes when Agility is not loaded – call sites must only know the wrapper).
+- **Next**: verify (Debug run: no #989, same `D3D12Core.dll` path line), then M0 step 2 (device creation).

@@ -15,14 +15,16 @@ plan but are no longer on the critical path.
 **Who writes the code:** from M0 on, all code is written by the developer (learning project). Claude acts as tutor: it
 explains, points to files, reviews and helps debug, using `knowledge.md` as its reference.
 
-## NEXT SESSION: build the Patroni board first (requested 2026-11-22)
+## Patroni board (built 2026-11-22)
 
-Before continuing with M0 (#989 is re-issued and waiting), Claude builds a **Patroni version of this plan**: one
-place that makes it visually easy to see **where we are, where we're going, and everything needed to know** for each
-step. Patroni = the developer's own visual workspace (patroni.abodi.nl), built through its MCP tools. Read its
-`get_guide` first.
+The **Patroni version of this plan** exists: Home → `EV (Claude)` → `path-tracing`
+(https://patroni.abodi.nl/w/01a1a76e-ee9e-74eb-9983-1d4c92cd8375#/b/01a204b0-f060-73b7-8333-8c053ab7df68).
+It holds the roadmap (every milestone as a node with a "you are here" marker), one board per milestone (what + why,
+knowledge + exact reading links, a visual, tasks, verify + pitfalls), the architecture (built vs planned), all
+decisions, the GI track and profiling. Formatting rule for every update: no overlapping items, notes as a title line +
+bullets, never a text blob.
 
-What the board must contain:
+What the board contains (the original spec):
 1. **Roadmap overview**: every milestone (M0 … M11, O1/O2, the GI track, side tracks) as a flow with dependencies and
    a clear **"you are here"** marker (done / current / next / later). Updated after every step.
 2. **Per milestone (nested nodes)**:
@@ -112,7 +114,7 @@ Every milestone ends in something visible and checkable. M0–M5 need no HIP/CUD
 | **M7** Denoising | `IDenoiser`; pack/unpack passes (texture ↔ linear buffers); **OIDN** (HIP on AMD, CUDA on NVIDIA) with albedo + normal guides (RGB albedo, not per-wavelength); **OptiX AOV** on NVIDIA; denoise every N frames or when the camera stops; GI harness steps 1–3 (EXR dump, two-seed reference mode, `metrics.py`, G3) | FLIP/MSE vs ~16k-spp ground truth at 1/4/16/64 spp; timings after warm-up; OIDN vs OptiX on the 3070; WARP accumulate-only |
 | **O1** Optimize the reference renderer | Dedicated optimization phase over everything up to M7 (strategy list below): profile → pick the biggest cost → change one thing → re-measure → keep or revert. Goal: highest quality per second (error vs ground truth at equal time), not just higher spp | Before/after table per optimization in `performance.md`, both GPUs; no image regression (FLIP vs reference) |
 | **M8a** Persistent bindless heap | One shader-visible heap (static + per-frame ring), frame-based deferred release, SM 6.6 `ResourceDescriptorHeap[]` | All raster passes pixel-identical (CI screenshot diff); no descriptor leaks |
-| **M8b** Real-time mode | G-buffer primaries + motion vectors (incl. ocean), 1–2 bounces at 1 spp, temporal denoiser (NRD or own SVGF), firefly clamp, ocean time running; **R2 temporal ReSTIR DI** (moved here from M11, G2) | Frame budget on both GPUs; ghosting on crests; error vs frozen reference |
+| **M8b** Real-time mode | G-buffer primaries + motion vectors (incl. ocean); **reprojection texture** right after the motion vectors (added 2026-11-22: one compute pass per frame writing previous-frame uv, a 4-bit bilinear-tap validity mask and an accuracy value; every temporal pass — R2, denoiser, M8d, M8e, TAA — reads it instead of doing its own disocclusion test, so history decisions are consistent and the GI comparison stays fair); 1–2 bounces at 1 spp, temporal denoiser (NRD or own SVGF), firefly clamp, ocean time running; **R2 temporal ReSTIR DI** (moved here from M11, G2) | Frame budget on both GPUs; ghosting on crests; error vs frozen reference |
 | **M8c** GI comparison harness | See "GI techniques track". EXR dumps, reference mode (two seeds), Python metrics, `.evscene` v2 (lights, camera paths, events, seed), `--benchmark` CLI, temporal + bias scripts, test scenes + loader fixes | Same cell twice → same metrics; PT relMSE slope −1 vs spp; one full report from one `run_matrix.py` call per PC |
 | M8d RC screen-space (SPWI) | Radiance cascades with screen probes + ray-traced world intervals as hybrid diffuse GI (see GI track) | Equal-time vs M8b's 1-spp bounce + denoiser, M8c rows |
 | M8e ReSTIR GI (R3) | Reuse of secondary-bounce samples (see GI track) | Equal-time vs 1–2 bounce PT; lag after sun jump, M8c rows |
@@ -249,4 +251,5 @@ hardware RayQuery (TinyBVH's `external/dx12rt` benchmark does this on Sponza); c
 
 Not part of this work, still open from the editor branches: the IBL bake fix (see `docs/editor-handoff.md`, "TODO: sky
 lighting streaks and blocks"). It makes a cleaner raster reference for the path tracer, so it is worth doing first or
-early.
+early. **Planned (2026-11-22): Claude implements this fix itself (exception to "the developer writes the code", at the
+developer's request) right after the developer's #989 task is finished and committed.**

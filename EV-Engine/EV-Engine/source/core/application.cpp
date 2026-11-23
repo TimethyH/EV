@@ -31,6 +31,7 @@ static LRESULT CALLBACK SafeWndProc(HWND hwnd, UINT message, WPARAM wParam, LPAR
 static void CALLBACK OnDeviceRemoved(PVOID, BOOLEAN);
 static void OnAbort(int);
 static LONG WINAPI OnUnhandledException(EXCEPTION_POINTERS* info);
+static void LogLoadedD3D12Core();
 
 
 using namespace EV;
@@ -350,6 +351,38 @@ Application::~Application()
     gs_WindowByName.clear();
 }
 
+// Path tracing M0 (Agility SDK check): logs which D3D12Core.dll the process actually loaded.
+// The exports from EV_AGILITY_SDK_EXPORTS (core/agility_sdk.h) only *ask* D3D12 to use EV's copy in <exe dir>\D3D12\;
+// if the version or path is wrong, D3D12 silently falls back to System32. This log line is the proof either way.
+// Must be called after the first D3D12 call (D3D12Core.dll is loaded lazily by d3d12.dll).
+static void LogLoadedD3D12Core()
+{
+	HMODULE hModule = GetModuleHandleW(L"D3D12Core.dll");
+    wchar_t path[MAX_PATH];
+    if (hModule != nullptr)
+    {
+        if (GetModuleFileNameW(hModule, path, MAX_PATH))
+        {
+		    OutputDebugStringW(L"Loaded D3D12Core.dll from: ");
+			OutputDebugStringW(path);
+			OutputDebugStringW(L"\n");
+
+            if (wcsstr(path, L"\\D3D12\\") == nullptr)
+            {
+                OutputDebugStringW(L"WARNING: D3D12Core.dll is NOT loaded from the expected D3D12\\ folder. Agility SDK is not active.\n");
+            }
+		}
+		else
+		{
+			OutputDebugStringW(L"Failed to get the path of the loaded D3D12Core.dll.\n");
+		}
+	}
+	else
+	{
+	    OutputDebugStringW(L"D3D12Core.dll is not loaded.\n");
+    }
+}
+
 void Application::Initialize()
 {
     // Crash reports are appended during a run; start each run with a fresh log, keeping the previous one
@@ -397,6 +430,9 @@ void Application::Initialize()
     if (m_dxgiAdapter)
     {
         m_device = CreateDevice(m_dxgiAdapter);
+        LogLoadedD3D12Core(); // Agility SDK check (path tracing M0)
+        // HRESULT ignored on purpose: without the Agility runtime this fails, m_device16 stays null and CheckFeatureSupport() falls back.
+        m_device.As(&m_device16);
 
         // A fence that is signaled with UINT64_MAX when the device is removed.
         if (SUCCEEDED(m_device->CreateFence(0, D3D12_FENCE_FLAG_NONE, IID_PPV_ARGS(&m_deviceRemovedFence))))
@@ -429,7 +465,7 @@ void Application::Initialize()
     {
         D3D12_FEATURE_DATA_ROOT_SIGNATURE featureData;
         featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_1;
-        if (FAILED(m_device->CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData,
+        if (FAILED(CheckFeatureSupport(D3D12_FEATURE_ROOT_SIGNATURE, &featureData,
             sizeof(D3D12_FEATURE_DATA_ROOT_SIGNATURE))))
         {
             featureData.HighestVersion = D3D_ROOT_SIGNATURE_VERSION_1_0;
@@ -1197,6 +1233,21 @@ DescriptorAllocation Application::AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE
     return m_descriptorAllocators[type]->Allocate(numDescriptors);
 }
 
+
+// Path tracing M0 / debug-layer warning #989: engine-wide capability query (see application.h).
+// Reference: ID3D12Device16::CheckFeatureSupport1 in thirdparty/agility/include/d3d12.h (around line 32024),
+// D3D12_SDK_VERSION is defined in the same header (line 1458).
+HRESULT Application::CheckFeatureSupport(D3D12_FEATURE feature, void* pFeatureSupportData, UINT featureSupportDataSize) const
+{
+    // Agility runtime loaded → new call, tiers clamped to the SDK version EV was compiled against.
+    // Otherwise (OS runtime fallback, m_device16 stays null) → classic call, which has no #989 warning there.
+    if (m_device16 != nullptr)
+    {
+        return m_device16->CheckFeatureSupport1(feature, pFeatureSupportData, featureSupportDataSize, D3D12_SDK_VERSION);
+    }
+    return m_device->CheckFeatureSupport(feature, pFeatureSupportData, featureSupportDataSize);
+}
+
 DXGI_SAMPLE_DESC Application::GetMultisampleQualityLevels(DXGI_FORMAT format, UINT numSamples, D3D12_MULTISAMPLE_QUALITY_LEVEL_FLAGS flags) const
 {
     DXGI_SAMPLE_DESC sampleDesc = { 1, 0 };
@@ -1207,7 +1258,7 @@ DXGI_SAMPLE_DESC Application::GetMultisampleQualityLevels(DXGI_FORMAT format, UI
     qualityLevels.Flags = flags;
     qualityLevels.NumQualityLevels = 0;
 
-    while (qualityLevels.SampleCount <= numSamples && SUCCEEDED(m_device->CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS))) && qualityLevels.NumQualityLevels > 0)
+    while (qualityLevels.SampleCount <= numSamples && SUCCEEDED(CheckFeatureSupport(D3D12_FEATURE_MULTISAMPLE_QUALITY_LEVELS, &qualityLevels, sizeof(D3D12_FEATURE_DATA_MULTISAMPLE_QUALITY_LEVELS))) && qualityLevels.NumQualityLevels > 0)
     {
         // That works...
         sampleDesc.Count = qualityLevels.SampleCount;

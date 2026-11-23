@@ -167,10 +167,8 @@ bool Resource::CheckFormatSupport(D3D12_FORMAT_SUPPORT2 formatSupport) const
 
 void Resource::CheckFeatureSupport()
 {
-    auto d3d12Device = Application::Get().GetDevice();
-
     auto desc = m_resource->GetDesc();
     m_formatSupport.Format = desc.Format;
-    ThrowIfFailed(d3d12Device->CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &m_formatSupport,
+    ThrowIfFailed(Application::Get().CheckFeatureSupport(D3D12_FEATURE_FORMAT_SUPPORT, &m_formatSupport,
         sizeof(D3D12_FEATURE_DATA_FORMAT_SUPPORT)));
 }
