@@ -27,6 +27,9 @@
     <ClInclude Include="include\convolution_pso.h">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="include\rc_toy.h">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="source\main.cpp">
@@ -44,6 +47,9 @@
     <ClCompile Include="source\convolution_pso.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="source\rc_toy.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <FxCompile Include="shaders\fft.hlsl" />
@@ -51,6 +57,7 @@
     <FxCompile Include="shaders\ocean_vertex.hlsl" />
     <FxCompile Include="shaders\animate_waves.hlsl" />
     <FxCompile Include="shaders\permute.hlsl" />
+    <FxCompile Include="shaders\rc_paint.hlsl" />
     <FxCompile Include="shaders\HDR_to_SDR_PS.hlsl" />
     <FxCompile Include="shaders\HDR_to_SDR_VS.hlsl" />
     <FxCompile Include="shaders\pano_to_cubemap_CS.hlsl" />

@@ -2047,6 +2047,81 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   local sample `T:\Projects\DX12\Samples\DirectX-Graphics-Samples\Samples\Desktop\D3D12Raytracing\src\D3D12RaytracingHelloWorld`
   (device check), section 6.1, 6.7.
 
+### RC-0 – 2D radiance cascades toy (GI track; after M0, before M1)
+
+- **Goal**: flatland radiance cascades (RC) on a paintable 1024² canvas, with a brute-force reference next to it, so
+  the developer *understands* intervals, cascades, merging and ringing before any 3D GI (M8c SPWI, M9r Split RC). No
+  DXR, no G-buffer, no path tracer needed. Estimate 3–5 days.
+- **Why it's on the path-tracing branch**: RC is one of the GI techniques the M9x bake-off compares. The 2D toy is the
+  cheapest way to learn its core (radiance *intervals* + *merging* with transmittance = pre-multiplied alpha
+  compositing) and its main artefact (ringing). The progressive brute-force reference (step 2) is also the first time
+  EV *accumulates samples over frames* – exactly what the path tracer does from M3 on.
+- **Where it lives in EV (decision 2026-11-23)**: inside OceanRenderer, as an editor panel "RC-0" in the **Center**
+  dock (a tab next to the Scene view), owned by a small class `RcToy` (`OceanRenderer/include/rc_toy.h`,
+  `source/rc_toy.cpp`) with its own render-graph passes that only run while its "Enable" box is ticked. Shaders:
+  `OceanRenderer/shaders/rc_*.hlsl` (compute, SM 6.0 like the ocean ones, hot-reloaded via `LoadShader`). Patterns to
+  copy: persistent UAV textures = the ocean cascade textures in `Ocean::GenerateH0` (`slopeTexture`); compute PSO +
+  `Dispatch` = `OceanCompute` (`compute_pso.cpp`); a pass = `rg.AddPass("Ocean Spectrum" …)` in
+  `Ocean::RecordRenderGraph`; panel = `Ocean::DrawPathTracingPanel` + `Editor::AddPanel`; texture in a panel =
+  `Editor::GetGUI()->GetTextureID(texture)` + `ImGui::Image`.
+- **Conventions (fixed, so every step agrees)** [from research `followup_radiance_cascades.md` §3 setup A]:
+  - Canvas `R16G16B16A16_FLOAT` 1024²: **rgb = emitted radiance, a = opacity** (a ≥ 0.5 = solid: a wall, or a light's
+    surface – lights emit from their surface and block rays like walls). Empty space = (0,0,0,0).
+  - Cascade texel = **(rgb = radiance of the interval, a = transmittance β)**: β = 1 "nothing hit in this interval",
+    β = 0 "hit" (research §0 "Transmittance"). (GM Shaders stores the opposite, "visibility = 1 on hit" – don't mix.)
+  - c0: a probe every **2 px** → 512² probes × **4 directions**; per cascade up: probe spacing ×2 per axis, directions
+    ×4, interval length ×4 → every cascade texture is 1024² (probe-first layout: probe i of c_k owns a
+    2^(k+1) × 2^(k+1) block of texels, one texel per direction).
+  - Direction n of N: angle = 2π (n + 0.5) / N.
+  - Intervals with t0 = 2 px, length ×4: c_k covers [t0 (4^k − 1)/3, t0 (4^(k+1) − 1)/3] → c0 [0,2], c1 [2,10],
+    c2 [10,42], c3 [42,170], c4 [170,682], c5 [682,2730] px; **6 cascades** reach past the 1448-px diagonal.
+  - Merge (research §0 "Merging"): L = L_near + β_near · L_far, β = β_near · β_far. Top-down: c5 first, each c_k merges
+    with c_(k+1) as it is written. Two 1024² textures ping-pong: c5→A, c4→B, c3→A, c2→B, c1→A, c0→B.
+  - Raymarch: plain 1-px steps through the canvas (no distance field yet), stop at the first solid texel or the
+    interval end; outside the canvas = nothing (black, β = 1).
+- **Teach first** (step 0, before any code): the penumbra condition (near → fine spatial / coarse angular, far → the
+  opposite), what an interval is, why cascades cost about the same each (4× directions, ¼ probes), merging = "over"
+  compositing, why diffuse only needs c0's 4 wide cones, where ringing comes from (parallax between c_k and c_(k+1)
+  probes).
+- **Order** (one `TODO(human)` round at a time, checkpoint after each):
+  1. **Canvas + panel + painting**: (a) create the persistent canvas texture; (b) panel shows it, mouse → canvas pixel
+     mapping; (c) `rc_paint.hlsl` brush pass (light colour/intensity, wall, eraser, radius).
+  2. **Brute-force reference**: `rc_reference.hlsl`, per pixel K rays per frame with a per-frame random rotation,
+     accumulated into a persistent texture (reset on paint) → converges to the "ground truth" fluence. View toggle.
+  3. **Gather one cascade**: `rc_cascade.hlsl` with a cascade-index constant: texel → (probe, direction) → interval
+     → march → (radiance, β). Visualise c0…c5 raw (no merge yet).
+  4. **Merge**: same shader, when β > 0 merge with the 4 nearest c_(k+1) probes × the 4 child directions of this
+     direction (bilinear weights, average of the 4 children = the "cone"). Six dispatches top-down, ping-pong.
+  5. **Final fluence**: `rc_fluence.hlsl`: per pixel, bilinear over the 4 nearest c0 probes, average their 4
+     directions → fluence; display tonemapped (simple Reinhard), and a difference view vs the reference.
+  6. **Fixes and toggles** (each an A/B against the reference): interval overlap; bilinear fix (ringing); t0;
+     optional: pre-averaging, l = 2 vs 4 length scaling, a jump-flood distance field to speed up marching.
+  7. **Measure + verify** (below), build-log entry, `performance.md` row (both PCs).
+- **Verify**: (1) same RC time for 2, 100 and 1,000 painted lights (Sannikov's figure: cost independent of light
+  count); (2) ringing visible around a 2-px light without the bilinear fix, gone with it; (3) RC vs the converged
+  reference: no visible bias except at the known artefacts; (4) Render Graph ms per cascade on both PCs (expect c5 to
+  cost most with 1-px marching: its intervals are 2048 px long – that is the argument for the distance field).
+- **Pitfalls**: β convention flipped (GM Shaders); off-by-one in interval starts (gaps → light leaks through thin
+  walls, research §2 "interval overlap"); merging c_k with the c_(k+1) value *already merged* (correct – that's the
+  point) vs with its raw interval (wrong); bilinear weights computed from texel instead of probe-centre positions;
+  merging when β = 0 (a hit must not see past the wall); forgetting the UAV barrier between cascade dispatches (the
+  render graph adds it when each dispatch is its own pass writing the texture); reading and writing the same cascade
+  texture in one dispatch (that's why there are two); sRGB vs linear when displaying (canvas values are linear HDR).
+- **Read** (exact sections; headings verified 2026-11-23):
+  - Step 0: [jason.today/rc](https://jason.today/rc) – "Why is the previous post's approach naive?", "Penumbra
+    hypothesis", "Codifying the penumbra hypothesis" (play with each demo); [m4xc Fundamentals of RC](https://m4xc.dev/articles/fundamental-rc/)
+    – "Observations" (all four sub-parts) and "Exploiting Observations". Local: research note §1 Takeaway, §3 row A.
+  - Step 2: jason.today "Why is the previous post's approach naive?" (the noise demo = what step 2 shows before it
+    converges).
+  - Step 3: m4xc "Cascades" → "Cascade Hierarchy", "Cascade Memory", "Cascade Gathering"; [GM Shaders RC part 1](https://mini.gmshaders.com/p/radiance-cascades)
+    – "Cascade Hierarchies", "How many Cascades?", "Raymarching from Probes".
+  - Step 4: m4xc "Merging" (all four: Intervals, Cones, Spatially, Algorithm); GM Shaders 1 "Merging Cascades" + "Ray
+    Visibility Term and when to Merge"; [GM Shaders RC part 2](https://mini.gmshaders.com/p/radiance-cascades2) "Merging
+    with Cascade N+1".
+  - Step 5: m4xc "Final Pass"; GM Shaders 1 "Screen Space Radiance Field".
+  - Step 6: GM Shaders 2 "Optimization #1: Pre-Averaging" and "Probe/Ray Memory Layout & Abstraction" (the overlap
+    line); research note §2 "Ringing and the bilinear fix"; jason.today "Generalizing to Many Cascades" (ringing remains).
+
 ### M1 – Acceleration structures
 
 - **Goal**: BLAS per `Mesh` (cached), TLAS per frame from a visitor, AS build pass in the render graph with timing.

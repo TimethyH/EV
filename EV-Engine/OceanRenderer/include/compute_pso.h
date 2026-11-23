@@ -38,10 +38,13 @@ public:
         NumRootParameters
     };
 
+    // Binds the pipeline state and root signature, after creating the pipeline state again if the shader was recompiled.
+    // Public so callers with their own bindings (e.g. RcToy's paint pass) can bind the PSO and then set their own
+    // UAVs / constants and dispatch, without adding another Dispatch overload here.
+    void SetPipelineState(CommandList& commandList);
+
 private:
     void CreatePipelineState();
-    // Binds the pipeline state and root signature, after creating the pipeline state again if the shader was recompiled.
-    void SetPipelineState(CommandList& commandList);
 
     std::shared_ptr<Shader> m_computeShader;
     PipelineShaders m_pipelineShaders;

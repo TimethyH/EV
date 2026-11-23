@@ -13,6 +13,11 @@ EV is a DX12 C++ engine (static lib `EV-Engine`) with apps on top (`OceanRendere
   "Where I struggled" section under the task list), and `plan.md` / `knowledge.md` if the plan changed.
 - Commit + push only when the developer asks; never commit `EV-Engine/imgui.ini`. No co-author line.
 
+## Queued Claude tasks (run only when the developer says they're NOT developing)
+- **Persistent render-graph textures ("option C")**: `docs/tasks/persistent-render-graph-textures.md` – the graph
+  owns textures that live across frames (`CreatePersistent`), flags derived from passes; migrate EV's own
+  `CreateTexture` call sites. Handed to Claude by the developer 2026-11-23.
+
 ## Where things are (read these instead of searching)
 | What | Where |
 |---|---|

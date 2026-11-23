@@ -22,6 +22,7 @@ performance". Newest results at the bottom of each table.
 | Date | Milestone | Machine | Shot | Res | spp / bounces | Pass times (ms) | Frame (ms) | Rays/s | VRAM | Quality @ time | Notes |
 |---|---|---|---|---|---|---|---|---|---|---|---|
 | 2026-11-23 | M0 (raster only, no PT) | AMD (main) | default ocean scene, camera untouched | 1237×712 viewport | – | total 0.35 (Render Graph); largest: ocean surface 0.18, skybox 0.013, tonemap 0.012; ocean spectrum 0.003, FFT displace H/V 0.008, slope H/V 0.008 | avg 0.8, max 1.6 (~1200–1300 FPS); later reading steady 1400–1500 FPS (~0.7 ms) – difference = open panels / longer warm-up (CPU-bound, so UI cost shows) | – | 1351 / 15419 MB | – | Ryzen 5 3600, Release, vsync off, normal clocks, 30 s warm-up, read by eye (jumps a lot at this frame rate). CPU-bound: frame 0.8 ms vs GPU 0.35 ms |
+| 2026-11-23 | M0 (raster only, no PT) | NVIDIA (laptop) | default ocean scene, camera untouched | 1212×681 viewport | – | total ≈ 0.9 avg (Render Graph); largest: ocean surface 0.26, skybox 0.030, slope/displacement FFT passes ≈ 0.029 each | avg 1.6, max 3.0 (~620 FPS) | – | 1366 / 7250 MB | – | Release, vsync off, normal clocks, on the charger. Less CPU-bound than the main PC (GPU 0.9 of 1.6 ms). Driver + CPU _fill in_ |
 
 ## A/B changes
 

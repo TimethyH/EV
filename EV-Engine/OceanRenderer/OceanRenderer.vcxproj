@@ -175,6 +175,7 @@
     <ClInclude Include="include\convolution_pso.h" />
     <ClInclude Include="include\ocean_pso.h" />
     <ClInclude Include="include\ocean_scene.h" />
+    <ClInclude Include="include\rc_toy.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="..\EV-Engine\resources\app_icon.rc" />
@@ -184,6 +185,7 @@
     <ClCompile Include="source\convolution_pso.cpp" />
     <ClCompile Include="source\main.cpp" />
     <ClCompile Include="source\ocean_pso.cpp" />
+    <ClCompile Include="source\rc_toy.cpp" />
     <ClCompile Include="source\ocean_scene.cpp" />
   </ItemGroup>
   <ItemGroup>
@@ -198,6 +200,16 @@
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
     </FxCompile>
     <FxCompile Include="shaders\brdf_lut.hlsl">
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">6.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">6.0</ShaderModel>
+      <ShaderType Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Compute</ShaderType>
+      <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Release|x64'">6.0</ShaderModel>
+    </FxCompile>
+    <FxCompile Include="shaders\rc_paint.hlsl">
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Compute</ShaderType>
       <ShaderModel Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">6.0</ShaderModel>
       <ShaderType Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Compute</ShaderType>

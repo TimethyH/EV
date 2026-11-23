@@ -274,3 +274,92 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   average = 0.1 s) – the `--benchmark` CSV (M1–M3) replaces this. Render Graph lists passes in run order, not by cost.
 - **Note**: CPU upgrade planned on the main PC → re-measure this row afterwards (new machine line in performance.md).
 - **Open**: laptop row (same procedure, similar viewport).
+
+## 2026-11-23 – M0 task 13, round 2: raster baseline, laptop
+- **Measured** (developer; Release, vsync off, on the charger, viewport 1212×681): ~620 FPS, frame avg 1.6 ms / max
+  3.0 ms; Render Graph GPU total ≈ 0.9 ms (ocean surface 0.26, skybox 0.030, slope/displacement FFT passes ≈ 0.029
+  each); VRAM 1366 / 7250 MB. Driver + CPU name still to add to the Machines table.
+- **Reading**: the laptop GPU is ~2.6× slower than the 9070 XT on this scene (0.9 vs 0.35 ms) and the FFT passes
+  are ~3.5× slower (0.029 vs 0.008 ms); frame time is less CPU-bound (GPU 0.9 of 1.6 ms).
+- **Open**: main-PC row again after its CPU upgrade (new machine line).
+
+## 2026-11-23 – RC-0 started: tutor entry + skeleton (Claude)
+- **Decision (developer)**: start RC-0 now; M0 leftovers (manual CI run on WARP, laptop driver/CPU, main-PC baseline
+  after the CPU upgrade) are done alongside. "Continue EV" = continue the path-tracing work.
+- **Tutor entry**: `knowledge.md` "### RC-0" written (goal, where it lives in EV, fixed conventions – canvas rgb =
+  emission / a = opacity, cascade texel rgb = radiance / a = transmittance β, c0 2 px × 4 directions, ×2 / ×4 / ×4,
+  t0 = 2 px, 6 cascades, ping-pong – order in 7 steps, verify, pitfalls, reading with exact section headings checked
+  on the live pages).
+- **Where it lives (decision)**: OceanRenderer, class `RcToy` (`include/rc_toy.h`, `source/rc_toy.cpp`), panel "RC-0"
+  in the Center dock (tab next to the Scene view), passes only while "Enable" is ticked. Skeleton by Claude: class
+  declaration, wiring in `Ocean::LoadContent` / `RecordRenderGraph` / `UnloadContent`, project entries, and the panel
+  showing the canvas with `ImGui::Image`. OceanRenderer Debug x64 compiles. First `TODO(human)`: step 1a, creating the
+  canvas texture in `RcToy::Initialize`.
+
+## 2026-11-23 – RC-0 step 1a: canvas texture
+- **What** (developer): `RcToy::Initialize` creates `m_canvas` – 1024² `R16G16B16A16_FLOAT`, `ALLOW_UNORDERED_ACCESS`,
+  via `Application::CreateTexture`, named "RC-0 Canvas".
+- **Bumps on the way**: copied the BRDF LUT's `R16G16_FLOAT` (2 channels; the canvas needs 4: rgb light + a opacity)
+  and its variable names; tried `std::make_shared<Texture>(w, h, format, name)` – no such constructor (only
+  `Texture(desc, clearValue)`), and a direct `make_shared` would skip `Application::TrackLiveTexture` (editor texture
+  browser). Factory functions are where the bookkeeping lives.
+- **Checked**: Claude review; OceanRenderer Debug x64 compiles. Cleanup (Claude): removed the leftover `make_shared`
+  line and the `TODO(human)`, added an explanatory comment.
+- **Question (developer)**: a simpler texture-creation wrapper? → see the session answer: `CreateTexture2D(name, w, h,
+  format, flags)` helper vs. letting the render graph own persistent textures (offered as optional).
+- **Decision (developer)**: option C – the render graph will own persistent textures (`CreatePersistent`, flags
+  derived from passes) and all EV texture creation moves to it. Handed to Claude as a queued task for a session when
+  the developer is not developing: `docs/tasks/persistent-render-graph-textures.md` (listed in `CLAUDE.md`). RC-0
+  continues with the current `CreateTexture` code until then.
+
+## 2026-11-23 – RC-0 step 1b: mouse → canvas pixel
+- **What** (developer): `RcToy::DrawPanel` reads `GetItemRectMin/Max` right after `ImGui::Image`, maps
+  `(mouse − min) / (max − min) · CanvasSize` into `m_brushPixelX/Y` (float canvas pixels), `m_painting =
+  IsItemHovered() && IsMouseDown(Left)`, and shows them as one text line.
+- **Review**: correct first time. No clamp needed – the brush is only used while hovered and ImGui's hover test is
+  `min ≤ mouse < max`, so 0 ≤ pixel < 1024 whenever it matters. Comments said "panel space" for the item rectangle; it
+  is screen space like `GetMousePos` (that's why the subtraction works) – fixed in cleanup.
+- **Checked**: OceanRenderer Debug x64 compiles; `TODO(human)` removed. Developer to confirm the corners read ≈ 0,0 and
+  ≈ 1023,1023.
+- **Fix (Claude, skeleton code)**: the canvas wasn't visible – it starts as (0,0,0,0) and ImGui alpha-blends images,
+  so alpha = 0 ("empty") drew fully transparent. The panel now uses `ImGui::ImageWithBg` over dark grey: empty = grey,
+  wall = black, light = its colour. Hover/coordinates were unaffected (the item rectangle existed all along).
+
+## 2026-11-23 – RC-0 step 1c round 1: the brush shader (rc_paint.hlsl)
+- **Skeleton (Claude)**: `shaders/rc_paint.hlsl` (cbuffer `PaintConstants` b0 + `RWTexture2D<float4> canvas` u0,
+  `[numthreads(16,16,1)]`), FxCompile entry, `RcToy::BrushMode` + `RcToy::PaintConstants` (static_assert = 8 root
+  constants, same field order as the cbuffer so HLSL's 16-byte register packing matches), brush UI in the panel.
+- **What** (developer): one thread per pixel; pixel center `pixel + 0.5` vs `brushCenter`, scalar `length`, early
+  return outside the radius; `switch (brushMode)` picks the whole value: light `(colour·intensity, 1)`, wall
+  `(0,0,0,1)`, eraser `(0,0,0,0)`.
+- **Bumps on the way** (3 rounds):
+  1. Compile error `operands for short-circuiting logical binary operator must be scalar`: `pixel >= 1024 || pixel < 0`
+     on `uint2` gives `bool2`s, and HLSL 2021 (DXC default) only allows `||`/`&&` on scalars (use `or()`/`any()`). The
+     bounds check wasn't needed at all: `uint < 0` is always false, the dispatch covers exactly 1024², and
+     out-of-bounds UAV writes are dropped.
+  2. `float2 d = length(...)`: `length` returns one float, silently splatted into both components → the radius test
+     became a `bool2` too. Missing `+ 0.5` (pixel center).
+  3. One `float4(brushColor * brushIntensity, mode == 2 ? 0 : 1)` for all modes: walls glowed, the eraser left light
+     in rgb (invisible in the panel because ImGui hides alpha 0). A per-mode scalar (`brushType` 1 / 0.5 / 0) can't
+     fix it – modes differ in rgb AND alpha – so pick the whole float4 per case.
+- **Checked**: `dxc -T cs_6_0` compiles; OceanRenderer Debug x64 builds. Cleanup (Claude): removed the unused
+  `intensity` variable and the `TODO(human)`, added explanatory comments.
+- **Next (round 2 skeleton, Claude)**: `m_paintPSO` (OceanCompute with root params [0] UAV table u0, [1] 8 constants
+  b0) created in `Initialize`; `AddPasses` imports the canvas each frame and adds "RC-0 Paint" (`Write(canvas)`) while
+  `m_painting`. `OceanCompute::SetPipelineState` made public so a pass can bind the PSO and set its own bindings.
+  Developer: the pass's Execute body (constants, bind, dispatch).
+
+## 2026-11-24 – RC-0 step 1c round 2: the paint pass – painting works
+- **What** (developer): the "RC-0 Paint" Execute body – `m_paintPSO->SetPipelineState`, a stack `PaintConstants`
+  filled from the brush members (`mode` cast to `uint32_t`), `SetCompute32BitConstants(PaintRoot::Brush, 8, &c)`,
+  `SetUnorderedAccessView(PaintRoot::CanvasUAV, 0, canvas, 0)`, `Dispatch(CanvasSize / 16, CanvasSize / 16, 1)`.
+- **Question (developer)**: "how do I pass the constant buffer data?" → Patroni board "Your own pass: constants,
+  bind, dispatch (RC-0 Paint)" under Branch ③ render-graph: record-vs-execute sequence diagram, root slot ↔ register
+  table, the constants' path (stack struct → copied into the command list → root slot → cbuffer b0), C++ vs HLSL
+  cbuffer layout cards (+ a wrong field order: 48 B with padding), dispatch = group counts.
+- **Review**: correct first time. Pointer form works (`sizeof / sizeof(float)` = 8); the template overload
+  `SetCompute32BitConstants(slot, constants)` would count for you.
+- **Checked**: developer ran it – lights, walls and eraser paint in the panel. Debug x64 builds; cleanup (Claude):
+  `TODO(human)` + `(void)` lines removed, comments added, `static_cast<uint32_t>(_countof(...))` for the C4267 warning
+  from the skeleton's `OceanCompute` construction.
+- **Next**: step 2 – brute-force reference, accumulated over frames.

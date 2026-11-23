@@ -16,6 +16,7 @@
 
 class ConvolutionCompute;
 class OceanCompute;
+class RcToy;
 class UpdateEventArgs;
 class KeyEventArgs;
 class MouseMotionEventArgs;
@@ -135,6 +136,9 @@ private:
 	// The toggle in the Path Tracing panel. Nothing reads it yet; from M2/M3 on the render graph chooses raster or
 	// path tracing with it. Must stay false on devices where RenderCaps::SupportsPathTracing() is false.
 	bool m_pathTracingEnabled = false;
+	// RC-0, the 2D radiance cascades toy (GI track): its own "RC-0" panel and render-graph passes.
+	bool m_showRcToyPanel = true;
+	std::shared_ptr<RcToy> m_rcToy;
 
 	// TODO: add textures
 	std::shared_ptr<EV::Texture> m_defaultTexture;

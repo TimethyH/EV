@@ -12,6 +12,7 @@
 #include "compute_pso.h"
 #include "convolution_pso.h"
 #include "ocean_pso.h"
+#include "rc_toy.h"
 #include "DX12/skybox_pso.h"
 #include "DX12/root_signature.h"
 #include "DX12/sdr_pso.h"
@@ -348,6 +349,11 @@ bool Ocean::LoadContent()
     m_editor->AddPanel("Ocean Parameters", [this]() { DrawOceanParameters(); }, Editor::DockSlot::Right, m_showOceanParams);
     m_editor->AddPanel("Light Parameters", [this]() { DrawLightParameters(); }, Editor::DockSlot::Right, m_showLightParams);
     m_editor->AddPanel("Path Tracing", [this]() { DrawPathTracingPanel(); }, Editor::DockSlot::Right, m_showPathTracingPanel);
+
+    // RC-0 (2D radiance cascades toy): its canvas is a tab next to the Scene view.
+    m_rcToy = std::make_shared<RcToy>();
+    m_rcToy->Initialize();
+    m_editor->AddPanel("RC-0", [this]() { m_rcToy->DrawPanel(*m_editor); }, Editor::DockSlot::Center, m_showRcToyPanel);
 
     // Start the loading task to perform async loading of the scene file.
     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
@@ -832,6 +838,9 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
             m_sdrPSO->Apply(context.GetCommandList());
         });
 
+    // RC-0's passes (nothing while its panel's Enable box is off).
+    m_rcToy->AddPasses(rg);
+
     rg.Execute(commandList);
 }
 
@@ -1036,6 +1045,11 @@ void Ocean::UnloadContent()
     m_oceanPSO.reset();
     m_fftPSO.reset();
     m_permutePSO.reset();
+    if (m_rcToy)
+    {
+        m_rcToy->Release();
+        m_rcToy.reset();
+    }
     for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
     {
     	m_oceanCascades[i].H0Texture.reset();
