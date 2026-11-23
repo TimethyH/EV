@@ -27,7 +27,7 @@
   *  @date October 22, 2018
   *  @author Jeremiah van Oosten
   *
-  *  @brief CommandList class encapsulates a ID3D12GraphicsCommandList2 interface.
+  *  @brief CommandList class encapsulates a ID3D12GraphicsCommandList4 interface.
   *  The CommandList class provides additional functionality that makes working with
   *  DirectX 12 applications easier.
   */
@@ -88,9 +88,9 @@ namespace EV
         }
 
         /**
-         * Get direct access to the ID3D12GraphicsCommandList2 interface.
+         * Get direct access to the ID3D12GraphicsCommandList4 interface.
          */
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> GetCommandList() const
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> GetCommandList() const
         {
             return m_commandList;
         }
@@ -508,7 +508,9 @@ namespace EV
         using TrackedObjects = std::vector < Microsoft::WRL::ComPtr<ID3D12Object> >;
 
         D3D12_COMMAND_LIST_TYPE m_commandListType;
-        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList2> m_commandList;
+        // List4 (path tracing M0) adds the DXR commands: BuildRaytracingAccelerationStructure, DispatchRays, ...
+        // IID_PPV_ARGS in the constructor reads this type, so changing it here is all creation needs.
+        Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> m_commandList;
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 
         // For copy queues, it may be necessary to generate mips while loading textures.

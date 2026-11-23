@@ -57,14 +57,14 @@ tasks, and marks architecture parts as built, along with `build-log.md`.
 | `research/*.md` | Raw research notes with sources (see `research/README.md`) |
 
 The research report was written before two facts were known: development happens mainly on the **AMD** PC, and the
-NVIDIA card is an **RTX 3070**. Where the report and this file disagree, **this file wins** (D12, D14, D15, D16).
+NVIDIA card is an **RTX 3070 Ti Laptop GPU** (a laptop; "the 3070" in this file means that GPU). Where the report and this file disagree, **this file wins** (D12, D14, D15, D16).
 
 ## Hardware
 
 | Machine | GPU | Role | Notes |
 |---|---|---|---|
 | Main dev PC | AMD Radeon RX 9070 XT (RDNA 4, gfx1201) | Daily development | DXR 1.1/1.2 API; SER accepted but does not reorder; HIP SDK for Windows supports gfx1201; no CUDA/OptiX |
-| Second PC | NVIDIA RTX 3070 (Ampere, compute capability 8.6, 8 GB) | CUDA/OptiX builds, comparisons, NVIDIA references | SER does not reorder on RTX 30 (only RTX 40+); no hardware OMM; 8 GB VRAM is a budget to watch |
+| Laptop | NVIDIA GeForce RTX 3070 Ti Laptop GPU (Ampere GA104, compute capability 8.6, 8 GB) | CUDA/OptiX builds, comparisons, NVIDIA references | SER does not reorder on RTX 30 (only RTX 40+); no hardware OMM; 8 GB VRAM is a budget to watch. Laptop: hybrid graphics (EV's `CreateAdapter` picks it by most VRAM, confirmed by the M0 `RenderCaps` line), timings depend on power mode → profile plugged in, same power mode every run. Driver reported SM 6.8 on 2026-11-23 (update before SM 6.9 shaders); Debug crash at swapchain creation (#989 from `dxgi.dll`, build log M0 step 3) |
 | CI | WARP (no GPU) | Build + smoke test | Path tracing stays off; raster path must keep working |
 
 Consequence: everything traced and everything in HLSL runs on both PCs. GPU compute is written once and built twice

@@ -150,7 +150,33 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Result, main PC**:
   `RenderCaps: AMD Radeon RX 9070 XT | vendor: 0x1002 | LUID: 00000000:0000f5ec | RT: 1.1 | SM: 6.9 | binding tier: 3 | SER reorders: no | SDK: 620`
   – matches the expectation (RT ≥ 1.1, SM 6.9, tier 3, SER FALSE). The current AMD driver reports RT tier 1.1, not
-  1.2 (DXR 1.2). **Second PC (RTX 3070): pending.**
+  1.2 (DXR 1.2).
+- **Result, laptop** (developer, Debug): `NVIDIA GeForce RTX 3070 Ti Laptop GPU | vendor: 0x10de | LUID:
+  00000000:00013697 | RT: 1.1 | SM: 6.8 | binding tier: 3 | SER reorders: no | SDK: 620`. **SM 6.8, not 6.9**:
+  the driver doesn't report SM 6.9 yet, so SM 6.9 shaders (D3) won't run there until a driver update – recheck then.
+  SER "no" as expected on RTX 30.
+- **Open (developer: not now)**: on the laptop the Debug run then **crashes at swapchain creation**: `dxgi.dll`
+  itself calls the deprecated `ID3D12Device::CheckFeatureSupport` on EV's device → debug layer reports #989 → EV's
+  info queue breaks on warnings. Not EV code, so the wrapper can't help. Not seen on the 9070 XT desktop (why the
+  laptop's DXGI path differs is unconfirmed; hybrid-GPU presentation is a guess). Options when it's picked up: deny
+  #989 in the info queue with a written reason (loses the check for EV's own calls), or don't break on that one ID;
+  also check whether CI (WARP) hits it.
+- **Hardware fix in the docs**: the NVIDIA machine is a laptop with an RTX 3070 Ti Laptop GPU, not a desktop RTX 3070
+  (`plan.md` Hardware table + `CLAUDE.md` corrected; "the 3070" in the docs means that GPU).
+
+## 2026-11-23 – M0 task 8: ID3D12GraphicsCommandList4
+- **What** (developer): `CommandList::m_commandList` and `GetCommandList()` are now `ID3D12GraphicsCommandList4`
+  (adds `BuildRaytracingAccelerationStructure`, `EmitRaytracingAccelerationStructurePostbuildInfo`,
+  `CopyRaytracingAccelerationStructure`, `SetPipelineState1`, `DispatchRays`, render passes, meta commands).
+- **Nothing else changed, on purpose**: `CreateCommandList(…, IID_PPV_ARGS(&m_commandList))` asks for the IID of the
+  member's type, so it now requests List4 by itself; the 41 `GetCommandList()` callers (17 files) use `auto` / `->` /
+  `.Get()`, and List4 → List2 / `ID3D12GraphicsCommandList*` converts automatically (derived → base). `demo.cpp`'s
+  List2 parameters are not compiled (not in the project). No fallback needed: every runtime with Device13 has List4.
+- **Predictions first** (developer): both right (creation line unchanged, callers compile); the reason for the first
+  was "a general wrapper" → the real reason is `IID_PPV_ARGS` taking the IID from the pointer type.
+- **Verified** (developer): Debug build + run on the 9070 XT, scene comes up (creation is wrapped in `ThrowIfFailed`).
+- **Cleanup (Claude)**: `TODO(human)` replaced by an explanatory comment; the file-header doc comment still said List2.
+
 - **Bumps on the way**: the OPTIONS5 struct used for all three queries (runtime only checks the size → silent
   `E_INVALIDARG`); the shader-model input started at 0 (`= {}`) and then at the 5.1 default, and the loop lowered
   `m_renderCaps` instead of the struct field the runtime reads; printing SM with `/ 10`, `% 10` ("10.5") instead of
