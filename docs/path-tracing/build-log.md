@@ -129,3 +129,10 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   device call (D3D12Core is loaded lazily) and logged twice → moved into the failure branch.
 - **Verified** (developer): Debug run works (EV breaks on debug-layer warnings, so none fired). Not committed yet.
 - **Next**: M0 step 3 – `RenderCaps` struct + one log line.
+
+## 2026-11-23 – Plan change: optional milestones are considered, not skipped silently (no code)
+- **Decision (developer)**: build **RC-0** (2D radiance cascades toy) after M0 and before M1, and **M1b** (hand-built
+  SAH BVH) after M1 and before M2. Updated in `plan.md` (RC-0 row, M1b row, GI-track order).
+- **Rule from now on**: every optional item (M3-ref, R0, R1, M5b, M9r-b/M9d/M9e, R4/R5, M11 extras, small optional
+  tasks like M0's DXC) is offered to the developer at the right moment – do it now or skip for now – before the plan
+  moves past the point where it fits. Nothing optional is passed without that question.
