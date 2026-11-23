@@ -95,4 +95,6 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Bumps on the way** (worth remembering): calling `CheckFeatureSupport1()` as a free function (it is a method of
   `ID3D12Device16`, needs `m_device16->`); hardcoding `620` instead of `D3D12_SDK_VERSION`; calling `m_device16`
   directly at a call site (crashes when Agility is not loaded – call sites must only know the wrapper).
-- **Next**: verify (Debug run: no #989, same `D3D12Core.dll` path line), then M0 step 2 (device creation).
+- **Verified** (developer, Debug run): #989 is gone. Committed as `a0bdeda` (together with M0 step 1 and the docs).
+- **Next**: M0 step 2 (device creation); task 4 (`EV_AGILITY_SDK_EXPORTS(D3D12_SDK_VERSION)`) optional. Claude's
+  queued IBL bake fix is now unblocked.
