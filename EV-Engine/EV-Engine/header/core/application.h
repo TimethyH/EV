@@ -39,6 +39,25 @@ class ShaderLibrary;
 	 */
 	using WndProcEvent = EV::Delegate<LRESULT(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)>;
 
+	// What this GPU + D3D12 runtime can do, queried once at startup by Application::QueryRenderCaps (path tracing M0
+	// step 3). Every default is the "not supported / lowest" value, so a query that fails (WARP, old driver, OS runtime
+	// without Agility) simply leaves a safe answer instead of garbage. Read it via Application::GetRenderCaps().
+	struct RenderCaps
+	{
+		std::wstring adapterName;   // DXGI_ADAPTER_DESC1::Description, e.g. L"AMD Radeon RX 9070 XT"
+		UINT vendorId = 0;          // PCI vendor: 0x1002 AMD, 0x10DE NVIDIA, 0x1414 Microsoft (WARP)
+		LUID adapterLuid = {};      // id of this adapter until reboot; M6 uses it to find the same GPU in HIP/CUDA
+
+		// OPTIONS5: can this device trace rays at all (DXR), and which DXR version. NOT_SUPPORTED = no path tracer.
+		D3D12_RAYTRACING_TIER raytracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
+		// SHADER_MODEL: newest HLSL shader model the device runs (0x69 = 6.9: high nibble major, low nibble minor).
+		D3D_SHADER_MODEL highestShaderModel = D3D_SHADER_MODEL_5_1;
+		// OPTIONS: tier 3 = fully bindless (a shader may index any descriptor in the heap, e.g. any material texture).
+		D3D12_RESOURCE_BINDING_TIER resourceBindingTier = D3D12_RESOURCE_BINDING_TIER_1;
+		// OPTIONS22: does Shader Execution Reordering really regroup threads on this hardware, or is it a no-op?
+		bool serActuallyReorders = false;
+	};
+
 
 	class Application
 	{
@@ -70,6 +89,9 @@ class ShaderLibrary;
 		// ID3D12Device16::CheckFeatureSupport1, which clamps reported tiers to the SDK version EV was built against.
 		// Same arguments and return value as ID3D12Device::CheckFeatureSupport. Use this instead of calling the device.
 		HRESULT CheckFeatureSupport(D3D12_FEATURE feature, void* pFeatureSupportData, UINT featureSupportDataSize) const;
+
+		// GPU capabilities queried once in Initialize (see RenderCaps). Cheap to call every frame.
+		const RenderCaps& GetRenderCaps() const { return m_renderCaps; }
 
 		CommandQueue& GetCommandQueue(
 			D3D12_COMMAND_LIST_TYPE type = D3D12_COMMAND_LIST_TYPE_DIRECT) const;
@@ -200,6 +222,8 @@ class ShaderLibrary;
 
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> CreateAdapter(bool bUseWarp);
 		Microsoft::WRL::ComPtr<ID3D12Device13> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
+		// Fills m_renderCaps and prints one summary line to the Output window. Needs m_dxgiAdapter + m_device.
+		void QueryRenderCaps();
 		bool CheckTearingSupport();
 		void TrackLiveTexture(const std::shared_ptr<Texture>& texture);
 
@@ -218,6 +242,8 @@ class ShaderLibrary;
 		// Same device seen through ID3D12Device16 (for CheckFeatureSupport1). Stays null when the Agility runtime is not
 		// loaded (OS runtime fallback), then CheckFeatureSupport() uses the classic call.
 		Microsoft::WRL::ComPtr<ID3D12Device16> m_device16 = {};
+		// Filled once by QueryRenderCaps(), read through GetRenderCaps().
+		RenderCaps m_renderCaps = {};
 
 		std::shared_ptr<CommandQueue> m_DirectCommandQueue;
 		std::shared_ptr<CommandQueue> m_ComputeCommandQueue;

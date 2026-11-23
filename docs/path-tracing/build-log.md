@@ -136,3 +136,24 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Rule from now on**: every optional item (M3-ref, R0, R1, M5b, M9r-b/M9d/M9e, R4/R5, M11 extras, small optional
   tasks like M0's DXC) is offered to the developer at the right moment – do it now or skip for now – before the plan
   moves past the point where it fits. Nothing optional is passed without that question.
+
+## 2026-11-23 – M0 step 3: RenderCaps + one log line
+- **What** (developer): `Application::QueryRenderCaps()`, called at the end of `Initialize`, fills `m_renderCaps`
+  (`struct RenderCaps` in `application.h`, getter `GetRenderCaps()`): adapter name / VendorId / LUID from
+  `m_dxgiAdapter->GetDesc1`, then `OPTIONS5.RaytracingTier`, `OPTIONS.ResourceBindingTier`,
+  `OPTIONS22.ShaderExecutionReorderingActuallyReorders` and `SHADER_MODEL` – all through the `CheckFeatureSupport`
+  wrapper, each stored only on `SUCCEEDED`, so a failed query keeps the safe default from the struct (never throws).
+  Shader model: asks `D3D_HIGHEST_SHADER_MODEL` (6.10 in this header) and steps down while `E_INVALIDARG`, floor 6.0
+  (MS Learn `D3D12_FEATURE_DATA_SHADER_MODEL`, Remarks → Note). One `std::format` line via `OutputDebugStringW`.
+- **Plan change**: adapter info is read inside `QueryRenderCaps`, not stored by `CreateAdapter` (no hidden side
+  effects; `CreateAdapter` runs twice with the WARP fallback). knowledge.md §2.5 + M0 entry updated.
+- **Result, main PC**:
+  `RenderCaps: AMD Radeon RX 9070 XT | vendor: 0x1002 | LUID: 00000000:0000f5ec | RT: 1.1 | SM: 6.9 | binding tier: 3 | SER reorders: no | SDK: 620`
+  – matches the expectation (RT ≥ 1.1, SM 6.9, tier 3, SER FALSE). The current AMD driver reports RT tier 1.1, not
+  1.2 (DXR 1.2). **Second PC (RTX 3070): pending.**
+- **Bumps on the way**: the OPTIONS5 struct used for all three queries (runtime only checks the size → silent
+  `E_INVALIDARG`); the shader-model input started at 0 (`= {}`) and then at the 5.1 default, and the loop lowered
+  `m_renderCaps` instead of the struct field the runtime reads; printing SM with `/ 10`, `% 10` ("10.5") instead of
+  the hex digits `>> 4`, `& 0xF`.
+- **Cleanup (Claude, after review)**: removed the `TODO(human)` + step comments, added a comment explaining the
+  shader-model loop, added the missing trailing `\n` to the log line.

@@ -32,7 +32,8 @@ GI-track milestones (RC-0, R0/R1, M8c–M8e, M9b/M9r/M9c, M9x) are in `plan.md` 
 
 ## Code map (by function – line numbers drift, search for the name)
 - Device, adapter, caps, DRED, frame loop: `EV-Engine/EV-Engine/source/core/application.cpp`
-  (`Application::Initialize`, `CreateAdapter`, `CreateDevice`, `CheckFeatureSupport` wrapper, `LogLoadedD3D12Core`,
+  (`Application::Initialize`, `CreateAdapter`, `CreateDevice`, `CheckFeatureSupport` wrapper, `QueryRenderCaps`
+  (fills `RenderCaps`, read via `GetRenderCaps()`), `LogLoadedD3D12Core`,
   `GetBreadcrumbOpName`, `GetDeviceRemovedReport`) + `header/core/application.h`
 - Agility SDK exports macro: `header/core/agility_sdk.h`, expanded in `OceanRenderer/source/main.cpp`
 - Command lists, queues, descriptors, render graph, PSOs: `header/DX12/` + `source/DX12/`

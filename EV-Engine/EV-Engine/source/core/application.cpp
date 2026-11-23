@@ -20,6 +20,7 @@
 
 #include <csignal>
 #include <DbgHelp.h>
+#include <format>
 #pragma comment(lib, "dbghelp.lib")
 
 constexpr wchar_t WINDOW_CLASS_NAME[] = L"DX12RenderWindowClass";
@@ -472,7 +473,71 @@ void Application::Initialize()
         }
         m_highestRootSignatureVersion = featureData.HighestVersion;
     }
+
+    // Path tracing M0 step 3: what can this GPU do (DXR tier, shader model, bindless, SER) + one log line.
+    QueryRenderCaps();
 }
+
+// Fills m_renderCaps once at startup and prints ONE summary line to the Output window (path tracing M0 step 3).
+// Rules: every device query goes through CheckFeatureSupport() (the #989 wrapper), never m_device directly; and
+// nothing here may throw: when a query fails (WARP, old driver, OS runtime) the field keeps its safe default from
+// RenderCaps and startup continues. Reference: knowledge.md §10 "M0 – Capabilities & plumbing".
+void Application::QueryRenderCaps()
+{
+    DXGI_ADAPTER_DESC1 adapterDesc;
+    if(SUCCEEDED(m_dxgiAdapter->GetDesc1(&adapterDesc)))
+    {
+        m_renderCaps.adapterName = adapterDesc.Description;
+        m_renderCaps.vendorId = adapterDesc.VendorId;
+        m_renderCaps.adapterLuid = adapterDesc.AdapterLuid;
+    }
+
+    D3D12_FEATURE_DATA_D3D12_OPTIONS5 RTfeatureSupportData = {};
+    D3D12_FEATURE_DATA_D3D12_OPTIONS BindlessfeatureSupportData = {};
+    D3D12_FEATURE_DATA_D3D12_OPTIONS22 SERfeatureSupportData = {};
+	D3D12_FEATURE_DATA_SHADER_MODEL shaderModelSupportData = {};
+	shaderModelSupportData.HighestShaderModel = D3D_HIGHEST_SHADER_MODEL;
+
+    if(SUCCEEDED(CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS5, &RTfeatureSupportData, sizeof(RTfeatureSupportData))))
+    {
+        m_renderCaps.raytracingTier = RTfeatureSupportData.RaytracingTier;
+    }
+    if(SUCCEEDED(CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS, &BindlessfeatureSupportData, sizeof(BindlessfeatureSupportData))))
+    {
+        m_renderCaps.resourceBindingTier = BindlessfeatureSupportData.ResourceBindingTier;
+    }
+    if(SUCCEEDED(CheckFeatureSupport(D3D12_FEATURE_D3D12_OPTIONS22, &SERfeatureSupportData, sizeof(SERfeatureSupportData))))
+    {
+        m_renderCaps.serActuallyReorders = SERfeatureSupportData.ShaderExecutionReorderingActuallyReorders;
+    }
+    // HighestShaderModel is in AND out: we ask "up to the newest model this header knows" and the runtime answers with
+    // the highest one the device supports. A runtime older than the header returns E_INVALIDARG for a model it has
+    // never heard of, so step down one minor version at a time (low hex digit = minor) and stop at 6.0.
+	HRESULT shaderModelResult = CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupportData, sizeof(shaderModelSupportData));
+    while(shaderModelResult == E_INVALIDARG && shaderModelSupportData.HighestShaderModel > D3D_SHADER_MODEL_6_0)
+    {
+        shaderModelSupportData.HighestShaderModel = static_cast<D3D_SHADER_MODEL>(static_cast<int>(shaderModelSupportData.HighestShaderModel) - 1);
+        shaderModelResult = CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupportData, sizeof(shaderModelSupportData));
+    }
+	if (SUCCEEDED(shaderModelResult))
+	{
+		m_renderCaps.highestShaderModel = shaderModelSupportData.HighestShaderModel;
+	}
+
+    std::wstring output = std::format(L"RenderCaps: {} | vendor: {:#06x} | LUID: {:08x}:{:08x} | RT: {}.{} | SM: {}.{} | binding tier: {} | SER reorders: {} | SDK: {}\n",
+		m_renderCaps.adapterName,
+		m_renderCaps.vendorId,
+		static_cast<uint32_t>(m_renderCaps.adapterLuid.HighPart),
+		m_renderCaps.adapterLuid.LowPart,
+		static_cast<int>(m_renderCaps.raytracingTier) / 10, static_cast<int>(m_renderCaps.raytracingTier) % 10,
+		static_cast<int>(m_renderCaps.highestShaderModel) >> 4, static_cast<int>(m_renderCaps.highestShaderModel) & 0xF,
+		static_cast<int>(m_renderCaps.resourceBindingTier),
+		m_renderCaps.serActuallyReorders ? L"yes" : L"no",
+		D3D12_SDK_VERSION);
+
+	OutputDebugStringW(output.c_str());
+}
+
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::CreateAdapter(bool bUseWarp)
 {

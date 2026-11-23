@@ -415,7 +415,7 @@ calls into the module.
 
 | Hook | Where | Notes |
 |---|---|---|
-| Caps query | `Application::Initialize` after 428-438 (before 439); adapter in `CreateAdapter` 441-482 (`GetDesc1` → `AdapterLuid`, `VendorId`: 0x1002 AMD, 0x10DE NVIDIA [T]) | Store `RenderCaps` on `Application` (members near `application.h:210-220`) + getter. Must not throw on WARP |
+| Caps query | **Done (M0 step 3, 2026-11-23):** `Application::QueryRenderCaps`, called at the end of `Initialize`; reads the adapter itself via `m_dxgiAdapter->GetDesc1` (`AdapterLuid`, `VendorId`: 0x1002 AMD, 0x10DE NVIDIA, 0x1414 WARP) | `struct RenderCaps` + `m_renderCaps` / `GetRenderCaps()` in `application.h`. Never throws: failed query = default kept |
 | Device | `CreateDevice` 501-562 | Base device → `As<ID3D12Device13>` (done) |
 | DRED | `GetBreadcrumbOpName` 1265-1290 | Add DXR op names |
 | Panel | `Editor::AddPanel(name, draw, DockSlot, open)` (`editor.h:142`, drawn in `DrawEditorPanels` `editor.cpp:434-445`); register in `Ocean::LoadContent` next to 348-349 | e.g. `AddPanel("Path Tracing", …, DockSlot::Right)`. Hidden in play mode |
@@ -2017,9 +2017,8 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   reorders); adapter LUID / VendorId; why the debug layer must stay silent; what DRED breadcrumbs are.
 - **Files** (by function name – line numbers drift, search for the name): `OceanRenderer/source/main.cpp`
   (`EV_AGILITY_SDK_EXPORTS`, done); `header/core/agility_sdk.h` (done); app `.vcxproj` post-build copy to
-  `$(OutDir)D3D12\` (done); `source/core/application.cpp`: `Application::Initialize` (caps query goes after the
-  device block, next to the root-signature check), `Application::CreateAdapter` (keep LUID / VendorId from
-  `DXGI_ADAPTER_DESC1`), `Application::CreateDevice` (base device → `As<ID3D12Device13>`, done 2026-11-23),
+  `$(OutDir)D3D12\` (done); `source/core/application.cpp`: `Application::QueryRenderCaps` (caps + adapter LUID /
+  VendorId + log line, called at the end of `Initialize`; done 2026-11-23), `Application::CreateDevice` (base device → `As<ID3D12Device13>`, done 2026-11-23),
   `Application::CheckFeatureSupport` (the wrapper every caps query must use), static `GetBreadcrumbOpName` (DRED names),
   the commented-out `++Application::m_frameCount` inside `Application::OnWndProc`, `Application::ReleaseStaleDescriptors`
   (reads the frame count); `header/core/application.h` (`m_device` / `GetDevice` / `CreateDevice` = Device13; caps
