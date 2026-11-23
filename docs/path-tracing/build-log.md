@@ -226,8 +226,13 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   `if/else` duplicating the widget with an always-true inner check, a generic "not supported" text instead of the
   reason, `%s` for the `std::wstring` name (prints only "A"; ImGui gets no C4477 check), and a per-frame copy of
   `RenderCaps`.
-- **Verified** (developer): panel shows on the 9070 XT with an active checkbox. WARP run (`EV_USE_WARP=1`) still to
-  confirm "unsupported" + RT reason; the CI check is M0's final verify.
+- **Verified** (developer): panel shows on the 9070 XT with an active checkbox. WARP run (`EV_USE_WARP=1`, main PC,
+  **inbox** WARP – no `D3D10Warp.dll` in the repo): `Microsoft Basic Render Driver | vendor: 0x1414 | RT: 1.1 |
+  SM: 6.8 | binding tier: 3 | SER reorders: no | SDK: 620` → **supported**, not "unsupported" as planned. The rule is
+  right; the plan's assumption "inbox WARP has no DXR" (knowledge.md §1 matrix, marked [I]) was wrong for this
+  Windows build. The CI runner's WARP (windows-2025 image) may still differ – the manual CI run will show it.
+  **Decision**: no override switch to force "unsupported" (no machine we use lacks the minimums); M0 verify changed to
+  "CI green on WARP, panel shows what the runner reports".
 - **Cleanup (Claude)**: `TODO(human)`s removed; `if (ImGui::Checkbox(...));` → plain call (the empty `if` did nothing,
   MSVC C4390).
 - **Task 12 (optional, newer DXC next to the exe): skipped for now** (developer). The Windows SDK DXC covers SM 6.6,
@@ -239,3 +244,15 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   the hex digits `>> 4`, `& 0xF`.
 - **Cleanup (Claude, after review)**: removed the `TODO(human)` + step comments, added a comment explaining the
   shader-model loop, added the missing trailing `\n` to the log line.
+
+## 2026-11-23 – Laptop Debug crash fixed: #989 from dxgi.dll denied (Claude, at the developer's request)
+- **Problem** (step-3 entry): on the laptop, `dxgi.dll` calls the deprecated `ID3D12Device::CheckFeatureSupport` on
+  EV's device during swapchain creation → `D3D12_MESSAGE_ID_DEPRECATED_API` (#989) → break-on-warning → crash.
+- **Fix**: `D3D12_MESSAGE_ID_DEPRECATED_API` added to the storage-filter `DenyIds` in `Application::CreateDevice`
+  (denied messages are never stored, so they can't break), with the reason in a comment. Why not
+  `SetBreakOnID(989, FALSE)`: the debug layer breaks if category OR severity OR ID is set, so break-on-WARNING still
+  fires. Why the whole run and not only around swapchain creation: DXGI may make the same call on `ResizeBuffers` /
+  fullscreen switches. Cost: a new deprecated call in EV's own code would go unnoticed (all capability queries go
+  through the `CheckFeatureSupport` wrapper → `CheckFeatureSupport1`, so none today).
+- **Checked**: EV-Engine Debug x64 builds (MSBuild, no new warnings). **Laptop run still to confirm** (Debug: reaches
+  the scene, resize the window once).

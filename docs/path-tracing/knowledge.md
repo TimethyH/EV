@@ -106,7 +106,7 @@ sampling + sun disk (NEE+MIS) + point lights · D18 branch from `scene-save-load
 
 | Capability | RX 9070 XT | RTX 3070 | WARP CI |
 |---|---|---|---|
-| DXR 1.1 inline RayQuery (`RaytracingTier ≥ 1_1`) | Yes [I] (DX12 Ultimate) | Yes [I] (since 2020) | Yes with **Microsoft.Direct3D.WARP NuGet ≥ 1.0.8**; inbox WARP: assume no ([NuGet WARP](https://www.nuget.org/packages/Microsoft.Direct3D.WARP)) |
+| DXR 1.1 inline RayQuery (`RaytracingTier ≥ 1_1`) | Yes [I] (DX12 Ultimate) | Yes [I] (since 2020) | Yes with **Microsoft.Direct3D.WARP NuGet ≥ 1.0.8**; inbox WARP: **yes on the main PC** (measured 2026-11-23: RT 1.1, SM 6.8, tier 3), CI runner image unverified ([NuGet WARP](https://www.nuget.org/packages/Microsoft.Direct3D.WARP)) |
 | Exact `RaytracingTier` reported | Unknown – may be 1.1 not 1.2 because OMM is not listed for AMD [U] → **query and log** | Unknown [U] → query and log | 1.0.18+: SM 6.9/DXR 1.2 |
 | Shader model with Agility 1.619+ | 6.9 with Adrenalin **26.2.1+** ([SM 6.9 retail](https://devblogs.microsoft.com/directx/shader-model-6-9-retail-and-more/)) | 6.9 with driver **595+**; "All RTX hardware" listed for SM 6.9 features | 6.9 (1.0.18+) |
 | SER (DXR 1.2) | API accepted, **does not reorder** | API accepted, **reorder is a no-op on RTX 20/30** ([SER post](https://devblogs.microsoft.com/directx/ser/)); query `D3D12_FEATURE_DATA_D3D12_OPTIONS22::ShaderExecutionReorderingActuallyReorders` (should be FALSE) | 1.0.21+: actually reorders |
@@ -1359,7 +1359,8 @@ COPYRAYTRACINGACCELERATIONSTRUCTURE (33), DISPATCHRAYS (34), SETPIPELINESTATE1 (
 - CI plan [I]: restore WARP 1.0.22 + Agility 1.620.2; copy `D3D10Warp.dll` next to the test exe (location
   undocumented [U]); `IDXGIFactory4::EnumWarpAdapter`; assert `RaytracingTier ≥ 1_1` and that D3D10Warp.dll loaded from
   the app folder. Smoke test: 64²–256², Cornell box + 33×33 ocean patch with refit, fixed seed, 16–64 frames, compare
-  mean/RMSE to a stored reference (not exact bytes). Default CI (inbox WARP) keeps PT off → panel "unsupported".
+  mean/RMSE to a stored reference (not exact bytes). Default CI (inbox WARP): planned as PT off → panel "unsupported", but inbox WARP on the main PC reports RT 1.1 /
+  SM 6.8 (2026-11-23), so the runner may support PT too – check the CI log's RenderCaps line.
 - Remember: CI does not run on push to `path-tracing` (only PRs / manual).
 
 ### 6.10 SM 6.10 / `dx::linalg` status (2026-11-18)
@@ -2010,7 +2011,7 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
 ### M0 – Capabilities & plumbing
 
 - **Goal**: the engine knows what the GPU can do, loads the Agility runtime, has `List4`, DXR-aware DRED, a running
-  frame counter and a "Path Tracing" panel that says "unsupported" on WARP.
+  frame counter and a "Path Tracing" panel that shows whether this adapter can path trace (and why not).
 - **Teach first**: what the Agility SDK is (app-local D3D12Core.dll) and why exports must live in the exe (static-lib
   linker rule); COM `QueryInterface`/`As<>` for optional interfaces; `CheckFeatureSupport` structs (`OPTIONS5`
   RaytracingTier, `SHADER_MODEL` with HighestShaderModel *input*, `OPTIONS` ResourceBindingTier, `OPTIONS22` SER
@@ -2031,7 +2032,9 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   + log line (adapter name, VendorId, LUID, RT tier, highest SM, binding tier, SER-reorders, Agility version); (4) List4;
   (5) DRED names; (6) frame counter (check what else reads `GetFrameCount()` – `ReleaseStaleDescriptors` – before
   enabling); (7) panel with a disabled toggle when unsupported; (8) optionally DXC next to the exe.
-- **Verify**: CI (manual run or PR, since push doesn't trigger) green on WARP with panel "unsupported"; both PCs log
+- **Verify**: CI (manual run or PR, since push doesn't trigger) green on WARP; the panel shows whatever the runner's
+  WARP reports (inbox WARP on the main PC = supported since 2026-11-23, so "unsupported" is no longer expected; the
+  unsupported branch stays untested by decision – no override switch); both PCs log
   caps (expect RT tier ≥ 1.1, SM 6.9, binding tier 3 [I], SER-reorders FALSE on both); `GetModuleFileName` shows
   `...\x64\Debug\D3D12\D3D12Core.dll`; debug layer silent in a full session; a forced device removal (e.g. TDR test)
   prints known op names.

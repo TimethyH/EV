@@ -675,6 +675,14 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
             D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
             D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
             D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
+            // #989 "deprecated API". Since Agility 1.620 the classic ID3D12Device::CheckFeatureSupport is deprecated.
+            // EV's own capability queries all go through Application::CheckFeatureSupport (-> CheckFeatureSupport1),
+            // but on some systems (the RTX 3070 Ti laptop) dxgi.dll itself calls the old function on our device while
+            // it creates / resizes the swapchain. That call is not ours and can't be changed, and with break-on-warning
+            // it crashed every Debug run there. Denied for the whole run because we don't know every DXGI call that
+            // does it. Cost: a NEW deprecated call in EV code would go unnoticed too - keep capability queries in the
+            // wrapper.
+            D3D12_MESSAGE_ID_DEPRECATED_API,
         };
 
         D3D12_INFO_QUEUE_FILTER NewFilter = {};
