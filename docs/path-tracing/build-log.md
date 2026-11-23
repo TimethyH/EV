@@ -254,5 +254,23 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   fires. Why the whole run and not only around swapchain creation: DXGI may make the same call on `ResizeBuffers` /
   fullscreen switches. Cost: a new deprecated call in EV's own code would go unnoticed (all capability queries go
   through the `CheckFeatureSupport` wrapper → `CheckFeatureSupport1`, so none today).
-- **Checked**: EV-Engine Debug x64 builds (MSBuild, no new warnings). **Laptop run still to confirm** (Debug: reaches
-  the scene, resize the window once).
+- **Checked**: EV-Engine Debug x64 builds (MSBuild, no new warnings). **Verified on the laptop** (developer, Debug):
+  reaches the scene, no crash after resizing the window. Commit `5caa166`.
+
+## 2026-11-23 – M0 task 13, round 1: VRAM line in the Stats window
+- **What** (developer): `Editor::DrawStats` prints `VRAM: <usage> / <budget> MB` from
+  `IDXGIAdapter3::QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, …)` via `Application::GetAdapter()`
+  (Adapter4 inherits Adapter3, no `As<>`); printed only on `SUCCEEDED`, `UINT64` bytes → MB with `%llu`.
+- **Why**: the `performance.md` baseline has a VRAM column; from M1 on it shows what acceleration structures cost,
+  and on the 8 GB laptop usage close to Budget explains sudden frame-time jumps (paging).
+- **Checked**: Claude review passed first time; EV-Engine Debug x64 compiles. `TODO(human)` removed, comment kept.
+- **Next**: round 2 – measure the raster baseline on both PCs (Release, vsync off, normal clocks) → `performance.md`.
+
+## 2026-11-23 – M0 task 13, round 2: raster baseline, main PC
+- **Measured** (developer; Release, vsync off, normal clocks, 30 s warm-up, default ocean scene, viewport 1237×712):
+  ~1200–1300 FPS, frame avg 0.8 ms / max 1.6 ms; Render Graph GPU total 0.35 ms (ocean surface 0.18, skybox 0.013,
+  tonemap 0.012, simulation passes ≤ 0.008 each); VRAM 1351 / 15419 MB. RX 9070 XT, Adrenalin 26.11.2, Ryzen 5 3600.
+- **Reading**: CPU-bound (frame 0.8 ms vs GPU 0.35 ms); numbers read by eye jump a lot at this frame rate (120-frame
+  average = 0.1 s) – the `--benchmark` CSV (M1–M3) replaces this. Render Graph lists passes in run order, not by cost.
+- **Note**: CPU upgrade planned on the main PC → re-measure this row afterwards (new machine line in performance.md).
+- **Open**: laptop row (same procedure, similar viewport).

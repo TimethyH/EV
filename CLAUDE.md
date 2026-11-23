@@ -50,4 +50,4 @@ GI-track milestones (RC-0, R0/R1, M8c–M8e, M9b/M9r/M9c, M9x) are in `plan.md` 
   `Loaded D3D12Core.dll from: …` is the proof.
 - Hardware: main dev PC = AMD RX 9070 XT (no CUDA/OptiX); laptop = NVIDIA RTX 3070 Ti Laptop GPU (8 GB, cc 8.6;
   "the 3070" in the docs). Laptop Debug crash at swapchain creation (#989 from `dxgi.dll`) fixed 2026-11-23 by
-  denying `D3D12_MESSAGE_ID_DEPRECATED_API` in `CreateDevice` (laptop run to confirm).
+  denying `D3D12_MESSAGE_ID_DEPRECATED_API` in `CreateDevice` (verified on the laptop, incl. resize).
