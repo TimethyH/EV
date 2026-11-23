@@ -2015,13 +2015,19 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   linker rule); COM `QueryInterface`/`As<>` for optional interfaces; `CheckFeatureSupport` structs (`OPTIONS5`
   RaytracingTier, `SHADER_MODEL` with HighestShaderModel *input*, `OPTIONS` ResourceBindingTier, `OPTIONS22` SER
   reorders); adapter LUID / VendorId; why the debug layer must stay silent; what DRED breadcrumbs are.
-- **Files**: `OceanRenderer/source/main.cpp`, `ShaderArt/source/main.cpp` (exports after line 11); new macro header in
-  `header/core/`; app `.vcxproj` post-build copy to `$(OutDir)D3D12\`; `source/core/application.cpp` (`Initialize`
-  353-439 → caps after 428-438; `CreateAdapter` 441-482 → keep LUID/VendorId; `CreateDevice` 501-562 → base device →
-  `As<ID3D12Device13>` (Device5 inherited, done 2026-11-23); `GetBreadcrumbOpName` 1265-1290; `++m_frameCount` at 993), `header/core/application.h`
-  (Device13 at 66/195/210, caps member + getter near 210-220); `header/DX12/command_list.h` (93, 511) /
-  `command_list.cpp:47`; `ocean_scene.cpp` (`AddPanel` next to 348-349); include order for Agility headers in
-  `EV-Engine.vcxproj` (213-229) and the app projects.
+- **Files** (by function name – line numbers drift, search for the name): `OceanRenderer/source/main.cpp`
+  (`EV_AGILITY_SDK_EXPORTS`, done); `header/core/agility_sdk.h` (done); app `.vcxproj` post-build copy to
+  `$(OutDir)D3D12\` (done); `source/core/application.cpp`: `Application::Initialize` (caps query goes after the
+  device block, next to the root-signature check), `Application::CreateAdapter` (keep LUID / VendorId from
+  `DXGI_ADAPTER_DESC1`), `Application::CreateDevice` (base device → `As<ID3D12Device13>`, done 2026-11-23),
+  `Application::CheckFeatureSupport` (the wrapper every caps query must use), static `GetBreadcrumbOpName` (DRED names),
+  the commented-out `++Application::m_frameCount` inside `Application::OnWndProc`, `Application::ReleaseStaleDescriptors`
+  (reads the frame count); `header/core/application.h` (`m_device` / `GetDevice` / `CreateDevice` = Device13; caps
+  member + getter next to `m_device16`); `header/DX12/command_list.h` (`GetCommandList()` and member `m_commandList`,
+  both `ID3D12GraphicsCommandList2` today) + `source/DX12/command_list.cpp` (`CommandList::CommandList` →
+  `CreateCommandList`); `OceanRenderer/source/ocean_scene.cpp` (new panel next to the `m_editor->AddPanel("Ocean
+  Parameters", …)` calls); Agility `include` first in `IncludePath` of `EV-Engine.vcxproj` and the app projects (done).
+  ShaderArt is skipped (unused).
 - **Order**: (1) Agility exports + DLL copy, log the loaded D3D12Core path; (2) device creation change; (3) caps struct
   + log line (adapter name, VendorId, LUID, RT tier, highest SM, binding tier, SER-reorders, Agility version); (4) List4;
   (5) DRED names; (6) frame counter (check what else reads `GetFrameCount()` – `ReleaseStaleDescriptors` – before
