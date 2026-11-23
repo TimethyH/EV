@@ -195,6 +195,23 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   commands yet); the optional forced `RemoveDevice()` test was offered, not taken.
 - **Cleanup (Claude)**: `TODO(human)` → explanatory comment; removed extra empty lines.
 
+## 2026-11-23 – M0 task 10: frame counter running again
+- **What** (developer): `WndProc`'s `WM_PAINT` case (EV's once-per-frame tick: the window is never validated, so
+  Windows keeps sending `WM_PAINT`) calls the private `Application::IncrementFrame()` **before** `OnUpdate` →
+  the first frame sees `m_frameCount = 1`; 0 means "no frame has run yet". The unused per-window
+  `Window::m_frameCounter` was deleted (one source of truth for M3's RNG seed). Also fixed: `WM_DPICHANGED` fell
+  through into `WM_PAINT` (missing `break`), which ran an extra frame on every DPI change.
+- **Checked first**: the only live reader, `DescriptorAllocation::Free`, stores the frame next to each stale
+  descriptor, but `DescriptorAllocatorPage::ReleaseStaleDescriptors` ignores it and frees everything after each
+  `Present` → enabling the counter changes no behaviour. Note for M3: the persistent bindless heap needs real
+  frame-based deferred release (the original tutorial design EV dropped).
+- **Found on the way**: the `friend WndProc` in `Application` had never worked – inside `namespace EV` an
+  unqualified friend names `EV::WndProc`, but the real one is global. Fix (developer): declare the global `WndProc`
+  before `namespace EV` and befriend `::WndProc` (same pattern as `window.h`).
+- **Verified** (developer): Watch window `EV::Application::m_frameCount` grows between two pauses.
+- **Cleanup (Claude)**: `TODO(human)` removed, comments put above their own lines, explanatory comments on the global
+  `WndProc` declaration and `IncrementFrame`.
+
 - **Bumps on the way**: the OPTIONS5 struct used for all three queries (runtime only checks the size → silent
   `E_INVALIDARG`); the shader-model input started at 0 (`= {}`) and then at the 5.1 default, and the loop lowered
   `m_renderCaps` instead of the struct field the runtime reads; printing SM with `/ 10`, `% 10` ("10.5") instead of

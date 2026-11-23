@@ -13,6 +13,9 @@
 #include "UI/GUI.h"
 #include "DX12/render_target.h"
 
+// The global window procedure (application.cpp). Declared here, outside namespace EV, so the friend declaration in
+// Application can name it as ::WndProc; an unqualified friend would mean a non-existent EV::WndProc.
+LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 namespace EV
 {
@@ -214,7 +217,6 @@ class ShaderLibrary;
 		WndProcEvent wndProcHandler;
 
 		void Stop(); // terminate app
-
 	protected:
 		Application(HINSTANCE hInstance);
 		virtual ~Application();
@@ -233,7 +235,12 @@ class ShaderLibrary;
 		Application(const Application& copy) = delete; // deletes copy constructor
 		Application& operator=(const Application& other) = delete; // deletes assignment operator
 
-		friend LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+		friend LRESULT CALLBACK ::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
+
+		// Global frame index (path tracing M0): only ::WndProc (WM_PAINT, once per frame) may advance it, hence private.
+		void IncrementFrame() {
+			++m_frameCount;
+		}
 
 		// Instance the application was made with
 		HINSTANCE m_hInstance = {};

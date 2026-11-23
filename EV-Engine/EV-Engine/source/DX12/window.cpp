@@ -137,8 +137,6 @@ void Window::OnUpdate(UpdateEventArgs& e)
 
 	if (auto pGame = m_pGame.lock())
 	{
-		m_frameCounter++;
-
 		UpdateEventArgs updateEventArgs(m_updateClock.GetDeltaSeconds(), m_updateClock.GetTotalSeconds());
 		pGame->OnUpdate(updateEventArgs);
 	}

@@ -1104,12 +1104,14 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             DPIScaleEventArgs dpiScaleEventArgs(dpiScaling);
             pWindow->OnDPIScaleChanged(dpiScaleEventArgs);
         }
+        break;
         case WM_PAINT:
         {
+			// frame 1 is the first frame after the window is created, so the first frame sees m_frameCount = 1.
+             Application::Get().IncrementFrame();
             // Recompile shaders whose source was saved, before the frame uses them.
             Application::Get().GetShaderLibrary().Update();
 
-            // ++Application::m_frameCount;
             // Delta time will be filled in by the Window.
             UpdateEventArgs updateEventArgs(0.0f, 0.0f);
             pWindow->OnUpdate(updateEventArgs);

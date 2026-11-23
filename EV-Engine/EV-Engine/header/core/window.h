@@ -189,8 +189,7 @@ namespace EV
 
 		HighResolutionClock m_updateClock = {};
 		HighResolutionClock m_renderClock = {};
-		uint64_t m_frameCounter = {};
-
+		
 		std::weak_ptr<Game> m_pGame;
 
 		Microsoft::WRL::ComPtr<IDXGISwapChain4> m_dxgiSwapChain;
