@@ -177,6 +177,24 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Verified** (developer): Debug build + run on the 9070 XT, scene comes up (creation is wrapped in `ThrowIfFailed`).
 - **Cleanup (Claude)**: `TODO(human)` replaced by an explanatory comment; the file-header doc comment still said List2.
 
+## 2026-11-23 – M0 task 9: DRED names for DXR ops
+- **What** (developer): `GetBreadcrumbOpName` names BuildRaytracingAccelerationStructure,
+  EmitRaytracingAccelerationStructurePostbuildInfo, CopyRaytracingAccelerationStructure, DispatchRays,
+  SetPipelineState1, Barrier, BeginCommandList, DispatchGraph, SetProgram (names spelled like the D3D12 methods, so
+  they can be searched). Unknown ops return "Unknown Operation", and the breadcrumb line in
+  `GetDeviceRemovedReport` now also prints the raw op number (option "format in the caller": the lookup keeps
+  returning only string literals).
+- **Key fact**: inline RayQuery has no breadcrumb op of its own – a path-tracing crash will point at **Dispatch**. The
+  useful new names are the AS ops (M1). To tell dispatches apart, pass names would need DRED BreadcrumbContext
+  (`ID3D12DeviceRemovedExtendedDataSettings1`, knowledge.md §6.7) – consider at the first M3 crash.
+- **Bumps on the way**: `return "[{}] Unknown Operation", op;` (comma operator → returns the enum → C2440; `{}`
+  only means something inside `std::format`; a formatted string can't be returned as `const char*` without
+  dangling); then a `snprintf` whose `%d`/`%s` slots didn't match the argument order (`%s` would have read address
+  31 → the crash reporter itself would crash; MSVC warning C4477 catches this).
+- **Verified**: Debug build + run on the 9070 XT, unchanged behaviour. The names can't appear before M1 (no DXR
+  commands yet); the optional forced `RemoveDevice()` test was offered, not taken.
+- **Cleanup (Claude)**: `TODO(human)` → explanatory comment; removed extra empty lines.
+
 - **Bumps on the way**: the OPTIONS5 struct used for all three queries (runtime only checks the size → silent
   `E_INVALIDARG`); the shader-model input started at 0 (`= {}`) and then at the 5.1 default, and the loop lowered
   `m_renderCaps` instead of the struct field the runtime reads; printing SM with `/ 10`, `% 10` ("10.5") instead of

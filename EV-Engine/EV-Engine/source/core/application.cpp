@@ -1396,8 +1396,12 @@ void Application::TrackLiveTexture(const std::shared_ptr<Texture>& texture)
     m_liveTextures.push_back(texture);
 }
 
+// Readable name for one DRED auto-breadcrumb (one GPU command recorded in a command list), used by
+// GetDeviceRemovedReport() to list the commands around the one the GPU was executing when the device was removed.
 static const char* GetBreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP op)
 {
+    // Ops without a name return "Unknown Operation"; the caller also prints the raw op number, so any op can still be
+    // looked up in enum D3D12_AUTO_BREADCRUMB_OP (d3d12.h). Inline RayQuery has no op of its own: it is a Dispatch.
     switch (op)
     {
     case D3D12_AUTO_BREADCRUMB_OP_SETMARKER: return "SetMarker";
@@ -1419,7 +1423,16 @@ static const char* GetBreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP op)
     case D3D12_AUTO_BREADCRUMB_OP_EXECUTEBUNDLE: return "ExecuteBundle";
     case D3D12_AUTO_BREADCRUMB_OP_PRESENT: return "Present";
     case D3D12_AUTO_BREADCRUMB_OP_RESOLVEQUERYDATA: return "ResolveQueryData";
-    default: return "Other";
+    case D3D12_AUTO_BREADCRUMB_OP_DISPATCHGRAPH: return "DispatchGraph";
+    case D3D12_AUTO_BREADCRUMB_OP_SETPROGRAM: return "SetProgram";
+    case D3D12_AUTO_BREADCRUMB_OP_BUILDRAYTRACINGACCELERATIONSTRUCTURE: return "BuildRaytracingAccelerationStructure";
+    case D3D12_AUTO_BREADCRUMB_OP_EMITRAYTRACINGACCELERATIONSTRUCTUREPOSTBUILDINFO: return "EmitRaytracingAccelerationStructurePostbuildInfo";
+    case D3D12_AUTO_BREADCRUMB_OP_COPYRAYTRACINGACCELERATIONSTRUCTURE: return "CopyRaytracingAccelerationStructure";
+    case D3D12_AUTO_BREADCRUMB_OP_DISPATCHRAYS: return "DispatchRays";
+    case D3D12_AUTO_BREADCRUMB_OP_SETPIPELINESTATE1: return "SetPipelineState1";
+    case D3D12_AUTO_BREADCRUMB_OP_BARRIER: return "Barrier";
+    case D3D12_AUTO_BREADCRUMB_OP_BEGIN_COMMAND_LIST: return "BeginCommandList";
+    default: return "Unknown Operation";
     }
 }
 
@@ -1477,7 +1490,7 @@ std::string Application::GetDeviceRemovedReport() const
             const UINT last = std::min(node->BreadcrumbCount, completed + 3);
             for (UINT i = first; i < last; ++i)
             {
-                snprintf(line, sizeof(line), "  %s [%u] %s\n", i == completed ? "->" : "  ", i, GetBreadcrumbOpName(node->pCommandHistory[i]));
+                snprintf(line, sizeof(line), " %s [%u] %s %d\n", i == completed ? "->" : "  ",  i, GetBreadcrumbOpName(node->pCommandHistory[i]), node->pCommandHistory[i]);
                 report += line;
             }
         }
