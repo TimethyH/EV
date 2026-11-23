@@ -92,6 +92,9 @@ protected:
 	void DrawMenu();
 	void DrawOceanParameters();
 	void DrawLightParameters();
+	// "Path Tracing" editor panel (path tracing M0 task 11): on/off toggle, greyed out with the reason when
+	// RenderCaps says the device can't path trace (e.g. WARP in CI).
+	void DrawPathTracingPanel();
 	void ResizeViewport(uint32_t width, uint32_t height);
 	void OnKeyPress(KeyEventArgs& e) override;
 	void OnKeyRelease(KeyEventArgs& e) override;
@@ -128,6 +131,10 @@ private:
 	double m_FPS;
 	bool m_showOceanParams = true;
 	bool m_showLightParams = false;
+	bool m_showPathTracingPanel = true;
+	// The toggle in the Path Tracing panel. Nothing reads it yet; from M2/M3 on the render graph chooses raster or
+	// path tracing with it. Must stay false on devices where RenderCaps::SupportsPathTracing() is false.
+	bool m_pathTracingEnabled = false;
 
 	// TODO: add textures
 	std::shared_ptr<EV::Texture> m_defaultTexture;

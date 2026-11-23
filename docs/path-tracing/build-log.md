@@ -212,6 +212,27 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Cleanup (Claude)**: `TODO(human)` removed, comments put above their own lines, explanatory comments on the global
   `WndProc` declaration and `IncrementFrame`.
 
+## 2026-11-23 – M0 task 11: "can we path trace here?" rule + Path Tracing panel
+- **Part A** (developer): `RenderCaps::GetPathTracingUnsupportedReason()` (application.cpp) is the one place that
+  decides; `SupportsPathTracing()` is derived from it (header). **Minimums (decision)**: RT tier ≥ 1.1 (inline
+  RayQuery), **SM ≥ 6.6** (RayQuery needs 6.5, `ResourceDescriptorHeap` bindless 6.6), resource binding tier 3
+  (bindless materials); checked in that order, each with its own reason text. SM 6.9 extras (SER, OMM) are optional
+  and get checked where they're used, so the laptop (SM 6.8) stays supported.
+- **Part B** (developer): `Ocean::DrawPathTracingPanel` (registered next to the Ocean/Light panels): "Enable Path
+  Tracing" checkbox (`m_pathTracingEnabled`, read by nothing until M2/M3) inside `BeginDisabled(!supported)`, the
+  reason as wrapped text outside the disabled block, and read-only adapter / RT tier / SM lines.
+- **Bumps on the way**: `m_renderCaps.x` inside a `RenderCaps` method (the struct is `this`); SM minimum 6.0 and
+  reason texts blaming "DXR 1.1" for every check; first panel version used a toggle `Button` (shows no state), an
+  `if/else` duplicating the widget with an always-true inner check, a generic "not supported" text instead of the
+  reason, `%s` for the `std::wstring` name (prints only "A"; ImGui gets no C4477 check), and a per-frame copy of
+  `RenderCaps`.
+- **Verified** (developer): panel shows on the 9070 XT with an active checkbox. WARP run (`EV_USE_WARP=1`) still to
+  confirm "unsupported" + RT reason; the CI check is M0's final verify.
+- **Cleanup (Claude)**: `TODO(human)`s removed; `if (ImGui::Checkbox(...));` → plain call (the empty `if` did nothing,
+  MSVC C4390).
+- **Task 12 (optional, newer DXC next to the exe): skipped for now** (developer). The Windows SDK DXC covers SM 6.6,
+  enough through M3; pick it up with the first SM 6.9 shader (knowledge.md §6.2: DXC v1.9.x).
+
 - **Bumps on the way**: the OPTIONS5 struct used for all three queries (runtime only checks the size → silent
   `E_INVALIDARG`); the shader-model input started at 0 (`= {}`) and then at the 5.1 default, and the loop lowered
   `m_renderCaps` instead of the struct field the runtime reads; printing SM with `/ 10`, `% 10` ("10.5") instead of

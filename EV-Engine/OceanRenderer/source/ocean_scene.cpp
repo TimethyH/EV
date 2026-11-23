@@ -347,6 +347,7 @@ bool Ocean::LoadContent()
     m_editor->AddMenuCallback([this]() { DrawMenu(); });
     m_editor->AddPanel("Ocean Parameters", [this]() { DrawOceanParameters(); }, Editor::DockSlot::Right, m_showOceanParams);
     m_editor->AddPanel("Light Parameters", [this]() { DrawLightParameters(); }, Editor::DockSlot::Right, m_showLightParams);
+    m_editor->AddPanel("Path Tracing", [this]() { DrawPathTracingPanel(); }, Editor::DockSlot::Right, m_showPathTracingPanel);
 
     // Start the loading task to perform async loading of the scene file.
     // m_loadingTask = std::async(std::launch::async, std::bind(&Ocean::LoadScene, this,
@@ -992,6 +993,26 @@ void Ocean::DrawLightParameters()
             ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
         ImGui::Unindent();
     }
+}
+
+// ── Path Tracing ─────────────────────────────────────────────────────────
+// Draws the contents of the "Path Tracing" panel; the Editor already wraps it in ImGui::Begin/End (Editor::AddPanel).
+// Asks RenderCaps whether this device can path trace and greys the toggle out with the reason when it can't.
+void Ocean::DrawPathTracingPanel()
+{
+	const RenderCaps& caps = Application::Get().GetRenderCaps();
+	bool pathTracingSupported = caps.SupportsPathTracing();
+    ImGui::BeginDisabled(!pathTracingSupported);
+    // Checkbox both shows and flips m_pathTracingEnabled; disabled (greyed out) when the device can't path trace.
+    ImGui::Checkbox("Enable Path Tracing", &m_pathTracingEnabled);
+    ImGui::EndDisabled();
+    if (!pathTracingSupported)
+    {
+		ImGui::TextWrapped("Path tracing is not supported on this device. Reason: %s", caps.GetPathTracingUnsupportedReason());
+    }
+	ImGui::Text("Adapter: %ls", caps.adapterName.c_str());
+	ImGui::Text("Raytracing Tier: %d.%d", caps.raytracingTier / 10, caps.raytracingTier % 10);
+	ImGui::Text("Shader Model: %d.%d", caps.highestShaderModel >> 4, caps.highestShaderModel & 0xF);
 }
 
 void Ocean::UnloadContent()

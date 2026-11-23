@@ -538,6 +538,27 @@ void Application::QueryRenderCaps()
 	OutputDebugStringW(output.c_str());
 }
 
+// See RenderCaps in application.h. Checks the minimum requirements in order and returns the first one that is missing.
+const char* RenderCaps::GetPathTracingUnsupportedReason() const
+{
+    // Minimums (decided 2026-11-23): DXR 1.1 for inline RayQuery, SM 6.6 for RayQuery (6.5) + ResourceDescriptorHeap
+    // bindless (6.6), binding tier 3 for bindless materials. SM 6.9 extras (SER, OMM) are optional, checked where used.
+    if(raytracingTier < D3D12_RAYTRACING_TIER_1_1)
+    {
+        return "no DXR 1.1 (inline RayQuery)";
+    }
+	if (highestShaderModel < D3D_SHADER_MODEL_6_6)
+	{
+		return "shader model below 6.6 (RayQuery + bindless)";
+	}
+    if(resourceBindingTier < D3D12_RESOURCE_BINDING_TIER_3)
+    {
+        return "no resource binding tier 3 (bindless materials)";
+    }
+
+    return nullptr;
+}
+
 
 Microsoft::WRL::ComPtr<IDXGIAdapter4> Application::CreateAdapter(bool bUseWarp)
 {

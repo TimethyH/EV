@@ -59,6 +59,12 @@ class ShaderLibrary;
 		D3D12_RESOURCE_BINDING_TIER resourceBindingTier = D3D12_RESOURCE_BINDING_TIER_1;
 		// OPTIONS22: does Shader Execution Reordering really regroup threads on this hardware, or is it a no-op?
 		bool serActuallyReorders = false;
+
+		// The ONE place that decides "can EV's path tracer run on this device?" (path tracing M0 task 11).
+		// Returns nullptr when it can, otherwise a short reason for the UI, e.g. "no DXR 1.1 (inline RayQuery)".
+		// Only string literals may be returned (they live for the whole program, see GetBreadcrumbOpName).
+		const char* GetPathTracingUnsupportedReason() const;
+		bool SupportsPathTracing() const { return GetPathTracingUnsupportedReason() == nullptr; }
 	};
 
 
