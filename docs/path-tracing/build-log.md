@@ -111,3 +111,21 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   texels match the sample spacing (+1 mip for margin), clamped to the mip chain.
 - **Checked**: both shaders compile with DXC `cs_6_0` (Windows SDK 10.0.26100), no warnings. Visual check by the
   developer: works (rough objects shade smoothly in front of the default sky).
+
+## 2026-11-23 – M0 task 4 + step 2: SDK version macro, two-step device creation
+- **Task 4** (developer): `OceanRenderer/source/main.cpp` exports `EV_AGILITY_SDK_EXPORTS(D3D12_SDK_VERSION)` instead of
+  a hardcoded `620`, so the exported version always equals the Agility `d3d12.h` EV compiles against (works because
+  `core/application.h` pulls in `d3d12.h` before the macro line).
+- **Step 2** (developer): `Application::CreateDevice` creates a base `ID3D12Device` first (`ThrowIfFailed` = adapter /
+  driver can't do FL 11_0), then `As<ID3D12Device13>` with its own `std::runtime_error` ("runtime too old, Agility SDK
+  not loaded?") and `LogLoadedD3D12Core()` printed just before it. Both pointers are locals; `Initialize` stores the
+  result in `m_device` (unchanged type: Device13).
+- **Plan change**: no separate `As<ID3D12Device5>` – Device13 inherits it, so the DXR device methods are already on
+  `m_device`. Whether DXR works is decided by `OPTIONS5.RaytracingTier` in step 3 (interface = runtime, tier = hardware).
+- **Bumps on the way**: `IID_PPV_ARGS(&m_device)` still requested Device13 (the pointer's type picks the interface);
+  the unchecked first `D3D12CreateDevice` (null `ComPtr` → access violation in `.As`); writing `m_device` inside
+  `CreateDevice` (hidden side effect, would bite in M6 when probing other adapters); changing `m_device` to the base
+  type broke `GetDevice()` (`ComPtr` only converts derived → base); `LogLoadedD3D12Core()` placed before the first
+  device call (D3D12Core is loaded lazily) and logged twice → moved into the failure branch.
+- **Verified** (developer): Debug run works (EV breaks on debug-layer warnings, so none fired). Not committed yet.
+- **Next**: M0 step 3 – `RenderCaps` struct + one log line.

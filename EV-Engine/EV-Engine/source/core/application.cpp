@@ -536,9 +536,27 @@ static void CALLBACK OnDebugLayerMessage(D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_S
 
 Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter)
 {
+    // The device is created in two steps (path tracing M0 step 2) instead of asking D3D12CreateDevice for Device13
+    // directly, so the two possible failures give two different, readable errors instead of one opaque HRESULT.
+    // No separate ID3D12Device5 query is needed: Device13 inherits from Device5, so all DXR device methods
+    // (CreateStateObject, GetRaytracingAccelerationStructurePrebuildInfo) are already on m_device. Whether DXR actually
+    // *works* is a hardware question answered by OPTIONS5.RaytracingTier (RenderCaps), not by which interface exists.
+    // Both pointers are locals: Initialize stores the result in m_device, this function has no side effects.
     ComPtr<ID3D12Device13> d3d12Device13;
-    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&d3d12Device13)));
+    ComPtr<ID3D12Device> baseDevice;
     //    NAME_D3D12_OBJECT(d3d12Device2);
+
+    // Step 1 – base device. Can only fail when the adapter cannot do D3D12 at feature level 11_0 (hardware/driver).
+    ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&baseDevice)));
+
+    // Step 2 – upgrade with ComPtr::As (= COM QueryInterface). Can only fail when the loaded D3D12 *runtime* is too old,
+    // e.g. the Agility SDK did not load and System32's D3D12Core.dll is used. Log which core was loaded (it is certainly
+    // loaded by now) right before the error; on success Initialize logs it once.
+    if (FAILED(baseDevice.As(&d3d12Device13)))
+    {
+        LogLoadedD3D12Core();
+        throw std::runtime_error("ID3D12Device13 not available: the loaded D3D12 runtime is too old (Agility SDK not loaded?). Check D3D12\\D3D12Core.dll next to the exe.");
+    }
 
         // Enable debug messages in debug mode.
 #if defined(_DEBUG)

@@ -271,7 +271,7 @@ descriptors (`swapchain.cpp:175-189`) → ~3 frames in flight. `GpuTimer` (`gpu_
 
 | Area | Today (file:line) | Needed | Milestone |
 |---|---|---|---|
-| Device | `ID3D12Device13` at FL 11_0 (`application.cpp:504`) | Base device + optional `As<ID3D12Device5>`; gate DXR on it + `OPTIONS5.RaytracingTier ≥ 1_1` | M0 |
+| Device | `ID3D12Device13` at FL 11_0 (`application.cpp:504`) | Base device → `As<ID3D12Device13>` (Device5 inherited; done 2026-11-23); gate DXR on `OPTIONS5.RaytracingTier ≥ 1_1` | M0 |
 | Feature checks | Root sig 1.1 only (428-438) | `RenderCaps`: RT tier, highest SM, resource binding tier, `OPTIONS22` SER-reorders flag, adapter LUID + VendorId, Agility version loaded | M0 |
 | Command list | `List2` (`command_list.h:93,511`) | `ID3D12GraphicsCommandList4` (create as List4 or `As()`); wrappers for `BuildRaytracingAccelerationStructure`, `EmitRaytracingAccelerationStructurePostbuildInfo`, `CopyRaytracingAccelerationStructure`; later `SetPipelineState1`/`DispatchRays` **must reset the PSO cache** (1261-1274) | M0/M1, M11 |
 | Descriptors | Per-list 1024-entry dynamic heaps, mid-list switches, no unbounded tables | M1–M7: fixed-size staged table under a global root signature (TLAS via null-resource SRV); M8a: one persistent shader-visible heap (static + per-frame ring) + SM 6.6 `ResourceDescriptorHeap[]` | M3, M8a |
@@ -416,7 +416,7 @@ calls into the module.
 | Hook | Where | Notes |
 |---|---|---|
 | Caps query | `Application::Initialize` after 428-438 (before 439); adapter in `CreateAdapter` 441-482 (`GetDesc1` → `AdapterLuid`, `VendorId`: 0x1002 AMD, 0x10DE NVIDIA [T]) | Store `RenderCaps` on `Application` (members near `application.h:210-220`) + getter. Must not throw on WARP |
-| Device | `CreateDevice` 501-562 | Base device + `As<ID3D12Device5>` |
+| Device | `CreateDevice` 501-562 | Base device → `As<ID3D12Device13>` (done) |
 | DRED | `GetBreadcrumbOpName` 1265-1290 | Add DXR op names |
 | Panel | `Editor::AddPanel(name, draw, DockSlot, open)` (`editor.h:142`, drawn in `DrawEditorPanels` `editor.cpp:434-445`); register in `Ocean::LoadContent` next to 348-349 | e.g. `AddPanel("Path Tracing", …, DockSlot::Right)`. Hidden in play mode |
 | Viewport mode toggle | `DrawViewportToolbar` `editor.cpp:882-906` (engine code, no app hook) | New editor API (e.g. next to `SetRenderGraph`, `editor.h:148`), drawn after Local/World (900-904) with `SameLine()`; hover test uses the last item's rect (`toolbarHovered`, 856) |
@@ -2017,8 +2017,8 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   reorders); adapter LUID / VendorId; why the debug layer must stay silent; what DRED breadcrumbs are.
 - **Files**: `OceanRenderer/source/main.cpp`, `ShaderArt/source/main.cpp` (exports after line 11); new macro header in
   `header/core/`; app `.vcxproj` post-build copy to `$(OutDir)D3D12\`; `source/core/application.cpp` (`Initialize`
-  353-439 → caps after 428-438; `CreateAdapter` 441-482 → keep LUID/VendorId; `CreateDevice` 501-562 → base device +
-  `As<ID3D12Device5>`; `GetBreadcrumbOpName` 1265-1290; `++m_frameCount` at 993), `header/core/application.h`
+  353-439 → caps after 428-438; `CreateAdapter` 441-482 → keep LUID/VendorId; `CreateDevice` 501-562 → base device →
+  `As<ID3D12Device13>` (Device5 inherited, done 2026-11-23); `GetBreadcrumbOpName` 1265-1290; `++m_frameCount` at 993), `header/core/application.h`
   (Device13 at 66/195/210, caps member + getter near 210-220); `header/DX12/command_list.h` (93, 511) /
   `command_list.cpp:47`; `ocean_scene.cpp` (`AddPanel` next to 348-349); include order for Agility headers in
   `EV-Engine.vcxproj` (213-229) and the app projects.
