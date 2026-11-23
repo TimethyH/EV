@@ -98,3 +98,16 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Verified** (developer, Debug run): #989 is gone. Committed as `a0bdeda` (together with M0 step 1 and the docs).
 - **Next**: M0 step 2 (device creation); task 4 (`EV_AGILITY_SDK_EXPORTS(D3D12_SDK_VERSION)`) optional. Claude's
   queued IBL bake fix is now unblocked.
+
+## 2026-11-23 – IBL bake fix ported (Claude, at the developer's request)
+- **What**: the sky-lighting fix from `Dads-Birthday` commit `11bf7d9` (see `docs/editor-handoff.md`, "TODO: sky lighting
+  streaks and blocks"). Only `OceanRenderer/shaders/ibl_specular.hlsl` and `ibl_convolution.hlsl` were taken from that
+  commit; both were byte-identical to its parent here, so nothing else from `Dads-Birthday` came along.
+- **Why it matters for the path tracer**: rough objects had view-dependent streaks and blotches baked into the IBL
+  cubemaps. That noise would have been in the raster reference every path-traced image is compared against.
+- **Cause, in short**: both bakes read far too detailed a skybox mip. The specular prefilter computed the texel solid
+  angle from the size of the cubemap being *written* instead of the one being *sampled*; the irradiance convolution
+  always read mip 0 with samples ~0.025 rad apart, so whether a sample hit the sun was luck. Fix: pick the mip whose
+  texels match the sample spacing (+1 mip for margin), clamped to the mip chain.
+- **Checked**: both shaders compile with DXC `cs_6_0` (Windows SDK 10.0.26100), no warnings. Visual check by the
+  developer: works (rough objects shade smoothly in front of the default sky).

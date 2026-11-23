@@ -253,3 +253,5 @@ Not part of this work, still open from the editor branches: the IBL bake fix (se
 lighting streaks and blocks"). It makes a cleaner raster reference for the path tracer, so it is worth doing first or
 early. **Planned (2026-11-22): Claude implements this fix itself (exception to "the developer writes the code", at the
 developer's request) right after the developer's #989 task is finished and committed.**
+**Done (2026-11-23, Claude):** the two shader edits from `Dads-Birthday` `11bf7d9` are on this branch (both compile with
+DXC cs_6_0) and the developer checked the result visually (see build-log.md, 2026-11-23).

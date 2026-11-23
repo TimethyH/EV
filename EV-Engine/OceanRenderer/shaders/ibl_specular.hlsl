@@ -99,8 +99,13 @@ void main(uint3 DTid : SV_DispatchThreadID)
     float3 prefilteredColor = 0;
     float totalWeight = 0;
 
-    float resolution = float(cubemapSize);
-    float saTexel = 4.0 * PI / (6.0 * resolution * resolution);
+    // The solid angle of a texel of the environment map that is sampled (not of the map being written): each
+    // sample reads the mip whose texels are about as big as the sample's share of the lobe. Using the smaller
+    // output size here read far too detailed mips, so the sun and clouds showed up as streaks and blocks on rough
+    // objects.
+    float envWidth, envHeight, envMipCount;
+    environmentMap.GetDimensions(0, envWidth, envHeight, envMipCount);
+    float saTexel = 4.0 * PI / (6.0 * envWidth * envWidth);
 
     for (uint i = 0u; i < sampleCount; ++i)
     {
@@ -117,7 +122,8 @@ void main(uint3 DTid : SV_DispatchThreadID)
             float D = DistributionGGX(NdotH, roughness);
             float pdf = (D * NdotH / (4.0 * HdotV)) + 0.0001;
             float saSample = 1.0 / (float(sampleCount) * pdf + 0.0001);
-            float mipLevel = roughness == 0.0 ? 0.0 : 0.5 * log2(saSample / saTexel);
+            // One mip blurrier than the exact size hides what is left of the sampling pattern.
+            float mipLevel = roughness == 0.0 ? 0.0 : clamp(0.5 * log2(saSample / saTexel) + 1.0, 0.0, envMipCount - 1.0);
 
             prefilteredColor += environmentMap.SampleLevel(linearSampler, L, mipLevel).rgb * NdotL;
             totalWeight += NdotL;

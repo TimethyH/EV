@@ -88,6 +88,9 @@ Branch: `scene-save-load`.
 - **Running a game**: `OceanRenderer.exe --play scenes/mygame.evscene` starts in play mode without the editor (Esc quits). `--scene <file>` opens a scene in the editor.
 
 ## TODO: sky lighting streaks and blocks (IBL bake fix, port from `Dads-Birthday`)
+**Status 2026-11-23: ported to `path-tracing`** (only the two shader files below, taken from `11bf7d9`; they were
+identical to the pre-fix versions), visually checked. Still to port to the editor branches if they get more work.
+
 Found and fixed on the `Dads-Birthday` branch (commit `11bf7d9`), which is not a development branch. Bring
 **only these two shader edits** over by hand. Do not merge or cherry-pick anything else from `Dads-Birthday`:
 that branch also has game code, shadow maps and asset changes that do not belong here.
