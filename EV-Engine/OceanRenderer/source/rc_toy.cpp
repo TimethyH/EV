@@ -48,27 +48,27 @@ namespace CascadeRoot
     };
 }
 
-// Root parameter slots of the viewer PSO (step 3, panel display only).
+// Root parameter slots of the viewer PSO (step 3, panel display only; t1 added in step 5).
 namespace ViewRoot
 {
     enum : uint32_t
     {
         SourceSRV = 0, // descriptor table, t0 (the texture to show)
         ViewUAV = 1,   // descriptor table, u0 (what ImGui draws)
-        Constants = 2, // 1 root constant, b0 = RcToy::ViewConstants
+        Constants = 2, // 3 root constants, b0 = RcToy::ViewConstants
+        SecondSRV = 3, // descriptor table, t1 (the reference, read by the Difference view)
     };
 }
 
-// The same root signature shape used three times: one SRV table (t0), one UAV table (u0), N root constants (b0).
-static std::shared_ptr<OceanCompute> CreateSrvUavConstantsPSO(const wchar_t* shaderPath, uint32_t constantCount)
+// Root parameter slots of the fluence PSO (step 5).
+namespace FluenceRoot
 {
-    CD3DX12_DESCRIPTOR_RANGE1 srvRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // 1 SRV at t0
-    CD3DX12_DESCRIPTOR_RANGE1 uavRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // 1 UAV at u0
-    CD3DX12_ROOT_PARAMETER1 rootParameters[3];
-    rootParameters[0].InitAsDescriptorTable(1, &srvRange);
-    rootParameters[1].InitAsDescriptorTable(1, &uavRange);
-    rootParameters[2].InitAsConstants(constantCount, 0); // b0
-    return std::make_shared<OceanCompute>(shaderPath, rootParameters, static_cast<uint32_t>(_countof(rootParameters)));
+    enum : uint32_t
+    {
+        Cascade0SRV = 0, // descriptor table, t0 (c0, merged with c1 ... c5)
+        FluenceUAV = 1,  // descriptor table, u0 (the fluence per canvas pixel)
+        CanvasSRV = 2,   // descriptor table, t1 (the canvas: solid pixels show their own emission)
+    };
 }
 
 // ── Resources ────────────────────────────────────────────────────────────
@@ -135,11 +135,40 @@ void RcToy::Initialize()
     cascadeRootParameters[CascadeRoot::UpperSRV].InitAsDescriptorTable(1, &cascadeUpperRange);
     m_cascadePSO = std::make_shared<OceanCompute>(L"/rc_cascade.cso", cascadeRootParameters,
         static_cast<uint32_t>(_countof(cascadeRootParameters)));
-    m_viewPSO = CreateSrvUavConstantsPSO(L"/rc_view.cso", sizeof(ViewConstants) / sizeof(uint32_t));
+
+    // The viewer: the texture to show (t0), its output (u0), 3 root constants (b0), and a second texture (t1) that only
+    // the Difference view reads (step 5: the reference).
+    CD3DX12_DESCRIPTOR_RANGE1 viewSourceRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // t0
+    CD3DX12_DESCRIPTOR_RANGE1 viewOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // u0
+    CD3DX12_DESCRIPTOR_RANGE1 viewSecondRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1); // t1
+    CD3DX12_ROOT_PARAMETER1 viewRootParameters[4];
+    viewRootParameters[ViewRoot::SourceSRV].InitAsDescriptorTable(1, &viewSourceRange);
+    viewRootParameters[ViewRoot::ViewUAV].InitAsDescriptorTable(1, &viewOutputRange);
+    viewRootParameters[ViewRoot::Constants].InitAsConstants(sizeof(ViewConstants) / sizeof(uint32_t), 0);
+    viewRootParameters[ViewRoot::SecondSRV].InitAsDescriptorTable(1, &viewSecondRange);
+    m_viewPSO = std::make_shared<OceanCompute>(L"/rc_view.cso", viewRootParameters,
+        static_cast<uint32_t>(_countof(viewRootParameters)));
+
+    // Step 5: the fluence, one value per canvas pixel. fp16 like the cascades (rewritten from scratch every frame).
+    m_fluence = Application::Get().CreateTexture(cascadeDesc);
+    m_fluence->SetName(L"RC-0 Fluence");
+
+    // rc_fluence.hlsl reads the merged c0 (t0) and the canvas (t1), and writes the fluence (u0). No constants.
+    CD3DX12_DESCRIPTOR_RANGE1 fluenceCascadeRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // t0
+    CD3DX12_DESCRIPTOR_RANGE1 fluenceOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);  // u0
+    CD3DX12_DESCRIPTOR_RANGE1 fluenceCanvasRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);  // t1
+    CD3DX12_ROOT_PARAMETER1 fluenceRootParameters[3];
+    fluenceRootParameters[FluenceRoot::Cascade0SRV].InitAsDescriptorTable(1, &fluenceCascadeRange);
+    fluenceRootParameters[FluenceRoot::FluenceUAV].InitAsDescriptorTable(1, &fluenceOutputRange);
+    fluenceRootParameters[FluenceRoot::CanvasSRV].InitAsDescriptorTable(1, &fluenceCanvasRange);
+    m_fluencePSO = std::make_shared<OceanCompute>(L"/rc_fluence.cso", fluenceRootParameters,
+        static_cast<uint32_t>(_countof(fluenceRootParameters)));
 }
 
 void RcToy::Release()
 {
+    m_fluencePSO.reset();
+    m_fluence.reset();
     m_viewPSO.reset();
     m_viewTexture.reset();
     m_cascadePSO.reset();
@@ -240,78 +269,121 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 				commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1); // 64 x 64 groups of 16 x 16
             });
 
-    // Steps 3 + 4: the cascades, and (for the panel) the viewer pass. Skipped unless the Cascade view is on: nothing
-    // else reads them yet (step 5's fluence pass will).
-    if (m_view != View::Cascade)
+    // Everything below only feeds the panel's views; the Canvas view shows m_canvas directly.
+    if (m_view == View::Canvas)
     {
         return;
     }
 
-    // Step 4, top-down: c5 first (raw, nothing above it), then c4 ... c_shown, each merging with the one just written.
-    // Each cascade is its own pass, so the graph puts a barrier between them (c_(k+1) written as UAV -> read as SRV).
-    // Merge off = step 3's behaviour: only c_shown, raw.
-    const RGTexture cascadeTextures[2] = {
-        renderGraph.Import("RC-0 Cascade A", m_cascades[0]),
-        renderGraph.Import("RC-0 Cascade B", m_cascades[1]),
-    };
-    const uint32_t shown = static_cast<uint32_t>(m_shownCascade);
-    const uint32_t top = m_merge ? CascadeCount - 1 : shown;
+    // What the viewer pass shows (t0). The Reference view shows the reference itself; the others replace it below.
+    RGTexture viewSource = referenceTexture;
 
-    for (int k = static_cast<int>(top); k >= static_cast<int>(shown); --k)
+    // Steps 3 + 4: the cascades, for the Cascade view and (step 5) for the fluence. The Fluence and Difference views
+    // always need the WHOLE merge down to c0 (all 6 cascades, Merge on), whatever the Cascade-view settings are.
+    const bool fluenceView = (m_view == View::Fluence || m_view == View::Difference);
+    if (m_view == View::Cascade || fluenceView)
     {
-        const RGTexture target = cascadeTextures[CascadeSlot(k)];    // c_k is written here...
-        const RGTexture upper = cascadeTextures[CascadeSlot(k) ^ 1u]; // ...and c_(k+1) was written to the other one.
+        const bool merge = fluenceView ? true : m_merge;
 
-        CascadeConstants cascadeConstants;
-        cascadeConstants.cascadeIndex = static_cast<uint32_t>(k);
-        // c5 has nothing above it. `upper` is still bound for c5 (a root table must be set before a dispatch), the
-        // shader just doesn't read it.
-        cascadeConstants.mergeWithUpper = (m_merge && k < static_cast<int>(CascadeCount) - 1) ? 1u : 0u;
+        // Step 4, top-down: c5 first (raw, nothing above it), then c4 ... c_shown, each merging with the one just
+        // written. Each cascade is its own pass, so the graph puts a barrier between them (c_(k+1) written as UAV ->
+        // read as SRV). Merge off = step 3's behaviour: only c_shown, raw.
+        const RGTexture cascadeTextures[2] = {
+            renderGraph.Import("RC-0 Cascade A", m_cascades[0]),
+            renderGraph.Import("RC-0 Cascade B", m_cascades[1]),
+        };
+        const uint32_t shown = fluenceView ? 0u : static_cast<uint32_t>(m_shownCascade);
+        const uint32_t top = merge ? CascadeCount - 1 : shown;
 
-        renderGraph.AddPass("RC-0 Cascade c" + std::to_string(k))
-            .Read(canvas, EV::RGAccess::NonPixelShaderRead)
-            .Read(upper, EV::RGAccess::NonPixelShaderRead)
-            .Write(target)
-            .Execute([this, canvas, upper, target, cascadeConstants](RGPassContext& context)
-                {
-                    CommandList& commandList = context.GetCommandList();
-                    m_cascadePSO->SetPipelineState(commandList);
+        for (int k = static_cast<int>(top); k >= static_cast<int>(shown); --k)
+        {
+            const RGTexture target = cascadeTextures[CascadeSlot(k)];    // c_k is written here...
+            const RGTexture upper = cascadeTextures[CascadeSlot(k) ^ 1u]; // ...and c_(k+1) was written to the other.
 
-                    commandList.SetCompute32BitConstants(CascadeRoot::Constants,
-                        sizeof(CascadeConstants) / sizeof(uint32_t), &cascadeConstants);
-                    commandList.SetShaderResourceView(CascadeRoot::CanvasSRV, 0, context.GetTexture(canvas),
-                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                    commandList.SetShaderResourceView(CascadeRoot::UpperSRV, 0, context.GetTexture(upper),
-                        D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
-                    commandList.SetUnorderedAccessView(CascadeRoot::CascadeUAV, 0, context.GetTexture(target), 0);
-                    // One thread per cascade TEXEL (= one ray: one probe, one direction). Every cascade is 1024^2.
-                    commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
-                });
+            CascadeConstants cascadeConstants;
+            cascadeConstants.cascadeIndex = static_cast<uint32_t>(k);
+            // c5 has nothing above it. `upper` is still bound for c5 (a root table must be set before a dispatch),
+            // the shader just doesn't read it.
+            cascadeConstants.mergeWithUpper = (merge && k < static_cast<int>(CascadeCount) - 1) ? 1u : 0u;
+
+            renderGraph.AddPass("RC-0 Cascade c" + std::to_string(k))
+                .Read(canvas, EV::RGAccess::NonPixelShaderRead)
+                .Read(upper, EV::RGAccess::NonPixelShaderRead)
+                .Write(target)
+                .Execute([this, canvas, upper, target, cascadeConstants](RGPassContext& context)
+                    {
+                        CommandList& commandList = context.GetCommandList();
+                        m_cascadePSO->SetPipelineState(commandList);
+
+                        commandList.SetCompute32BitConstants(CascadeRoot::Constants,
+                            sizeof(CascadeConstants) / sizeof(uint32_t), &cascadeConstants);
+                        commandList.SetShaderResourceView(CascadeRoot::CanvasSRV, 0, context.GetTexture(canvas),
+                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                        commandList.SetShaderResourceView(CascadeRoot::UpperSRV, 0, context.GetTexture(upper),
+                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                        commandList.SetUnorderedAccessView(CascadeRoot::CascadeUAV, 0, context.GetTexture(target), 0);
+                        // One thread per cascade TEXEL (= one ray: one probe, one direction). Every cascade is 1024^2.
+                        commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
+                    });
+        }
+        const RGTexture cascadeTexture = cascadeTextures[CascadeSlot(shown)]; // c_shown (c0 for the fluence views).
+        viewSource = cascadeTexture;
+
+        // Step 5: merged c0 -> one light value per canvas pixel (rc_fluence.hlsl). One thread per canvas pixel.
+        if (fluenceView)
+        {
+            const RGTexture fluenceTexture = renderGraph.Import("RC-0 Fluence", m_fluence);
+
+            renderGraph.AddPass("RC-0 Fluence")
+                .Read(cascadeTexture, EV::RGAccess::NonPixelShaderRead)
+                .Read(canvas, EV::RGAccess::NonPixelShaderRead)
+                .Write(fluenceTexture)
+                .Execute([this, cascadeTexture, canvas, fluenceTexture](RGPassContext& context)
+                    {
+                        CommandList& commandList = context.GetCommandList();
+                        m_fluencePSO->SetPipelineState(commandList);
+
+                        commandList.SetShaderResourceView(FluenceRoot::Cascade0SRV, 0,
+                            context.GetTexture(cascadeTexture), D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                        commandList.SetShaderResourceView(FluenceRoot::CanvasSRV, 0, context.GetTexture(canvas),
+                            D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                        commandList.SetUnorderedAccessView(FluenceRoot::FluenceUAV, 0,
+                            context.GetTexture(fluenceTexture), 0);
+                        commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
+                    });
+
+            viewSource = fluenceTexture;
+        }
     }
-    const RGTexture cascadeTexture = cascadeTextures[CascadeSlot(shown)]; // What the viewer shows: c_shown.
 
-    // Viewer: cascade -> m_viewTexture with alpha 1 (radiance) or beta as grey. Only for the panel.
+    // Viewer: viewSource -> m_viewTexture with alpha 1, for the panel. Modes (rc_view.hlsl): 0 = rgb (tonemapped for
+    // Reference + Fluence when the box is ticked, so both look the same), 1 = a cascade's beta as grey,
+    // 2 = Difference (viewSource = fluence, t1 = reference).
     const RGTexture viewTexture = renderGraph.Import("RC-0 View", m_viewTexture);
     ViewConstants viewConstants;
-    viewConstants.mode = m_showBeta ? 1u : 0u;
+    viewConstants.mode = (m_view == View::Difference) ? 2u : (m_view == View::Cascade && m_showBeta) ? 1u : 0u;
+    viewConstants.tonemap = (m_tonemap && (m_view == View::Reference || m_view == View::Fluence)) ? 1u : 0u;
+    viewConstants.differenceScale = m_differenceScale;
 
+    // The reference is read twice in the Reference view (t0 and t1): fine, the graph allows declaring a read twice.
     renderGraph.AddPass("RC-0 View")
-        .Read(cascadeTexture, EV::RGAccess::NonPixelShaderRead)
+        .Read(viewSource, EV::RGAccess::NonPixelShaderRead)
+        .Read(referenceTexture, EV::RGAccess::NonPixelShaderRead)
         .Write(viewTexture)
-        .Execute([this, cascadeTexture, viewTexture, viewConstants](RGPassContext& context)
+        .Execute([this, viewSource, referenceTexture, viewTexture, viewConstants](RGPassContext& context)
             {
                 CommandList& commandList = context.GetCommandList();
                 m_viewPSO->SetPipelineState(commandList);
 
                 commandList.SetCompute32BitConstants(ViewRoot::Constants,
                     sizeof(ViewConstants) / sizeof(uint32_t), &viewConstants);
-                commandList.SetShaderResourceView(ViewRoot::SourceSRV, 0, context.GetTexture(cascadeTexture),
+                commandList.SetShaderResourceView(ViewRoot::SourceSRV, 0, context.GetTexture(viewSource),
+                    D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+                commandList.SetShaderResourceView(ViewRoot::SecondSRV, 0, context.GetTexture(referenceTexture),
                     D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                 commandList.SetUnorderedAccessView(ViewRoot::ViewUAV, 0, context.GetTexture(viewTexture), 0);
                 commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
             });
-
-    // Step 5 adds the fluence pass here.
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────
@@ -352,6 +424,10 @@ void RcToy::DrawPanel(Editor& editor)
     ImGui::RadioButton("Reference", &view, static_cast<int>(View::Reference));
     ImGui::SameLine();
     ImGui::RadioButton("Cascade", &view, static_cast<int>(View::Cascade));
+    ImGui::SameLine();
+    ImGui::RadioButton("Fluence", &view, static_cast<int>(View::Fluence));
+    ImGui::SameLine();
+    ImGui::RadioButton("Difference", &view, static_cast<int>(View::Difference));
     m_view = static_cast<View>(view);
     ImGui::SameLine();
     ImGui::SetNextItemWidth(120.0f);
@@ -373,6 +449,19 @@ void RcToy::DrawPanel(Editor& editor)
         ImGui::Checkbox("Merge", &m_merge);
     }
 
+    // Step 5: Reference and Fluence share the tonemap setting (compare like with like); Difference has its own scale.
+    if (m_view == View::Reference || m_view == View::Fluence)
+    {
+        ImGui::Checkbox("Tonemap (Reinhard)", &m_tonemap);
+    }
+    else if (m_view == View::Difference)
+    {
+        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SliderFloat("Difference x", &m_differenceScale, 1.0f, 64.0f, "%.0f");
+        ImGui::SameLine();
+        ImGui::TextDisabled("red = RC too bright, blue = too dark (let the reference converge first)");
+    }
+
     // Largest square that fits in the space left in the panel.
     const ImVec2 available = ImGui::GetContentRegionAvail();
     const float side = std::max(1.0f, std::min(available.x, available.y));
@@ -381,9 +470,8 @@ void RcToy::DrawPanel(Editor& editor)
     // canvas is fully transparent. Drawing it over a dark grey background turns that into a readable view:
     // empty = grey (background shows through), wall = black (rgb 0, alpha 1), light = its colour (rgb > 0, alpha 1).
     const ImVec4 emptySpaceColor(0.15f, 0.15f, 0.15f, 1.0f);
-    const std::shared_ptr<Texture>& shown = (m_view == View::Reference && m_reference) ? m_reference
-        : (m_view == View::Cascade && m_viewTexture) ? m_viewTexture
-        : m_canvas;
+    // Every view except the canvas is drawn by the viewer pass into m_viewTexture (alpha 1, tonemap, difference).
+    const std::shared_ptr<Texture>& shown = (m_view != View::Canvas && m_viewTexture) ? m_viewTexture : m_canvas;
     ImGui::ImageWithBg(editor.GetGUI()->GetTextureID(shown), ImVec2(side, side), ImVec2(0.0f, 0.0f),
         ImVec2(1.0f, 1.0f), emptySpaceColor);
 

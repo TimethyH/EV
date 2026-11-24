@@ -84,19 +84,23 @@ public:
     };
     static_assert(sizeof(CascadeConstants) == 2 * sizeof(uint32_t), "CascadeConstants must be 2 root constants");
 
-    // What rc_view.hlsl receives (cbuffer ViewConstants, b0): 1 root constant.
+    // What rc_view.hlsl receives (cbuffer ViewConstants, b0): 3 root constants.
     struct ViewConstants
     {
-        uint32_t mode = 0; // 0 = show rgb (the radiance), 1 = show alpha as grey (the transmittance beta).
+        uint32_t mode = 0;             // 0 = rgb, 1 = alpha as grey (a cascade's beta), 2 = difference fluence - reference.
+        uint32_t tonemap = 0;          // Step 5: 1 = Reinhard x / (1 + x) on mode 0's rgb.
+        float    differenceScale = 1.0f; // Step 5, mode 2: the difference is multiplied by this.
     };
-    static_assert(sizeof(ViewConstants) == 1 * sizeof(uint32_t), "ViewConstants must be 1 root constant");
+    static_assert(sizeof(ViewConstants) == 3 * sizeof(uint32_t), "ViewConstants must be 3 root constants");
 
-    // Which texture the panel shows.
+    // Which texture the panel shows. Everything except the canvas goes through the viewer pass (rc_view.hlsl).
     enum class View : uint32_t
     {
-        Canvas = 0,    // What you painted.
-        Reference = 1, // The brute-force fluence (step 2).
-        Cascade = 2,   // One cascade, c0..c5, raw (step 3) or merged (step 4), through the viewer pass.
+        Canvas = 0,     // What you painted.
+        Reference = 1,  // The brute-force fluence (step 2).
+        Cascade = 2,    // One cascade, c0..c5, raw (step 3) or merged (step 4).
+        Fluence = 3,    // Step 5: the RC result per pixel (merged c0 -> rc_fluence.hlsl).
+        Difference = 4, // Step 5: fluence minus reference (red = RC too bright, blue = too dark).
     };
 
 private:
@@ -153,11 +157,21 @@ private:
 
     // Viewer: ImGui alpha-blends images, and a cascade's alpha is beta (0 = "hit" = fully transparent in the panel), so
     // a raw cascade can't be shown with ImGui::Image directly. rc_view.hlsl copies it into m_viewTexture with
-    // alpha 1 (or shows beta as grey). [0] source SRV (t0), [1] view UAV (u0), [2] 1 root constant (b0).
+    // alpha 1 (or shows beta as grey, or the difference view). [0] source SRV (t0), [1] view UAV (u0),
+    // [2] 3 root constants (b0), [3] second SRV (t1: the reference, for the difference view).
     std::shared_ptr<EV::Texture>  m_viewTexture;
     std::shared_ptr<OceanCompute> m_viewPSO;
 
     int  m_shownCascade = 0;    // Panel slider: which cascade is shown.
     bool m_showBeta = false;    // Panel checkbox: show the cascade's beta instead of its radiance.
     bool m_merge = true;        // Panel checkbox (step 4): merged c5 ... c_shown top-down, or only c_shown raw (step 3).
+
+    // Step 5: the RC result per canvas pixel, R16G16B16A16_FLOAT 1024^2 (rgb = fluence, a = 1). Rewritten every frame.
+    std::shared_ptr<EV::Texture> m_fluence;
+
+    // rc_fluence.hlsl + its root signature: [0] merged c0 SRV (t0), [1] fluence UAV (u0), [2] canvas SRV (t1).
+    std::shared_ptr<OceanCompute> m_fluencePSO;
+
+    bool  m_tonemap = true;          // Panel checkbox (step 5): Reinhard on the Reference and Fluence views.
+    float m_differenceScale = 4.0f;  // Panel slider (step 5): how strongly the Difference view amplifies errors.
 };

@@ -509,4 +509,37 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   drawn into a panel smaller than 1024 px (downscaled → moiré that moves with the size); Reference is per-pixel light.
   Like-for-like comparison needs step 5 (fluence = average of a probe's directions). Remaining RC artefacts (rings,
   leaks) are step 6. Step 4 done.
-- **Committed**: steps 3 + 4 together (gather + merge, plumbing, rc_view viewer) on `path-tracing`, pushed 2026-11-24.
+- **Committed**: steps 3 + 4 together (gather + merge, plumbing, rc_view viewer) on `path-tracing`, pushed 2026-11-24
+  (`8f575a7`).
+
+## 2026-11-24 – RC-0 step 5 skeleton (Claude)
+- New `rc_fluence.hlsl` (t0 merged c0, t1 canvas, u0 `m_fluence` 1024² fp16): one thread per canvas pixel; solid
+  pixels show their own emission (same as the reference); `ProbeFluence(probe)` = round 5a `TODO(human)` (average the
+  probe's 4 c0 texels); `main` uses the probe the pixel is in (`pixel / 2`) until round 5b (bilinear over 4 probes).
+- Views "Fluence" and "Difference" (panel): both force the full merge c5 → c0 regardless of the Cascade-view settings,
+  then the fluence pass. Every view except Canvas now goes through `rc_view.hlsl`, which gained t1 + 3 root constants:
+  mode 2 = signed luminance difference fluence − reference × scale (red = RC brighter, blue = darker), and a
+  Reinhard tonemap toggle applied to Reference and Fluence alike. `CreateSrvUavConstantsPSO` removed (its only user,
+  the viewer, now has its own 4-parameter root signature).
+- Step 5 board: node "Step 5 · Fluence" on the RC-0 board (explorer: pixel → probe(s), probe → 2×2 texels/4 cones;
+  "Know this first"; task 5a + checkpoint + traps). DXC clean (rc_fluence, rc_view); OceanRenderer Release builds.
+
+## 2026-11-24 – RC-0 step 5 round 5a: one probe's fluence
+- **What** (developer): `ProbeFluence` loops i = 0…3, `offset = int2(i % 2, i / 2)`, texel = `probe * 2 + offset`,
+  sums `.rgb`, divides by 4.
+- **Checked**: DXC `cs_6_0` clean; first-time pass. Cleanup (Claude): `TODO(human)` → explanations (offset = direction
+  n, rgb only, equal shares → / 4). Round 5b `TODO(human)` added in `main` (bilinear over the 4 nearest c0 probes; the
+  5a single-probe line stays until the developer replaces it).
+
+## 2026-11-24 – RC-0 step 5 round 5b: bilinear over the 4 nearest c0 probes
+- **What** (developer): in `main`, `origin = pixel + 0.5`, `gridPos = origin / C0_PROBE_SIDE − 0.5`,
+  `base = int2(floor(gridPos))`, `weight` = fraction; the 2b offsets/weights loop with
+  `clamp(base + offset, 0, C0_PROBE_COUNT − 1)` and `light += ProbeFluence(probe) * weight`; 5a line removed.
+- **Bumps on the way**: asked whether the divisor is still `upperSide` → divide by the spacing of the probes being
+  read (c0: 2 px). First version stored `origin` and `gridPos` as `uint2` → fractions cut, weight always 0 (blocky,
+  shifted by one probe); DXC gave no warning. Second version (`float2`) correct.
+- **Checked**: DXC `cs_6_0` clean. Cleanup (Claude): `TODO(human)` → explanations; stale "upperCount" in the copied
+  clamp comment → `C0_PROBE_COUNT`.
+- **Run**: developer: Fluence is smooth now (2×2 blocks gone). Step 5 done.
+- **Committed**: step 5 (fluence pass + Fluence/Difference views, tonemap toggle, rounds 5a + 5b) on `path-tracing`,
+  pushed 2026-11-24.

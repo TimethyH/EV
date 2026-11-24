@@ -60,6 +60,7 @@
     <FxCompile Include="shaders\rc_paint.hlsl" />
     <FxCompile Include="shaders\rc_reference.hlsl" />
     <FxCompile Include="shaders\rc_cascade.hlsl" />
+    <FxCompile Include="shaders\rc_fluence.hlsl" />
     <FxCompile Include="shaders\rc_view.hlsl" />
     <FxCompile Include="shaders\HDR_to_SDR_PS.hlsl" />
     <FxCompile Include="shaders\HDR_to_SDR_VS.hlsl" />
