@@ -405,6 +405,108 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
 - **Checked**: developer ran it – Reference view converges (grain fades, resets on paint / slider). DXC `cs_6_0`
   clean. Cleanup (Claude): `TODO(human)` removed, the now-dead frame-0 zero write removed (the blend already gives
   `color` when old = 0), comments on the start-over and the blend formula.
+- **Committed**: `2c6811c` (steps 2a + 2b).
 - **Next**: step 3 – gather one cascade (`rc_cascade.hlsl`, raw c0…c5, no merge yet). Read first: m4xc "Cascades"
   (Hierarchy, Memory, Gathering), GM Shaders RC part 1 "Cascade Hierarchies", "How many Cascades?", "Raymarching from
   Probes".
+
+## 2026-11-24 – RC-0 step 3 skeleton (Claude)
+- Split into two rounds: (1) `DecodeTexel` – texel → probe centre, direction, interval; (2) `MarchInterval` + the real
+  output (radiance, β).
+- **Skeleton**: `m_cascades[2]` (1024² fp16 + UAV; [1] waits for step 4's ping-pong), `m_cascadePSO` (slots
+  `CascadeRoot`: SRV t0 canvas, UAV u0, 1 constant `cascadeIndex`), pass "RC-0 Cascade" (only while the Cascade view is
+  on, computes the cascade picked by the panel slider c0…c5), `rc_cascade.hlsl` with `ProbeRay` + `DecodeTexel` stub
+  and a round-1 checkpoint output (rg = direction, b = probe checkerboard from `origin`).
+- **Viewer (Claude, tooling)**: `rc_view.hlsl` + pass "RC-0 View" → `m_viewTexture`, alpha forced to 1 (ImGui
+  alpha-blends and β = 0 = "hit" would draw the lit texels transparent); "Show beta" shows β as grey.
+  `CreateSrvUavConstantsPSO` helper for the shared root-signature shape. OceanRenderer Debug x64 builds.
+
+## 2026-11-24 – RC-0 step 3 round 1: DecodeTexel
+- **What** (developer): `DecodeTexel` – `probeSide = 1 << (k+1)`, N = side², `probeIndex = texel / side`,
+  `localTexel = texel & (side − 1)`, origin `(probeIndex + 0.5) · 2 · 2^k`, n = `x + y · side`,
+  angle `2π (n + 0.5) / N`, interval `T0 (4^k − 1)/3 … T0 (4^(k+1) − 1)/3` via `pow`.
+- **Bumps on the way** (3 rounds):
+  1. Step 1 of the TODO ("block side and N") was unclear → reworded as "the size of one probe's square".
+  2. `localTexel = texel + (side−1) & ~(side−1)` – the round-up-to-a-multiple alignment trick (and `+` binds before
+     `&`) → block start, not the offset. `4 ^ k` = XOR in HLSL (no power operator), and `4 ^ k - 1` = `4 ^ (k−1)`.
+     Interval math explained on the Patroni board "Interval math (step 3)" (geometric sum, gap = t · 2π/N ≈ 4 px).
+  3. `tStart = T0 * pow(4, k) - 1 / 3.0` – brackets missing (c0 started at 1.67). Fixed.
+- **Checked**: DXC `cs_6_0` clean; developer ran it – colour wheel in every probe block, blue checkerboard over probes.
+  Cleanup (Claude): `TODO(human)` + instruction comments removed, per-block explanations added.
+
+## 2026-11-24 – RC-0 step 3 round 2 skeleton (Claude)
+- Checkpoint output removed; `main` writes `MarchInterval(origin, direction, tStart, tEnd)` (stub returns a miss).
+  `MarchInterval` = `TODO(human)`: 1-px steps over the half-open `[tStart, tEnd)`, hit = (emission, β 0), miss or
+  outside the canvas = (0, 0, 0, β 1). DXC clean.
+
+## 2026-11-24 – RC-0 step 3 round 2: MarchInterval – step 3 done
+- **What** (developer): `for (float t = tStart; t < tEnd; t++)`, position = origin + direction · t, `any()` bounds test
+  on the position → break (miss), solid (`a >= 0.5`) → `(rgb, 0)`; after the loop `(0, 0, 0, 1)`.
+- **Bumps on the way** (2 rounds):
+  1. Bounds test on `t` (`t >= 1024`) instead of the position; unconditional `return` on the first step (every texel =
+     the canvas colour at its interval start); hit returned β = 1 instead of 0.
+  2. All three fixed – DXC clean.
+- **Checked**: developer ran it – c0 thin outlines around lights, c2 a lit ring 10–42 px out, Show beta dark bands at
+  each cascade's wall distances. Hovering gave an ImGui "conflicting ID" warning: the panel's radio button and slider
+  were both labelled "Cascade" (Claude's panel code) → slider renamed "Shown cascade". Cleanup (Claude): `TODO(human)` +
+  instruction comments removed, explanations kept.
+- **Next**: step 4 – merge top-down (c5 → c0, ping-pong A/B). Read first: m4xc "Merging" (Intervals, Cones, Spatially,
+  Algorithm); GM Shaders 1 "Merging Cascades" + "Ray Visibility Term and when to Merge"; GM Shaders 2 "Merging with
+  Cascade N+1".
+
+## 2026-11-24 – RC-0 step 4 skeleton (Claude)
+- Six "RC-0 Cascade c<k>" passes, c5 first, ping-pong via `CascadeSlot(k) = (5 − k) & 1` (c_k writes one texture as
+  UAV u0, reads c_(k+1) from the other as SRV t1). Root constants `cascadeIndex` + `mergeWithUpper` (0 for c5 or when
+  the panel's "Merge" checkbox is off). `ProbeRay` gained `.probe` + `.n`; `MergeWithUpper` = `TODO(human)`.
+  Step 4 board: node "Step 4 · Merging cascades" on the RC-0 board (explorer ①②③ + "over" demo ④).
+
+## 2026-11-24 – RC-0 step 4 round 1a: one upper probe, one child
+- **What** (developer): `MergeWithUpper` – first child `m = 4n`, `upperSide = 1 << (k+2)`, local = `(m % side,
+  m / side)`, upper probe = `probe >> 1`, `upperTexel = upperProbe · upperSide + local`, then
+  `(L_near + β_near · L_far, β_near · β_far)`.
+- **Bumps on the way**: the original round 1 (4 children at once) was too big → split into 1a (one child) and 1b
+  (average of 4). Two extra board sections: "Stuck? Round 1a in 3 tiny pieces" and "C · step by step" (name glossary
+  with units + a clickable upperCascade picture + forward/backward DecodeTexel). Review: `ray.probe / probeSide`
+  (probe index ÷ texel size, right only at k = 0); float maths on indices (`* 4.0`, `* 0.5`) → `* 4u`, `>> 1`;
+  `upperTexelX/Y` → `localX/Y`.
+- **Checked**: DXC `cs_6_0` clean; developer ran it – light reaches far, blocky (expected with one upper probe).
+  Cleanup (Claude): round-1a instructions replaced by explanations; round 1b `TODO(human)` added (average the 4 children).
+
+## 2026-11-24 – RC-0 step 4 round 1b: the whole cone (4 children averaged)
+- **What** (developer): `upperProbeId` + `upperSide` hoisted out of a loop over i = 0…3, child `4n + i`, same
+  local/upperTexel maths, sum of the 4 float4s, `far = sum / 4` (L and β averaged together), merge line unchanged.
+- **Checked**: DXC `cs_6_0` clean; first-time pass. Developer ran it – smoother than 1a, still 2×2-blocky, Show beta
+  shows grey steps at shadow edges (partly blocked cones = penumbrae). Cleanup (Claude): comments that had drifted when
+  the lines moved into the loop put back next to their lines.
+
+## 2026-11-24 – RC-0 step 4 round 2a skeleton (Claude)
+- The 1b loop moved unchanged into `ReadUpperCone(upperProbeId, n, upperSide)`; `MergeWithUpper` still reads one upper
+  probe through it. Round 2a `TODO(human)`: gridPos / base (int2) / weight in the upper probe grid, checkpoint = weight as
+  colour on c3. Step 4 board: section "Round 2 · bilinear" (1D number line explorer, worked numbers, 2D weights, edge
+  clamp, checkpoint + traps). DXC clean.
+
+## 2026-11-24 – RC-0 step 4 round 2a: position in the upper probe grid
+- **What** (developer): in `MergeWithUpper`, `gridPos = ray.origin / upperSide − 0.5`, `base = int2(floor(gridPos))`,
+  `weight = gridPos − base`; debug return `float4(weight, 0, 1)`.
+- **Bumps on the way** (3 reviews): first written inside `ReadUpperCone`, which only gets `ray.probe >> 1` (the bit
+  that decides the weight is already gone), with a centre built from the upper probe id × the c0 spacing 2. Then in
+  the right place but `(ray.origin + 0.5) * 2` (index → px applied to a value already in px → one solid colour) and
+  `floor(uint2(gridPos))` (cast before floor truncates; −0.25 can't be a uint). Third version correct.
+- **Checked**: code review passed. First run showed the normal merged c3 (debug return already removed – the cascade
+  view shows raw direction texels, so it looks striped); with the return put back, the developer saw the 2×2
+  four-colour pattern of solid probe blocks ✓. Cleanup (Claude): instructions → explanations; round 2b `TODO(human)`
+  added (4 clamped upper probes × bilinear weights, `upperCount = 1024 / upperSide` and `far = 0` prepared, round-1
+  single read removed). DXC `cs_6_0` clean.
+
+## 2026-11-24 – RC-0 step 4 round 2b: bilinear over the 4 nearest upper probes
+- **What** (developer): `offsets[4]` (0,0) (1,0) (0,1) (1,1) + `weights[4]` = products of the per-axis (1 − w) / w; loop:
+  `clamp(base + offset, 0, upperCount − 1)` on int2, then `far += ReadUpperCone(uint2(id), n, upperSide) * weight`.
+  Considered `far /= 4` (left commented out) – not needed, the 4 weights already sum to 1.
+- **Checked**: DXC `cs_6_0` clean; first-time pass. Cleanup (Claude): `TODO(human)` + the commented-out division
+  removed, explanations added (weights sum to 1, clamp the probe not the weight).
+- **Run**: merged c0 much closer to Reference, but still blocks and lines, changing with the render/panel size.
+  Explained: the Cascade view shows raw direction texels (each c0 probe = a 2×2 block of 4 DIFFERENT directions),
+  drawn into a panel smaller than 1024 px (downscaled → moiré that moves with the size); Reference is per-pixel light.
+  Like-for-like comparison needs step 5 (fluence = average of a probe's directions). Remaining RC artefacts (rings,
+  leaks) are step 6. Step 4 done.
+- **Committed**: steps 3 + 4 together (gather + merge, plumbing, rc_view viewer) on `path-tracing`, pushed 2026-11-24.
