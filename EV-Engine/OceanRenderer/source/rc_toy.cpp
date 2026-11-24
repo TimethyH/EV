@@ -7,6 +7,7 @@
 #include "rc_toy.h"
 
 #include <algorithm>
+#include <cfloat> // FLT_MAX (panel size constraints)
 #include <string>
 #include <d3dx12.h>
 
@@ -387,18 +388,43 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────
-// The "RC-0" tab next to the Scene view. Shows the canvas as a square that fills the panel.
+// The "RC-0" tab next to the Scene view. Layout: a fixed-width column of controls on the left, the canvas image in
+// the rest of the panel (so the image gets the panel's full height), either scaled to fit or at 1 pixel per texel.
 void RcToy::DrawPanel(Editor& editor)
 {
+    // Width of the controls column in screen pixels; sliders inside it get a fixed width so their labels still fit.
+    constexpr float ControlsWidth = 300.0f;
+    constexpr float SliderWidth = 140.0f;
+    // Below this much room for the image next to the column, the controls go on top instead (a narrow panel, e.g.
+    // docked at the side, would otherwise leave the image only a few pixels wide).
+    constexpr float MinImageWidth = 400.0f;
+    const bool sideBySide = ImGui::GetContentRegionAvail().x >= ControlsWidth + MinImageWidth;
+
+    // The controls in a child window: its own scroll region, so they scroll on a short panel while the image keeps
+    // its size. Side by side: a fixed-width column at full height. On top: full width, as tall as its contents
+    // (AutoResizeY). Every Begin/BeginChild needs its End/EndChild, also on the early return.
+    const ImVec2 controlsSize = sideBySide ? ImVec2(ControlsWidth, 0.0f) : ImVec2(0.0f, 0.0f);
+    const ImGuiChildFlags controlsFlags = sideBySide ? ImGuiChildFlags_Borders
+        : (ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
+    if (!sideBySide)
+    {
+        // On top: at most 40% of the panel's height, the rest stays for the image (the controls scroll inside).
+        ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
+            ImVec2(FLT_MAX, std::max(80.0f, ImGui::GetContentRegionAvail().y * 0.4f)));
+    }
+    ImGui::BeginChild("##RcControls", controlsSize, controlsFlags);
+
     ImGui::Checkbox("Enable", &m_enabled);
 
     if (!m_canvas)
     {
         ImGui::TextDisabled("No canvas yet (RcToy::Initialize).");
+        ImGui::EndChild();
         return;
     }
 
     // Brush settings (step 1c). The mode numbers are what rc_paint.hlsl receives.
+    ImGui::SeparatorText("Brush");
     int mode = static_cast<int>(m_brushMode);
     ImGui::RadioButton("Light", &mode, static_cast<int>(BrushMode::Light));
     ImGui::SameLine();
@@ -406,43 +432,44 @@ void RcToy::DrawPanel(Editor& editor)
     ImGui::SameLine();
     ImGui::RadioButton("Eraser", &mode, static_cast<int>(BrushMode::Eraser));
     m_brushMode = static_cast<BrushMode>(mode);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(120.0f);
+    ImGui::SetNextItemWidth(SliderWidth);
     ImGui::SliderFloat("Radius", &m_brushRadius, 1.0f, 64.0f, "%.0f px");
     if (m_brushMode == BrushMode::Light)
     {
         ImGui::ColorEdit3("Colour", m_brushColor, ImGuiColorEditFlags_NoInputs);
         ImGui::SameLine();
-        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SetNextItemWidth(SliderWidth - 40.0f);
         ImGui::DragFloat("Intensity", &m_brushIntensity, 0.1f, 0.0f, 100.0f, "%.1f");
     }
 
-    // Which texture to show (step 2), and the reference's settings.
+    // Which texture to show (step 2), one per line.
+    ImGui::SeparatorText("View");
     int view = static_cast<int>(m_view);
     ImGui::RadioButton("Canvas", &view, static_cast<int>(View::Canvas));
     ImGui::SameLine();
     ImGui::RadioButton("Reference", &view, static_cast<int>(View::Reference));
     ImGui::SameLine();
     ImGui::RadioButton("Cascade", &view, static_cast<int>(View::Cascade));
-    ImGui::SameLine();
     ImGui::RadioButton("Fluence", &view, static_cast<int>(View::Fluence));
     ImGui::SameLine();
     ImGui::RadioButton("Difference", &view, static_cast<int>(View::Difference));
     m_view = static_cast<View>(view);
-    ImGui::SameLine();
-    ImGui::SetNextItemWidth(120.0f);
+    ImGui::Checkbox("1:1 pixels (scroll)", &m_pixelPerfect);
+
+    // Step 2: the reference's settings.
+    ImGui::SeparatorText("Reference");
+    ImGui::SetNextItemWidth(SliderWidth);
     ImGui::SliderInt("Rays / frame", &m_raysPerFrame, 1, 64);
-    ImGui::SameLine();
-    ImGui::Text("Reference: %u frames", m_referenceFrame);
+    ImGui::Text("%u frames accumulated", m_referenceFrame);
 
     // Step 3: which raw cascade to compute and show, and radiance vs beta.
     if (m_view == View::Cascade)
     {
+        ImGui::SeparatorText("Cascade");
         // ImGui hashes the label into the widget ID: "Cascade" is already the radio button above, so this label must
         // differ (same label in one window = conflicting IDs, hovering one highlights both).
-        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SetNextItemWidth(SliderWidth);
         ImGui::SliderInt("Shown cascade", &m_shownCascade, 0, static_cast<int>(CascadeCount) - 1, "c%d");
-        ImGui::SameLine();
         ImGui::Checkbox("Show beta", &m_showBeta);
         ImGui::SameLine();
         // Step 4: off = the raw interval only (step 3), on = c5 ... c_shown merged top-down.
@@ -452,19 +479,38 @@ void RcToy::DrawPanel(Editor& editor)
     // Step 5: Reference and Fluence share the tonemap setting (compare like with like); Difference has its own scale.
     if (m_view == View::Reference || m_view == View::Fluence)
     {
+        ImGui::SeparatorText("Display");
         ImGui::Checkbox("Tonemap (Reinhard)", &m_tonemap);
     }
     else if (m_view == View::Difference)
     {
-        ImGui::SetNextItemWidth(120.0f);
+        ImGui::SeparatorText("Difference");
+        ImGui::SetNextItemWidth(SliderWidth);
         ImGui::SliderFloat("Difference x", &m_differenceScale, 1.0f, 64.0f, "%.0f");
-        ImGui::SameLine();
-        ImGui::TextDisabled("red = RC too bright, blue = too dark (let the reference converge first)");
+        ImGui::TextWrapped("Red = RC too bright, blue = too dark. Let the reference converge first.");
     }
 
-    // Largest square that fits in the space left in the panel.
+    // Last frame's mouse mapping (it is computed after the image, below).
+    ImGui::SeparatorText("Mouse");
+    ImGui::Text("Brush pixel: (%.0f, %.0f)", m_brushPixelX, m_brushPixelY);
+    ImGui::Text("Painting: %s", m_painting ? "yes" : "no");
+
+    ImGui::EndChild();
+
+    // The image (right of the column, or below the controls), in its own child window so 1:1 mode can scroll it
+    // (both axes) without moving the controls.
+    if (sideBySide)
+    {
+        ImGui::SameLine();
+    }
+    ImGui::BeginChild("##RcImage", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
+        ImGuiWindowFlags_HorizontalScrollbar);
+
+    // Scaled to fit: the largest square in the space left. 1:1: exactly CanvasSize screen pixels, one per texel
+    // (no texels skipped, so no moire; the child window scrolls when the panel is smaller than that).
     const ImVec2 available = ImGui::GetContentRegionAvail();
-    const float side = std::max(1.0f, std::min(available.x, available.y));
+    const float side = m_pixelPerfect ? static_cast<float>(CanvasSize)
+        : std::max(1.0f, std::min(available.x, available.y));
 
     // ImGui alpha-blends images, and the canvas's alpha is OPACITY (0 = empty space), so a plain Image() of an empty
     // canvas is fully transparent. Drawing it over a dark grey background turns that into a readable view:
@@ -486,6 +532,7 @@ void RcToy::DrawPanel(Editor& editor)
 	m_brushPixelX = (mousePos.x - rectMin.x) / (rectMax.x - rectMin.x) * CanvasSize;
 	m_brushPixelY = (mousePos.y - rectMin.y) / (rectMax.y - rectMin.y) * CanvasSize;
 	m_painting = ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-	ImGui::Text("Brush pixel: (%.1f, %.1f), painting: %s", m_brushPixelX, m_brushPixelY, m_painting ? "yes" : "no");
+	// (The brush pixel / painting read-out moved to the controls column, "Mouse".)
 
+    ImGui::EndChild();
 }

@@ -542,4 +542,16 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   clamp comment → `C0_PROBE_COUNT`.
 - **Run**: developer: Fluence is smooth now (2×2 blocks gone). Step 5 done.
 - **Committed**: step 5 (fluence pass + Fluence/Difference views, tonemap toggle, rounds 5a + 5b) on `path-tracing`,
-  pushed 2026-11-24.
+  pushed 2026-11-24 (`4e35a90`).
+
+## 2026-11-24 – RC-0 panel: bigger canvas view (Claude, asked by the developer)
+- Asked: could RC use the main (Scene) viewport? The RC-0 tab already shares the Center dock with Scene, so it would
+  only gain the controls' height; the blur/lines come from drawing 1024² into a smaller panel. Chosen instead:
+  `DrawPanel` = a 300-px controls column (child window, own scroll; sections Brush / View / Reference / Cascade /
+  Display / Difference / Mouse) + the image in a second child window using the full height, and a "1:1 pixels
+  (scroll)" checkbox (`m_pixelPerfect`): 1024 × 1024 screen pixels, one per texel, scrollbars when the panel is
+  smaller. Mouse mapping unchanged (screen space, so it also works scrolled). Release builds.
+- **Bump**: developer saw no image – imgui.ini had RC-0 docked at the RIGHT side, 353 px wide (not in Center), so the
+  column left ~30 px (and the old 1024² → ~350 px squeeze explains the earlier blur). Fix: below 300 + 400 px width the
+  controls go on top (AutoResizeY, capped at 40 % of the height, scrolling), image below. Best view: dock RC-0 next to
+  Scene.

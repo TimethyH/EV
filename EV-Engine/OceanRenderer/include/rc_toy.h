@@ -174,4 +174,8 @@ private:
 
     bool  m_tonemap = true;          // Panel checkbox (step 5): Reinhard on the Reference and Fluence views.
     float m_differenceScale = 4.0f;  // Panel slider (step 5): how strongly the Difference view amplifies errors.
+
+    // Panel checkbox: show the canvas at 1 screen pixel per texel (1024 x 1024, scroll if the panel is smaller)
+    // instead of scaled to fit. Scaling a 1024^2 image down skips texels, which shows up as moire lines.
+    bool m_pixelPerfect = false;
 };
