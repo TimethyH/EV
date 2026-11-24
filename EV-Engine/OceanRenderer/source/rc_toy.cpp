@@ -24,6 +24,17 @@ namespace PaintRoot
     };
 }
 
+// Root parameter slots of the reference PSO (step 2).
+namespace ReferenceRoot
+{
+    enum : uint32_t
+    {
+        CanvasSRV = 0,    // descriptor table, t0 (the canvas, read only)
+        ReferenceUAV = 1, // descriptor table, u0 (the running average)
+        Constants = 2,    // 2 root constants, b0 = RcToy::ReferenceConstants
+    };
+}
+
 // ── Resources ────────────────────────────────────────────────────────────
 // Called once from Ocean::LoadContent, after the device exists.
 void RcToy::Initialize()
@@ -46,12 +57,48 @@ void RcToy::Initialize()
     paintRootParameters[PaintRoot::Brush].InitAsConstants(sizeof(PaintConstants) / sizeof(uint32_t), 0); // b0
     m_paintPSO = std::make_shared<OceanCompute>(L"/rc_paint.cso", paintRootParameters,
         static_cast<uint32_t>(_countof(paintRootParameters)));
+
+    // Step 2: the reference's running average. 32-bit float per channel: at frame n each new frame only moves the
+    // average by 1/n, and a 16-bit float (10-bit mantissa) would stop changing after roughly a thousand frames.
+    auto referenceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, CanvasSize, CanvasSize);
+    referenceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
+    m_reference = Application::Get().CreateTexture(referenceDesc);
+    m_reference->SetName(L"RC-0 Reference");
+
+    // The reference shader reads the canvas (SRV, t0), writes the average (UAV, u0) and gets 2 root constants (b0).
+    // Separate tables for the SRV and the UAV, like the ocean's H0 pass (ReadTextures / WriteTextures).
+    CD3DX12_DESCRIPTOR_RANGE1 referenceCanvasRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // 1 SRV at t0
+    CD3DX12_DESCRIPTOR_RANGE1 referenceOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // 1 UAV at u0
+    CD3DX12_ROOT_PARAMETER1 referenceRootParameters[3];
+    referenceRootParameters[ReferenceRoot::CanvasSRV].InitAsDescriptorTable(1, &referenceCanvasRange);
+    referenceRootParameters[ReferenceRoot::ReferenceUAV].InitAsDescriptorTable(1, &referenceOutputRange);
+    referenceRootParameters[ReferenceRoot::Constants].InitAsConstants(sizeof(ReferenceConstants) / sizeof(uint32_t), 0);
+    m_referencePSO = std::make_shared<OceanCompute>(L"/rc_reference.cso", referenceRootParameters,
+        static_cast<uint32_t>(_countof(referenceRootParameters)));
 }
 
 void RcToy::Release()
 {
+    m_referencePSO.reset();
+    m_reference.reset();
     m_paintPSO.reset();
     m_canvas.reset();
+}
+
+RcToy::ReferenceConstants RcToy::NextReferenceConstants()
+{
+    // The canvas changed (painting) or the ray count moved: the old average belongs to another scene, start over.
+    if (m_painting || m_raysPerFrame != m_lastRaysPerFrame)
+    {
+        m_referenceFrame = 0;
+        m_lastRaysPerFrame = m_raysPerFrame;
+    }
+
+    ReferenceConstants constants;
+    constants.frameIndex = m_referenceFrame;
+    constants.raysPerFrame = static_cast<uint32_t>(m_raysPerFrame);
+    ++m_referenceFrame;
+    return constants;
 }
 
 // ── Render graph ─────────────────────────────────────────────────────────
@@ -100,7 +147,34 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
             });
     }
 
-    // Steps 2-5 add their passes here (reference, cascades, fluence).
+    // Step 2: the brute-force reference, every frame, AFTER the paint pass (the graph runs passes in the order they
+    // are added, so it sees this frame's paint). The constants are taken NOW, while recording: frameIndex is this
+    // frame's value, and m_referenceFrame has already moved on by the time the pass's lambda runs.
+    // So the lambda gets them BY VALUE and never changes RcToy's state itself.
+    const RGTexture referenceTexture = renderGraph.Import("RC-0 Reference", m_reference);
+    const ReferenceConstants referenceConstants = NextReferenceConstants();
+
+    // Reads the canvas as an SRV in a compute shader (NonPixelShaderRead: the graph's barrier and the SRV binding
+    // below ask for the same state, so no second transition) and writes the running average as a UAV.
+    renderGraph.AddPass("RC-0 Reference")
+        .Read(canvas, EV::RGAccess::NonPixelShaderRead)
+        .Write(referenceTexture)
+        .Execute([this, canvas, referenceTexture, referenceConstants](RGPassContext& context)
+            {
+                CommandList& commandList = context.GetCommandList();
+                m_referencePSO->SetPipelineState(commandList);
+
+                // Handles -> the real textures (only valid inside the lambda).
+                std::shared_ptr<Texture> canvasTexture = context.GetTexture(canvas);
+                std::shared_ptr<Texture> refTexture = context.GetTexture(referenceTexture);
+
+                commandList.SetCompute32BitConstants(ReferenceRoot::Constants, sizeof(ReferenceConstants) / sizeof(float), &referenceConstants);
+				commandList.SetShaderResourceView(ReferenceRoot::CanvasSRV, 0, canvasTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
+				commandList.SetUnorderedAccessView(ReferenceRoot::ReferenceUAV, 0, refTexture, 0);
+				commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1); // 64 x 64 groups of 16 x 16
+            });
+
+    // Steps 3-5 add their passes here (cascades, fluence).
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────
@@ -134,6 +208,18 @@ void RcToy::DrawPanel(Editor& editor)
         ImGui::DragFloat("Intensity", &m_brushIntensity, 0.1f, 0.0f, 100.0f, "%.1f");
     }
 
+    // Which texture to show (step 2), and the reference's settings.
+    int view = static_cast<int>(m_view);
+    ImGui::RadioButton("Canvas", &view, static_cast<int>(View::Canvas));
+    ImGui::SameLine();
+    ImGui::RadioButton("Reference", &view, static_cast<int>(View::Reference));
+    m_view = static_cast<View>(view);
+    ImGui::SameLine();
+    ImGui::SetNextItemWidth(120.0f);
+    ImGui::SliderInt("Rays / frame", &m_raysPerFrame, 1, 64);
+    ImGui::SameLine();
+    ImGui::Text("Reference: %u frames", m_referenceFrame);
+
     // Largest square that fits in the space left in the panel.
     const ImVec2 available = ImGui::GetContentRegionAvail();
     const float side = std::max(1.0f, std::min(available.x, available.y));
@@ -142,7 +228,8 @@ void RcToy::DrawPanel(Editor& editor)
     // canvas is fully transparent. Drawing it over a dark grey background turns that into a readable view:
     // empty = grey (background shows through), wall = black (rgb 0, alpha 1), light = its colour (rgb > 0, alpha 1).
     const ImVec4 emptySpaceColor(0.15f, 0.15f, 0.15f, 1.0f);
-    ImGui::ImageWithBg(editor.GetGUI()->GetTextureID(m_canvas), ImVec2(side, side), ImVec2(0.0f, 0.0f),
+    const std::shared_ptr<Texture>& shown = (m_view == View::Reference && m_reference) ? m_reference : m_canvas;
+    ImGui::ImageWithBg(editor.GetGUI()->GetTextureID(shown), ImVec2(side, side), ImVec2(0.0f, 0.0f),
         ImVec2(1.0f, 1.0f), emptySpaceColor);
 
     // Step 1b: which canvas pixel is under the mouse, and is the left button painting there?

@@ -65,7 +65,26 @@ public:
     };
     static_assert(sizeof(PaintConstants) == 8 * sizeof(uint32_t), "PaintConstants must be 8 root constants");
 
+    // What rc_reference.hlsl receives each frame (cbuffer ReferenceConstants, b0): 2 root constants.
+    struct ReferenceConstants
+    {
+        uint32_t frameIndex = 0;   // Frames already in the running average; 0 = start over.
+        uint32_t raysPerFrame = 4; // Rays per pixel this frame.
+    };
+    static_assert(sizeof(ReferenceConstants) == 2 * sizeof(uint32_t), "ReferenceConstants must be 2 root constants");
+
+    // Which texture the panel shows.
+    enum class View : uint32_t
+    {
+        Canvas = 0,    // What you painted.
+        Reference = 1, // The brute-force fluence (step 2).
+    };
+
 private:
+    // The reference's constants for THIS frame, and advance the frame counter: restarts the average (frameIndex 0)
+    // when the canvas changed or the rays-per-frame slider moved. Call once per frame, while recording.
+    ReferenceConstants NextReferenceConstants();
+
     // The panel's "Enable" box: RC-0's passes only run while it is ticked.
     bool m_enabled = false;
 
@@ -87,4 +106,15 @@ private:
 
     // rc_paint.hlsl + its root signature: [0] descriptor table with the canvas UAV (u0), [1] 8 root constants (b0).
     std::shared_ptr<OceanCompute> m_paintPSO;
+
+    // Step 2: the brute-force reference. R32G32B32A32_FLOAT running average of the fluence, persistent like the canvas.
+    std::shared_ptr<EV::Texture> m_reference;
+
+    // rc_reference.hlsl + its root signature: [0] canvas SRV (t0), [1] reference UAV (u0), [2] 2 root constants (b0).
+    std::shared_ptr<OceanCompute> m_referencePSO;
+
+    View     m_view = View::Canvas;
+    uint32_t m_referenceFrame = 0;      // Frames accumulated so far (shown in the panel).
+    int      m_raysPerFrame = 4;        // Panel slider.
+    int      m_lastRaysPerFrame = 4;    // To notice the slider moving (restart the average).
 };

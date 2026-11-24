@@ -363,3 +363,48 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   `TODO(human)` + `(void)` lines removed, comments added, `static_cast<uint32_t>(_countof(...))` for the C4267 warning
   from the skeleton's `OceanCompute` construction.
 - **Next**: step 2 – brute-force reference, accumulated over frames.
+- **Committed**: `de62cb9` (steps 1a–1c + docs).
+- **Decision (developer)**: the render graph wasn't written by them, so they set up at least ONE render-graph pass
+  from scratch themselves (step 2a); after that Claude skeletons passes as before.
+
+## 2026-11-24 – RC-0 step 2a: the "RC-0 Reference" pass, set up by the developer
+- **Skeleton (Claude)**: `m_reference` (1024² `R32G32B32A32_FLOAT` + UAV – float32 because a running average moves
+  by 1/n per frame and fp16 stalls after ~1000 frames), `m_referencePSO` (slots `ReferenceRoot`: [0] SRV table t0,
+  [1] UAV table u0, [2] 2 root constants b0), `rc_reference.hlsl` stub (canvas rgb with alpha 1 → empty space black),
+  `NextReferenceConstants()` (frameIndex, raysPerFrame; restart on paint / slider), panel Canvas/Reference toggle,
+  rays slider, frame counter.
+- **What** (developer, no pass shell given): `Import(m_reference)`, `AddPass("RC-0 Reference")
+  .Read(canvas, NonPixelShaderRead).Write(reference)`, Execute: PSO, constants, SRV with the matching
+  `NON_PIXEL_SHADER_RESOURCE` state, UAV, `Dispatch(64, 64, 1)`.
+- **Bumps on the way** (2 rounds):
+  1. `referenceTexture` (an `RGTexture` handle) used in the lambda without capturing it, and without
+     `context.GetTexture` → compile error.
+  2. `SetUnorderedAccessView(slot, 0, tex, D3D12_RESOURCE_STATE_UNORDERED_ACCESS)`: the 4th parameter is the MIP;
+     the state (value 8) silently converted to mip 8. Old-style enums convert to integers without a warning.
+  3. `NextReferenceConstants()` moved INTO the lambda and called twice (counter +2 per frame). Fixed by calling it once
+     while recording and capturing the result by value: the lambda only reads what it captured, never changes state.
+- **Checked**: developer ran it – Reference view shows black empty space, painting works in both views. Debug x64
+  builds; cleanup (Claude): `TODO(human)` removed, comments added.
+- **Next (2b skeleton, Claude)**: `rc_reference.hlsl` gets `Random01` (PCG hash, per pixel + frame) and `March`
+  (1-px steps, first solid texel's rgb, 0 when leaving the canvas); developer writes `main`: inside-solid case,
+  stratified directions with a random rotation, average, running-average blend.
+
+## 2026-11-24 – RC-0 step 2b: the brute-force reference converges
+- **What** (developer): `rc_reference.hlsl` `main` – solid pixel → its own rgb; else `raysPerFrame` rays at
+  `angle = 2π (u + k/K)` (u = `Random01(pixel, frameIndex)`), each `March`ed from the pixel centre, averaged; old value
+  = 0 on frame 0, else `reference[pixel].rgb`; blend `old + (x − old) / (n + 1)`, alpha 1.
+- **Rotation**: the developer's `2π (u + k/K)` turns the even set by up to a full circle; the planned `2π (k + u)/K`
+  turns it by up to one gap (2π/K). The set repeats every gap, so both give the same distribution – fine as written.
+- **Bumps on the way** (3 rounds):
+  1. Blend pieces in the wrong places: `x + (n0 − old)/(n+1)` instead of `old + (x − old)/(n+1)` → would never
+     smooth out. `n0` only set when `frameIndex == 0` (uninitialised otherwise – HLSL compiles that silently) and
+     `float3 = float4` truncation warning.
+  2. `oldCol` set correctly in `if`/`else`, but the blend still read `reference[pixel]` (float4) → right numbers by
+     accident (frame-0 zero write + same-thread UAV read-after-write), 2 truncation warnings.
+  3. Blend uses `oldCol` – DXC clean.
+- **Checked**: developer ran it – Reference view converges (grain fades, resets on paint / slider). DXC `cs_6_0`
+  clean. Cleanup (Claude): `TODO(human)` removed, the now-dead frame-0 zero write removed (the blend already gives
+  `color` when old = 0), comments on the start-over and the blend formula.
+- **Next**: step 3 – gather one cascade (`rc_cascade.hlsl`, raw c0…c5, no merge yet). Read first: m4xc "Cascades"
+  (Hierarchy, Memory, Gathering), GM Shaders RC part 1 "Cascade Hierarchies", "How many Cascades?", "Raymarching from
+  Probes".
