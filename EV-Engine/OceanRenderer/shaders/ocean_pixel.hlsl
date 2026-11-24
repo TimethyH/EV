@@ -58,6 +58,15 @@ cbuffer OceanCB : register(b2)
     float pad1;
 }
 
+// Roughness: smooth close by (tight glints), rougher far away (sub-pixel waves).
+static const float ROUGHNESS_NEAR = 0.08f;
+static const float ROUGHNESS_FAR = 0.3f;
+static const float ROUGHNESS_DISTANCE = 300.0f; // metres
+// Scatter strengths k2-k4 (k1 = peakScatterIntensity).
+static const float SCATTER_VIEW = 0.3f;
+static const float SCATTER_SUN = 0.25f;
+static const float SCATTER_BUBBLES = 0.05f;
+
 cbuffer Constants : register(b3)
 {
     float patchSize0;
@@ -178,7 +187,10 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 BRDF = 0;
     
     float foamRoughnessModifier = 0.8f;
-	float roughness = 0.2f + foam * foamRoughnessModifier;
+	// Roughness grows with distance: near -> far over ~ROUGHNESS_DISTANCE.
+    float viewDistance = length(cameraPosition - IN.PositionWS.xyz);
+    float distanceBlend = 1.0f - exp(-viewDistance / ROUGHNESS_DISTANCE);
+    float roughness = lerp(ROUGHNESS_NEAR, ROUGHNESS_FAR, distanceBlend) + foam * foamRoughnessModifier;
     roughness = saturate(roughness);
 	
 	// float roughness = 0.2f; // TODO: hardcoded here AND ibl_specular
@@ -211,10 +223,8 @@ float4 main(PixelShaderInput IN) : SV_Target
  
  
     float3 mainLightDirection = normalize(-DirectionalLights[0].DirectionWS.xyz);
-    float3 halfVecMain = normalize(viewDirWS + mainLightDirection);
-    float HdotVMain = max(dot(halfVecMain, viewDirWS), 0.0);
-    float3 fresnelMain = PBRCalculateFresnel(HdotVMain, F0);
-    for (int i = 0; i < 2; ++i)
+    // Glints from light 0 only: light 1 points straight down and adds a fake glint under the camera.
+    for (int i = 0; i < 1; ++i)
     {
 	    
     // -------------------------------
@@ -231,13 +241,15 @@ float4 main(PixelShaderInput IN) : SV_Target
     kd *= float3(1.0f, 1.0f, 1.0f) - metallic;
     float intensity = 1.0f;
    // Directional Light BRDF calculation
-    directionalLightBRDF += (kd * oceanColor / PI + PBRSpecular(normDist, geometryFunc, fresnel, viewDirWS, dirLightDir, normal))
+    // Specular only: water's colour comes from the volume (body + sss below), not a Lambert surface.
+    directionalLightBRDF += PBRSpecular(normDist, geometryFunc, fresnel, viewDirWS, dirLightDir, normal)
                                 * DirectionalLights[i].Color * intensity * max(dot(dirLightDir, normal), 0.0f);
     }
 
 
 
     float3 R = reflect(-viewDirWS, normal);
+    R.y = abs(R.y); // Downward reflections would sample below the horizon; mirror them up.
     const float MAX_REFLECTION_LOD = 4.0f;
     float3 specularColor = specularMap.SampleLevel(linearClampSampler, R, roughness * MAX_REFLECTION_LOD);
 
@@ -246,19 +258,25 @@ float4 main(PixelShaderInput IN) : SV_Target
     float2 lutUV = float2(NdotV, roughness);
     float2 envBRDF = brdfLUT.Sample(linearClampSampler, lutUV).rg;
 
-    float3 irradiance = diffuseMap.Sample(linearClampSampler, normal).rgb;
-    float3 diffuse = irradiance * oceanColor;
-    float3 fresnelIBL = PBRCalculateFresnelIBL(NdotV, F0, roughness);
-    float3 kd_ibl = (float3(1.0f, 1.0f, 1.0f) - fresnelIBL) * (1.0f - metallic);
-    float3 specular = specularColor * (fresnelIBL * envBRDF.x + envBRDF.y);
-    float3 ambient = (kd_ibl * diffuse + specular);
+    // Split sum: plain F0, the LUT already contains Fresnel's angle dependence.
+    float3 specular = specularColor * (F0 * envBRDF.x + envBRDF.y);
+
+    // Water body: sky light (from straight up) scattered back out with oceanColor, minus what was reflected.
+    float3 fresnelView = PBRCalculateFresnel(NdotV, F0);
+    float3 skyIrradiance = diffuseMap.Sample(linearClampSampler, float3(0.0f, 1.0f, 0.0f)).rgb;
+    float3 body = (1.0f - fresnelView) * oceanColor.rgb * skyIrradiance;
+    float3 ambient = specular + body;
 
     // SubSurfaceScatter
 	// https://github.com/GarrettGunnell/Water/blob/1673a12e796c5745aea6fa26eda53261da8efa80/Assets/Shaders/FFTWater.shader
+    // Acerola's scatter terms: k1 back-lit crests, k2 looking down, k3 sun-facing sides, k4 bubbles.
     float H = max(IN.WaveHeight, 0.0f) * heightModifier;
     float k1 = peakScatterIntensity * H * pow(saturate(dot(mainLightDirection, -viewDirWS)), 4.0f) * pow(0.5f - 0.5f * dot(mainLightDirection, normal), 3.0f);
+    float k2 = SCATTER_VIEW * pow(saturate(dot(viewDirWS, float3(0.0f, 1.0f, 0.0f))), 2.0f);
+    float k3 = SCATTER_SUN * saturate(dot(normal, mainLightDirection));
+    float k4 = SCATTER_BUBBLES;
 
-    float3 sss = (1 - fresnelMain) * k1 * scatteredColor * DirectionalLights[0].Color;
+    float3 sss = (1.0f - fresnelView) * (k1 + k2 + k3 + k4) * scatteredColor.rgb * DirectionalLights[0].Color.rgb;
 
      // Combine ambient, point light, and directional light contributions
     BRDF += sss + ambient * IBLIntensity + pointLightBRDF + directionalLightBRDF;
