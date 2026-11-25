@@ -485,7 +485,7 @@ bool Ocean::LoadContent()
     CreateBRDFLUT();
 
     // Update Render params for the ocean.
-    m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(0.0f, 0.5f, 0.4f, 1.0f);
+    m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(20.0f / 255.0f, 11.0f / 255.0f, 1.0f / 255.0f, 1.0f); // #140B01
     m_displacementPSO->m_oceanRenderParams.oceanrColor = XMFLOAT4(0.0f, 0.15f, 0.3f, 1.0f);
     m_displacementPSO->m_oceanRenderParams.IBLIntensity = 0.4f;
     m_displacementPSO->m_oceanRenderParams.heightMod = 2.0f;
@@ -965,11 +965,9 @@ void Ocean::DrawOceanParameters()
     if (ImGui::CollapsingHeader("  Lighting", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Indent();
-        ImGui::Text("Ocean Color");
-        ImGui::ColorEdit4("##oceanColor", &m_displacementPSO->m_oceanRenderParams.oceanrColor.x,
+        ImGui::ColorEdit4("Ocean Color", &m_displacementPSO->m_oceanRenderParams.oceanrColor.x,
             ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
-        ImGui::SameLine(); ImGui::Text("Scatter Color");
-        ImGui::ColorEdit4("##scatterColor", &m_displacementPSO->m_oceanRenderParams.scatterColor.x,
+        ImGui::ColorEdit4("Scatter Color", &m_displacementPSO->m_oceanRenderParams.scatterColor.x,
             ImGuiColorEditFlags_NoInputs | ImGuiColorEditFlags_PickerHueWheel);
 
         ImGui::Spacing();
@@ -997,8 +995,8 @@ void Ocean::DrawOceanParameters()
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("How quickly foam fades, per second (lower = longer lasting)");
         ImGui::SliderFloat("Bias", &m_foamParameters[1], -1.0f, 1.0f);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Foam forms where the Jacobian drops below this, for both crest and trailing foam (higher = more foam)");
-        ImGui::SliderFloat("Intensity", &m_foamParameters[2], 0.0f, 10.0f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Foam added per second where a wave breaks");
+        ImGui::SliderFloat("Trailing Intensity", &m_foamParameters[2], 0.0f, 10.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Trailing foam added per second where a wave breaks (crest foam ignores this)");
         ImGui::SliderFloat("Softness", &m_foamParameters[3], 0.01f, 1.0f);
         if (ImGui::IsItemHovered()) ImGui::SetTooltip("Jacobian range below Bias over which foam forming ramps up (lower = harder onset)");
 
