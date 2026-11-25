@@ -73,7 +73,7 @@ Texture2D FoamDetailTexture : register(t18);
 // Roughness: smooth close by (tight glints), rougher far away (sub-pixel waves).
 static const float ROUGHNESS_NEAR = 0.08f;
 static const float ROUGHNESS_FAR = 0.3f;
-static const float ROUGHNESS_DISTANCE = 300.0f; // metres
+static const float ROUGHNESS_DISTANCE = 400.0f; // metres
 // Scatter strengths k2-k4 (k1 = peakScatterIntensity).
 static const float SCATTER_VIEW = 0.3f;
 static const float SCATTER_SUN = 0.25f;
@@ -229,7 +229,7 @@ float4 main(PixelShaderInput IN) : SV_Target
     float distanceBlend = 1.0f - exp(-viewDistance / ROUGHNESS_DISTANCE);
     float roughness = lerp(ROUGHNESS_NEAR, ROUGHNESS_FAR, distanceBlend) + foamCoverage * foamRoughnessModifier;
     roughness = saturate(roughness);
-	
+
 	// float roughness = 0.2f; // TODO: hardcoded here AND ibl_specular
     float metallic = 0.0f;
 		
@@ -288,7 +288,11 @@ float4 main(PixelShaderInput IN) : SV_Target
     float3 R = reflect(-viewDirWS, normal);
     R.y = abs(R.y); // Downward reflections would sample below the horizon; mirror them up.
     const float MAX_REFLECTION_LOD = 4.0f;
-    float3 specularColor = specularMap.SampleLevel(linearClampSampler, R, roughness * MAX_REFLECTION_LOD);
+    // Small waves make R jump between pixels, so the sharp mips give grainy sky far away: read the mip that matches
+    // R's change per pixel. Capped at 2.5, higher washes out the sunset glow on the water.
+    const float MAX_FOOTPRINT_LOD = 2.5f;
+    float footprintLod = min(specularMap.CalculateLevelOfDetail(linearClampSampler, R), MAX_FOOTPRINT_LOD);
+    float3 specularColor = specularMap.SampleLevel(linearClampSampler, R, max(roughness * MAX_REFLECTION_LOD, footprintLod));
 
 
     float NdotV = max(dot(normal, viewDirWS), 0.0f);

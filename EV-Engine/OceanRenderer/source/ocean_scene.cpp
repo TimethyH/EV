@@ -797,7 +797,7 @@ bool Ocean::LoadContent()
     // Update Render params for the ocean.
     m_displacementPSO->m_oceanRenderParams.scatterColor = XMFLOAT4(20.0f / 255.0f, 11.0f / 255.0f, 1.0f / 255.0f, 1.0f); // #140B01
     m_displacementPSO->m_oceanRenderParams.oceanrColor = XMFLOAT4(0.0f, 0.15f, 0.3f, 1.0f);
-    m_displacementPSO->m_oceanRenderParams.IBLIntensity = 0.4f;
+    m_displacementPSO->m_oceanRenderParams.IBLIntensity = 0.9f;
     m_displacementPSO->m_oceanRenderParams.heightMod = 2.0f;
     m_displacementPSO->m_oceanRenderParams.peakScatterIntensity = 0.6f;
     // Trailing foam per cascade (1500 m, 250 m, 17 m, 5 m): the small ones only hold ripples and tile visibly.
