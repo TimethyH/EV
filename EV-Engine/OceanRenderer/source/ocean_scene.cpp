@@ -231,15 +231,18 @@ namespace
             p.gamma = 7.0f;
             p.swell = 1.0f;
             p.spreadBlend = 1.0f;
-            p.shortWavesFade = 0.15f;
+            p.shortWavesFade = 0.013f;
             p.oceanColor = ColorFromHex(0x0A3358);
             p.scatterColor = ColorFromHex(0x2A8C8C);
             p.heightMod = 2.0f;
             p.peakScatterIntensity = 0.8f;
             p.IBLIntensity = 0.5f;
-            p.foamDecay = 1.0f;
-            p.foamBias = 0.0f;
+            p.foamDecay = 0.43f;
+            p.foamBias = 0.675f;
             p.foamTrailingIntensity = 1.0f;
+            p.foamSoftness = 0.081f;
+            p.foamTextureSize = 30.0f;
+            p.foamSharpness = 1.507f;
             p.skybox = "assets/sky4k.hdr";
         }
 
@@ -1250,9 +1253,10 @@ void Ocean::DrawOceanParameters()
 {
     bool paramsChanged = false;
 
-    auto Slider = [&](const char* label, float* v, float vmin, float vmax, const char* tooltip = nullptr) -> bool
+    auto Slider = [&](const char* label, float* v, float vmin, float vmax, const char* tooltip = nullptr,
+                      const char* format = "%.3f", ImGuiSliderFlags flags = 0) -> bool
         {
-            bool changed = ImGui::SliderFloat(label, v, vmin, vmax);
+            bool changed = ImGui::SliderFloat(label, v, vmin, vmax, format, flags);
             if (tooltip && ImGui::IsItemHovered())
                 ImGui::SetTooltip("%s", tooltip);
             return ImGui::IsItemDeactivatedAfterEdit();
@@ -1271,9 +1275,12 @@ void Ocean::DrawOceanParameters()
     if (ImGui::CollapsingHeader("  Wind", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Indent();
-        paramsChanged |= Slider("Speed (m/s)", &m_jonswapParams.windSpeed, 0.0f, 100.0f, "Wind speed in metres per second");
+        // Logarithmic: every factor 10 gets a third of the slider, so calm values are fine-grained but storms still reachable.
+        paramsChanged |= Slider("Speed (m/s)", &m_jonswapParams.windSpeed, 0.1f, 100.0f, "Wind speed in metres per second",
+                                "%.2f", ImGuiSliderFlags_Logarithmic);
         paramsChanged |= Slider("Direction (deg)", &m_jonswapParams.windDirection, 0.0f, 360.0f, "Wind direction in degrees");
-        paramsChanged |= Slider("Fetch (m)", &m_jonswapParams.fetch, 1000.0f, 1000000.0f, "Distance over which wind acts on the surface");
+        paramsChanged |= Slider("Fetch (m)", &m_jonswapParams.fetch, 1000.0f, 1000000.0f, "Distance over which wind acts on the surface",
+                                "%.0f", ImGuiSliderFlags_Logarithmic);
         ImGui::Unindent();
     }
 

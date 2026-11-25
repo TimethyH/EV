@@ -1158,9 +1158,9 @@ LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam)
             // For printable characters, the next message will be WM_CHAR.
             // This message contains the character code we need to send the KeyPressed event.
             // Inspired by the SDL 1.2 implementation.
+            // Only peeked, not removed: WM_CHAR still has to reach ImGui (OnWndProc) for typing in text fields.
             if (PeekMessage(&charMsg, hwnd, 0, 0, PM_NOREMOVE) && charMsg.message == WM_CHAR)
             {
-                GetMessage(&charMsg, hwnd, 0, 0);
                 c = static_cast<unsigned int>(charMsg.wParam);
             }
             bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
