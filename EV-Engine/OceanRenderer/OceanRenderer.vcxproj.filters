@@ -57,6 +57,7 @@
     <FxCompile Include="shaders\ocean_vertex.hlsl" />
     <FxCompile Include="shaders\animate_waves.hlsl" />
     <FxCompile Include="shaders\permute.hlsl" />
+    <FxCompile Include="shaders\ocean_mips.hlsl" />
     <FxCompile Include="shaders\rc_paint.hlsl" />
     <FxCompile Include="shaders\rc_reference.hlsl" />
     <FxCompile Include="shaders\rc_cascade.hlsl" />

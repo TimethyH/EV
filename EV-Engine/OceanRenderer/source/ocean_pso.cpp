@@ -32,7 +32,8 @@ EV::OceanPSO::OceanPSO(const EV::Camera& cam, const std::wstring& vertexPath, co
         D3D12_ROOT_SIGNATURE_FLAG_DENY_GEOMETRY_SHADER_ROOT_ACCESS;
 
     // Descriptor range for the textures.
-    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 15, 3);
+    // t3-t5 IBL, t6-t17 cascades (displacement, slope, foam per cascade), t18 foam detail texture.
+    CD3DX12_DESCRIPTOR_RANGE1 descriptorRage(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 16, 3);
 
 
     // clang-format off
@@ -210,6 +211,11 @@ void EV::OceanPSO::Apply(CommandList& commandList)
             commandList.SetShaderResourceView(RootParameters::Textures, 3 + i * 3 + 1, m_textures[i].slopeTexture, shaderRead);
             commandList.SetShaderResourceView(RootParameters::Textures, 3 + i * 3 + 2, m_textures[i].foamTexture, shaderRead);
         }
+        // The table is visible to all stages, so the texture has to be in both shader read states (not BindTexture).
+        if (m_foamDetailTexture)
+            commandList.SetShaderResourceView(RootParameters::Textures, 15, m_foamDetailTexture, shaderRead);
+        else
+            commandList.SetShaderResourceView(RootParameters::Textures, 15, m_defaultSRV, shaderRead);
 
     // if (m_dirtyFlags & DF_SpotLights)
     // {
@@ -255,4 +261,9 @@ void EV::OceanPSO::SetOceanTextures(std::shared_ptr<Texture> displacement, std::
    m_textures[cascade].displacementTexture = displacement;
    m_textures[cascade].slopeTexture = slope;
    m_textures[cascade].foamTexture = foam;
+}
+
+void EV::OceanPSO::SetFoamDetailTexture(std::shared_ptr<Texture> texture)
+{
+    m_foamDetailTexture = texture;
 }

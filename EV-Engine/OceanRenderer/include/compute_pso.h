@@ -16,6 +16,7 @@ namespace EV
 	class PipelineStateObject;
 	class RootSignature;
 	class CommandList;
+	class Buffer;
 }
 
 using namespace EV;
@@ -29,6 +30,12 @@ public:
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWTexture, DirectX::XMUINT3 dispatchDimension, uint32_t columnPhase);
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<ShaderResourceView>& envCubemap, const std::shared_ptr<Texture>& irradianceMap, uint32_t cubemapSize, uint32_t sampleCount);
     void Dispatch(std::shared_ptr<CommandList> commandList, const std::shared_ptr<Texture>& RWSlopeTexture, const std::shared_ptr<Texture>& RWDisplacementTexture, const std::shared_ptr<Texture>& foamTexture, std::vector<float> foamData, DirectX::XMUINT3 dispatchDimension);
+
+    // Mips 1-9 of a cascade's 512x512 slope and foam textures in one dispatch. counters: one uint per cascade, 0
+    // between dispatches (the shader resets it).
+    void DispatchMipChain(CommandList& commandList, const std::shared_ptr<Texture>& slopeTexture,
+        const std::shared_ptr<Texture>& foamTexture, const std::shared_ptr<Buffer>& counters, uint32_t cascade);
+    static constexpr uint32_t MipChainLevels = 10;
 
     enum RootParameters
     {

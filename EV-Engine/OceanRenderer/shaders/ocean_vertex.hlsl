@@ -34,6 +34,7 @@ struct VertexShaderOutput
     float2 TexCoord : TEXCOORD0;
     float4 Position : SV_Position;
     float WaveHeight : TEXCOORD1;
+    float2 GridPosition : TEXCOORD2; // The undisplaced position on the plane.
 };
 
 Texture2D DisplacementTexture0 : register(t6);
@@ -67,6 +68,7 @@ VertexShaderOutput main(VertexPositionNormalTexture data)
     OUT.NormalVS = mul((float3x3) matrixBuffer.invTransposeModelViewMatrix, data.Normal);
     OUT.TexCoord = data.TexCoord;
     OUT.WaveHeight = displacement.y;
+    OUT.GridPosition = data.Position.xz;
 
     return OUT;
 }

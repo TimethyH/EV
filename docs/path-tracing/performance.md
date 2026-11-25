@@ -28,3 +28,4 @@ performance". Newest results at the bottom of each table.
 
 | Date | Change | Machine | Shot | Before | After | Quality impact | Kept? |
 |---|---|---|---|---|---|---|---|
+| 2026-11-25 | Ocean slope + foam mip chains: engine `GenerateMips` (2 per cascade, ~3 dispatches each, views + texture wrapper created every call) → `ocean_mips.hlsl`, one dispatch per cascade for both chains (groupshared reduction to mip 6, last group via atomic counter builds mips 7–9) | AMD (main) | default ocean scene, camera untouched, maximised editor | Release (median of 3 runs, 600 warm-up + 3000 frames each): mips 4 passes 0.039 ms GPU (p95 0.055), graph GPU 0.518 ms, frame 1.03 ms. Debug: mips 0.070 ms, frame ~13.2 ms | Release: mips 0.029 ms GPU (p95 0.031), graph GPU 0.458 ms, frame 0.86 ms (−17 %). Debug: mips 0.043 ms, frame 7.5–9.4 ms | None expected (same 2×2 box filter); far-view captures A/B look the same, debug layer silent | yes |

@@ -375,6 +375,8 @@ bool Ocean::LoadContent()
     m_skybox = commandList->CreateCube(1.0f, true);
     // Turned into the skybox cubemap and image based lighting by SetEnvironment, once the PSOs exist.
     auto skyPanorama = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
+    // Linear data, not colour.
+    m_foamDetailTexture = commandList->LoadTextureFromFile(L"assets/ocean/foam.png", false);
 
     // m_cubeMesh = commandList->CreateCube();
     m_helmet = commandList->LoadSceneFromFile(L"assets/damaged_helmet/DamagedHelmet.gltf");
@@ -432,7 +434,14 @@ bool Ocean::LoadContent()
     CD3DX12_DESCRIPTOR_RANGE1 permuteDescriptorRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 3, 0);
     CD3DX12_ROOT_PARAMETER1 permuteRootParameters[2];
     permuteRootParameters[0].InitAsDescriptorTable(1, &permuteDescriptorRangeUAV); // UAV
-    permuteRootParameters[1].InitAsConstants(4, 0); // 4 floats, register b0
+    permuteRootParameters[1].InitAsConstants(5, 0); // foam parameters + delta time, b0
+
+    // Mip chains (ocean_mips.hlsl)
+    CD3DX12_DESCRIPTOR_RANGE1 mipChainRangeUAV(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 2 * OceanCompute::MipChainLevels, 0, 0,
+        D3D12_DESCRIPTOR_RANGE_FLAG_DESCRIPTORS_VOLATILE);
+    CD3DX12_ROOT_PARAMETER1 mipChainRootParameters[2];
+    mipChainRootParameters[0].InitAsDescriptorTable(1, &mipChainRangeUAV); // u0-u19: slope, foam mips
+    mipChainRootParameters[1].InitAsUnorderedAccessView(2 * OceanCompute::MipChainLevels); // u20: counter
 
     // Convolution
     CD3DX12_DESCRIPTOR_RANGE1 convolutionSRVRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0);
@@ -450,9 +459,15 @@ bool Ocean::LoadContent()
 
     m_unlitPSO = std::make_shared<EffectPSO>(m_camera, L"/vertex.cso", L"/pixel.cso");
     m_displacementPSO = std::make_shared<OceanPSO>(m_camera, L"/ocean_vertex.cso", L"/ocean_pixel.cso", m_oceanCascadesNumber, m_oceanPatchSizes);
+    m_displacementPSO->SetFoamDetailTexture(m_foamDetailTexture);
     m_oceanPSO = std::make_shared<OceanCompute>(L"/animate_waves.cso", H0RootParameters, _countof(H0RootParameters));
     m_fftPSO = std::make_shared<OceanCompute>(L"/fft.cso", FFTRootParameters, _countof(FFTRootParameters));
     m_permutePSO = std::make_shared<OceanCompute>(L"/permute.cso", permuteRootParameters, _countof(permuteRootParameters));
+    m_mipChainPSO = std::make_shared<OceanCompute>(L"/ocean_mips.cso", mipChainRootParameters, _countof(mipChainRootParameters));
+    // Committed resources start zeroed, as the shader expects.
+    m_mipChainCounters = Application::Get().CreateBuffer(
+        CD3DX12_RESOURCE_DESC::Buffer(m_oceanCascadesNumber * sizeof(uint32_t), D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS));
+    m_mipChainCounters->SetName(L"Ocean Mip Chain Counters");
     m_convolutionPSO = std::make_shared<ConvolutionCompute>(L"/ibl_convolution.cso", convolutionRootParameters, _countof(convolutionRootParameters));
     m_specularConvolutionPSO = std::make_shared<ConvolutionCompute>(L"/ibl_specular.cso", convolutionRootParameters, _countof(convolutionRootParameters));
     m_brdfLutPSO = std::make_shared<ConvolutionCompute>(L"/brdf_lut.cso", brdfLutRootParameters, _countof(brdfLutRootParameters));
@@ -475,29 +490,29 @@ bool Ocean::LoadContent()
     m_displacementPSO->m_oceanRenderParams.IBLIntensity = 0.4f;
     m_displacementPSO->m_oceanRenderParams.heightMod = 2.0f;
     m_displacementPSO->m_oceanRenderParams.peakScatterIntensity = 0.6f;
+    // Trailing foam per cascade (1500 m, 250 m, 17 m, 5 m): the small ones only hold ripples and tile visibly.
+    m_displacementPSO->m_oceanRenderParams.foamCascadeWeights = XMFLOAT4(1.0f, 1.0f, 0.5f, 0.25f);
+    m_displacementPSO->m_oceanRenderParams.foamTextureSize = 6.0f;
+    m_displacementPSO->m_oceanRenderParams.foamSharpness = 4.0f;
+    m_displacementPSO->m_oceanRenderParams.foamAlbedo = 0.9f;
+    m_displacementPSO->m_oceanRenderParams.foamDebugView = 0.0f;
 
-
+    // permute.hlsl b0. Per second, so frame-rate independent.
     struct Constants
     {
-        float foamDecay;
-        float foamBias;
-        float foamAdd;
-        float foamThreshold;
+        float foamDecay; // per second
+        float foamBias;  // foam forms below this Jacobian
+        float foamAdd;   // per second at full strength
+        float foamRange; // ramp width below foamBias
+        float deltaTime; // set in OnUpdate
     } cbv;
-    // // old foam settings (mayb good mayb shit)
-    // cbv.foamDecay = 0.005f;
-    // cbv.foamBias = 0.3f;
-    // cbv.foamAdd = 1.0f;
-    // cbv.foamThreshold = 0.0f;
+    cbv.foamDecay = 0.4f;
+    cbv.foamBias = 0.3f;
+    cbv.foamAdd = 5.0f;
+    cbv.foamRange = 0.3f;
+    cbv.deltaTime = 0.0f;
 
-    // Foam settings after playing with it
-    cbv.foamDecay = 0.006f;
-    cbv.foamBias = 0.407f;
-    cbv.foamAdd = 0.051f;
-    cbv.foamThreshold = 0.181f;
-
-    m_foamParameters.resize(sizeof(Constants) / 4);
-    m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamThreshold };
+    m_foamParameters = { cbv.foamDecay, cbv.foamBias, cbv.foamAdd, cbv.foamRange, cbv.deltaTime };
     
     // Tonemapped output shown in the editor's Scene panel (same format as the swapchain for the SDR pass).
     auto viewportDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R8G8B8A8_UNORM, m_width, m_height, 1, 1, 1, 0,
@@ -603,6 +618,11 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
 
     // The ocean simulation runs in the render graph (RecordRenderGraph).
     m_oceanTime = oceanTime;
+    // Clamped: a hitch (breakpoint, window drag) would add or remove all foam at once.
+    m_foamParameters[4] = static_cast<float>(std::min(e.deltaTime, 0.1));
+    // Crest foam in the pixel shader uses the same thresholds.
+    m_displacementPSO->m_oceanRenderParams.foamBias = m_foamParameters[1];
+    m_displacementPSO->m_oceanRenderParams.foamRange = m_foamParameters[3];
 
     m_unlitPSO->SetDirectionalLights(m_directionalLights);
     m_displacementPSO->SetDirectionalLights(m_directionalLights);
@@ -737,6 +757,16 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
             {
                 m_permutePSO->Dispatch(context.GetCommandListPtr(), context.GetTexture(c.slope), context.GetTexture(c.displacement),
                     context.GetTexture(c.foam), m_foamParameters, XMUINT3(phaseGroups, phaseGroups, 1));
+            });
+
+        // The pixel shader samples slope and foam with mips; the passes above only write mip 0.
+        rg.AddPass("Ocean Mips" + cascade)
+            .Write(c.slope)
+            .Write(c.foam)
+            .Execute([this, c, i](RGPassContext& context)
+            {
+                m_mipChainPSO->DispatchMipChain(context.GetCommandList(), context.GetTexture(c.slope),
+                    context.GetTexture(c.foam), m_mipChainCounters, i);
             });
     }
 
@@ -963,14 +993,30 @@ void Ocean::DrawOceanParameters()
     if (ImGui::CollapsingHeader("  Foam", ImGuiTreeNodeFlags_DefaultOpen))
     {
         ImGui::Indent();
-        ImGui::SliderFloat("Decay", &m_foamParameters[0], 0.0f, 0.1f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How quickly foam fades per frame (lower = longer lasting)");
+        ImGui::SliderFloat("Decay", &m_foamParameters[0], 0.0f, 2.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How quickly foam fades, per second (lower = longer lasting)");
         ImGui::SliderFloat("Bias", &m_foamParameters[1], -1.0f, 1.0f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Jacobian threshold for foam generation (lower = more foam)");
-        ImGui::SliderFloat("Intensity", &m_foamParameters[2], 0.0f, 2.0f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Amount of foam added when a wave breaks");
-        ImGui::SliderFloat("Threshold", &m_foamParameters[3], 0.0f, 1.0f);
-        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Minimum biased Jacobian value to trigger foam");
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Foam forms where the Jacobian drops below this, for both crest and trailing foam (higher = more foam)");
+        ImGui::SliderFloat("Intensity", &m_foamParameters[2], 0.0f, 10.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Foam added per second where a wave breaks");
+        ImGui::SliderFloat("Softness", &m_foamParameters[3], 0.01f, 1.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Jacobian range below Bias over which foam forming ramps up (lower = harder onset)");
+
+        auto& params = m_displacementPSO->m_oceanRenderParams;
+        ImGui::Spacing();
+        ImGui::SliderFloat4("Cascade Weights", &params.foamCascadeWeights.x, 0.0f, 2.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Foam contribution of each cascade (1500 m, 250 m, 17 m, 5 m)");
+        ImGui::SliderFloat("Texture Size (m)", &params.foamTextureSize, 0.5f, 30.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Metres covered by one repeat of the foam texture (assets/ocean/foam.png)");
+        ImGui::SliderFloat("Sharpness", &params.foamSharpness, 1.0f, 20.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("How hard the edge between foam and water is");
+        ImGui::SliderFloat("Albedo", &params.foamAlbedo, 0.0f, 1.0f);
+        if (ImGui::IsItemHovered()) ImGui::SetTooltip("Foam reflectance (real foam is about 0.8-0.9)");
+        int debugView = static_cast<int>(params.foamDebugView);
+        if (ImGui::Combo("Debug View", &debugView, "Off\0Foam amount\0Foam coverage\0Crest foam only\0"))
+        {
+            params.foamDebugView = static_cast<float>(debugView);
+        }
         ImGui::Unindent();
     }
 
@@ -1045,6 +1091,8 @@ void Ocean::UnloadContent()
     m_oceanPSO.reset();
     m_fftPSO.reset();
     m_permutePSO.reset();
+    m_mipChainPSO.reset();
+    m_mipChainCounters.reset();
     if (m_rcToy)
     {
         m_rcToy->Release();
@@ -1057,6 +1105,7 @@ void Ocean::UnloadContent()
         m_oceanCascades[i].displacementTexture.reset();
         m_oceanCascades[i].foamTexture.reset();
     }
+    m_foamDetailTexture.reset();
     m_skyboxTexture.reset();
     m_skyboxCubemap.reset();
     m_skyboxCubemapSRV.reset();
@@ -1153,8 +1202,13 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList, const UINT casc
     std::vector<std::complex<float>> H0(OCEAN_SUBRES * OCEAN_SUBRES, { 0,0 });
     std::vector<std::complex<float>> H0Conj(OCEAN_SUBRES * OCEAN_SUBRES, { 0,0 });
 
-    const float lowCutoff = cascade == 0 ? 0.001f : (OCEAN_SUBRES * PI / m_oceanPatchSizes[cascade - 1]); // nyquist limit of previous cascade;
-    const float highCutoff = highestK;
+    // Boundary between cascades i and i+1 at 6 wavelengths per patch of i+1: every wave is >= ~6 texels long in its
+    // cascade (gasgiant's FFT-Ocean split). At the Nyquist limit the shortest waves were 2 texels long and their
+    // derivatives (normals, Jacobian, foam) aliased.
+    const float boundaryFactor = 6.0f;
+    auto boundaryK = [&](UINT i) { return boundaryFactor * 2.0f * PI / m_oceanPatchSizes[i + 1]; };
+    const float lowCutoff = cascade == 0 ? 0.001f : boundaryK(cascade - 1);
+    const float highCutoff = cascade + 1 < m_oceanCascadesNumber ? boundaryK(cascade) : highestK;
     for (int m = 0; m < OCEAN_SUBRES; m++) {
         for (int n = 0; n < OCEAN_SUBRES; n++) {
             // Get wave vector for this frequency
@@ -1207,7 +1261,8 @@ void Ocean::GenerateH0(std::shared_ptr<CommandList> commandList, const UINT casc
     auto phaseDesc = CD3DX12_RESOURCE_DESC::Tex2D(phaseFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     phaseDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-    DXGI_FORMAT foamFormat = DXGI_FORMAT_R32_FLOAT;
+    // r = foam, g = lambda * Dxz. Needs typed UAV loads of R32G32_FLOAT (TypedUAVLoadAdditionalFormats).
+    DXGI_FORMAT foamFormat = DXGI_FORMAT_R32G32_FLOAT;
     auto foamDesc = CD3DX12_RESOURCE_DESC::Tex2D(foamFormat, OCEAN_SUBRES, OCEAN_SUBRES);
     foamDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 

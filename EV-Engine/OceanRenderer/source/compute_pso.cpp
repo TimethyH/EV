@@ -135,4 +135,25 @@ void OceanCompute::Dispatch(std::shared_ptr<CommandList> commandList, const std:
 
 }
 
+void OceanCompute::DispatchMipChain(CommandList& commandList, const std::shared_ptr<Texture>& slopeTexture,
+    const std::shared_ptr<Texture>& foamTexture, const std::shared_ptr<Buffer>& counters, uint32_t cascade)
+{
+    assert(slopeTexture->GetD3D12ResourceDesc().MipLevels == MipChainLevels);
+    assert(foamTexture->GetD3D12ResourceDesc().MipLevels == MipChainLevels);
+
+    SetPipelineState(commandList);
+
+    // u0-u9 slope mips, u10-u19 foam mips, u20 counter.
+    for (uint32_t mip = 0; mip < MipChainLevels; ++mip)
+    {
+        commandList.SetUnorderedAccessView(0, mip, slopeTexture, mip);
+        commandList.SetUnorderedAccessView(0, MipChainLevels + mip, foamTexture, mip);
+    }
+
+    commandList.SetUnorderedAccessView(1, counters, D3D12_RESOURCE_STATE_UNORDERED_ACCESS, cascade * sizeof(uint32_t));
+
+    // 64x64 texels per group.
+    commandList.Dispatch(8, 8, 1);
+}
+
 

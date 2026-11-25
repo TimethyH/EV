@@ -89,6 +89,8 @@ namespace EV
 
 
 		void SetOceanTextures(std::shared_ptr<Texture> displacement, std::shared_ptr<Texture> slope, std::shared_ptr<Texture> foam, const UINT cascade);
+		// t18: foam pattern (assets/ocean/foam.png)
+		void SetFoamDetailTexture(std::shared_ptr<Texture> texture);
         // Helper function to bind a texture to the rendering pipeline.
         inline void BindTexture(CommandList& commandList, uint32_t offset,
             const std::shared_ptr<Texture>& texture);
@@ -101,8 +103,17 @@ namespace EV
             float peakScatterIntensity = 0.0f;
             float IBLIntensity = 0.0f;
             float pad1 = 0.0f;
+            DirectX::XMFLOAT4 foamCascadeWeights = DirectX::XMFLOAT4(1.0f, 1.0f, 1.0f, 1.0f);
+            float foamTextureSize = 1.0f; // metres per repeat
+            float foamSharpness = 1.0f;
+            float foamAlbedo = 1.0f;
+            float foamDebugView = 0.0f; // 0 = off, 1 = foam amount, 2 = foam coverage, 3 = crest foam only
+            float foamBias = 0.0f;      // copied from m_foamParameters every frame
+            float foamRange = 1.0f;
+            float pad2 = 0.0f;
+            float pad3 = 0.0f;
 
-            // 48 bytes.
+            // 96 bytes, matches OceanCB in ocean_pixel.hlsl.
         }m_oceanRenderParams;
 
 	private:
@@ -139,6 +150,8 @@ namespace EV
             DirectX::XMFLOAT3 position;
             float pad;
         };
+
+        std::shared_ptr<Texture> m_foamDetailTexture;
 
         struct FFTTextures
         {

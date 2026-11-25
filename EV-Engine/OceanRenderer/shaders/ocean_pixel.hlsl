@@ -5,6 +5,7 @@ struct PixelShaderInput
     float3 NormalVS : NORMAL;
     float2 TexCoord : TEXCOORD0;
     float WaveHeight : TEXCOORD1;
+    float2 GridPosition : TEXCOORD2; // undisplaced position: the cascade textures are indexed by it
 };
 
 struct DirectionalLight
@@ -56,7 +57,18 @@ cbuffer OceanCB : register(b2)
     float peakScatterIntensity;
     float IBLIntensity;
     float pad1;
+    float4 foamCascadeWeights; // trailing foam weight per cascade
+    float foamTextureSize;     // metres per repeat of the foam texture
+    float foamSharpness;
+    float foamAlbedo;
+    float foamDebugView;       // 0 = off, 1 = foam amount, 2 = foam coverage, 3 = crest foam only
+    float foamBias;            // same as the permute pass, for crest foam
+    float foamRange;
+    float2 pad2;
 }
+
+// Histogram-equalised: thresholding at (1 - foam) covers a fraction 'foam' of the area.
+Texture2D FoamDetailTexture : register(t18);
 
 // Roughness: smooth close by (tight glints), rougher far away (sub-pixel waves).
 static const float ROUGHNESS_NEAR = 0.08f;
@@ -154,10 +166,10 @@ float3 PBRSpecular(float normalDist, float geometry, float3 fresnel, float3 view
 float4 main(PixelShaderInput IN) : SV_Target
 {
 
-    float2 uv0 = IN.PositionWS.xz / patchSize0;
-    float2 uv1 = IN.PositionWS.xz / patchSize1;
-    float2 uv2 = IN.PositionWS.xz / patchSize2;
-    float2 uv3 = IN.PositionWS.xz / patchSize3;
+    float2 uv0 = IN.GridPosition / patchSize0;
+    float2 uv1 = IN.GridPosition / patchSize1;
+    float2 uv2 = IN.GridPosition / patchSize2;
+    float2 uv3 = IN.GridPosition / patchSize3;
 
     float4 slope0 = SlopeTexture0.Sample(anisotropicSampler, uv0);
     float4 slope1 = SlopeTexture1.Sample(anisotropicSampler, uv1);
@@ -165,11 +177,36 @@ float4 main(PixelShaderInput IN) : SV_Target
     float4 slope3 = SlopeTexture3.Sample(anisotropicSampler, uv3);
     float4 slope = slope0 + slope1 + slope2 + slope3;
 
-    float foam0 = FoamTexture0.Sample(anisotropicSampler, uv0).r;
-    float foam1 = FoamTexture1.Sample(anisotropicSampler, uv1).r;
-    float foam2 = FoamTexture2.Sample(anisotropicSampler, uv2).r;
-    float foam3 = FoamTexture3.Sample(anisotropicSampler, uv3).r;
-    float foam = saturate(foam0 + foam1 + foam2 + foam3);
+    // r = trailing foam, g = lambda * Dxz
+    float2 foam0 = FoamTexture0.Sample(anisotropicSampler, uv0).rg;
+    float2 foam1 = FoamTexture1.Sample(anisotropicSampler, uv1).rg;
+    float2 foam2 = FoamTexture2.Sample(anisotropicSampler, uv2).rg;
+    float2 foam3 = FoamTexture3.Sample(anisotropicSampler, uv3).rg;
+
+    // Crest foam: Jacobian of the summed cascades. Low where the waves pinch together (crests), < 0 where they fold.
+    float2 jacobianDiagonal = slope.ba; // sum of lambda * (Dxx, Dzz)
+    float jacobianShear = foam0.g + foam1.g + foam2.g + foam3.g;
+    float jacobian = (1.0f + jacobianDiagonal.x) * (1.0f + jacobianDiagonal.y) - jacobianShear * jacobianShear;
+    float crestFoam = saturate((foamBias - jacobian) / max(foamRange, 0.0001f));
+
+    // Trailing foam: accumulated and fading per cascade (permute.hlsl).
+    float trailingFoam = dot(float4(foam0.r, foam1.r, foam2.r, foam3.r), foamCascadeWeights);
+    float foam = saturate(max(crestFoam, trailingFoam));
+
+    // Coverage: the foam amount thresholds the pattern, so fresh foam is solid and fading foam breaks into lace.
+    float2 foamUV = IN.GridPosition / foamTextureSize;
+    float foamDetail = FoamDetailTexture.Sample(anisotropicSampler, foamUV).r;
+    float foamCoverage = saturate((foamDetail - (1.0f - foam)) * foamSharpness);
+    // Far away the small mips average the pattern to ~0.5, hiding foam below 0.5: use the foam amount itself there.
+    float foamLod = FoamDetailTexture.CalculateLevelOfDetail(anisotropicSampler, foamUV);
+    foamCoverage = lerp(foamCoverage, foam, saturate((foamLod - 3.0f) / 2.0f));
+
+    if (foamDebugView > 2.5f)
+        return float4(crestFoam.xxx, 1.0f);
+    if (foamDebugView > 1.5f)
+        return float4(foamCoverage.xxx, 1.0f);
+    if (foamDebugView > 0.5f)
+        return float4(foam.xxx, 1.0f);
 
     // Reconstruct normal from slopes (object space, Y-up)
     float3 normal = normalize(float3(-slope.x, 1.0f, -slope.y));
@@ -190,7 +227,7 @@ float4 main(PixelShaderInput IN) : SV_Target
 	// Roughness grows with distance: near -> far over ~ROUGHNESS_DISTANCE.
     float viewDistance = length(cameraPosition - IN.PositionWS.xyz);
     float distanceBlend = 1.0f - exp(-viewDistance / ROUGHNESS_DISTANCE);
-    float roughness = lerp(ROUGHNESS_NEAR, ROUGHNESS_FAR, distanceBlend) + foam * foamRoughnessModifier;
+    float roughness = lerp(ROUGHNESS_NEAR, ROUGHNESS_FAR, distanceBlend) + foamCoverage * foamRoughnessModifier;
     roughness = saturate(roughness);
 	
 	// float roughness = 0.2f; // TODO: hardcoded here AND ibl_specular
@@ -280,8 +317,12 @@ float4 main(PixelShaderInput IN) : SV_Target
 
      // Combine ambient, point light, and directional light contributions
     BRDF += sss + ambient * IBLIntensity + pointLightBRDF + directionalLightBRDF;
-	// Add Foam
-    float3 foamColor = float3(1.0f, 1.0f, 1.0f);
-    BRDF = lerp(BRDF, foamColor, saturate(foam));
+    // Foam: diffuse layer lit by sun and sky. Normal flattened halfway to up: bubbles don't follow the ripples.
+    float3 foamNormal = normalize(lerp(normal, float3(0.0f, 1.0f, 0.0f), 0.5f));
+    float3 foamSun = DirectionalLights[0].Color.rgb * saturate(dot(foamNormal, mainLightDirection)) / PI;
+    // Not scaled by IBLIntensity (that is the water's reflection knob), like the models' diffuse.
+    float3 foamSky = diffuseMap.Sample(linearClampSampler, foamNormal).rgb;
+    float3 foamColor = foamAlbedo * (foamSun + foamSky);
+    BRDF = lerp(BRDF, foamColor, foamCoverage);
     return float4(BRDF, 1.0f);
 }

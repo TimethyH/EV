@@ -227,6 +227,8 @@ private:
 	std::shared_ptr<OceanCompute> m_oceanPSO;
 	std::shared_ptr<OceanCompute> m_fftPSO;
 	std::shared_ptr<OceanCompute> m_permutePSO;
+	std::shared_ptr<OceanCompute> m_mipChainPSO;   // ocean_mips.hlsl
+	std::shared_ptr<Buffer> m_mipChainCounters;    // one uint per cascade
 	std::shared_ptr<ConvolutionCompute> m_convolutionPSO;
 	std::shared_ptr<ConvolutionCompute> m_specularConvolutionPSO;
 	std::shared_ptr<ConvolutionCompute> m_brdfLutPSO;
@@ -260,7 +262,8 @@ private:
 	std::shared_ptr<Texture> m_skyboxCubemap; 
 	std::shared_ptr<Texture> m_diffuseIrradianceMap; 
 	std::shared_ptr<Texture> m_specularIrradianceMap; 
-	std::shared_ptr<Texture> m_brdfLUT; 
+	std::shared_ptr<Texture> m_brdfLUT;
+	std::shared_ptr<Texture> m_foamDetailTexture; // assets/ocean/foam.png
 
 	std::shared_ptr<EV::ShaderResourceView> m_skyboxCubemapSRV; 
 	std::shared_ptr<EV::ShaderResourceView> m_diffuseCubemapSRV; 

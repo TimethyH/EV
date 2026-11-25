@@ -4,15 +4,16 @@ float4 Permute(float4 data, float3 id)
 }
 cbuffer Constants : register(b0)
 {
-    float foamDecay;
-    float foamBias;
-    float foamAdd;
-    float foamThreshold;
+    float foamDecay;  // per second
+    float foamBias;   // foam forms where the Jacobian is below this
+    float foamAdd;    // per second, at full strength
+    float foamRange;  // Jacobian range below foamBias to reach full strength
+    float deltaTime;
 }
 
 RWTexture2D<float4> displacementTexture : register(u0);
 RWTexture2D<float4> slopeTexture : register(u1);
-RWTexture2D<float> foamTexture : register(u2);
+RWTexture2D<float2> foamTexture : register(u2); // r = foam, g = lambda * Dxz
 
 
 
@@ -25,7 +26,7 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     float4 htildeDisplacement = Permute(displacementTexture.Load(int3(dispatchThreadID.xy, 0)), dispatchThreadID);
     float4 htildeSlope = Permute(slopeTexture[dispatchThreadID.xy], dispatchThreadID);
     
-    float foamData = foamTexture.Load(int3(dispatchThreadID.xy, 0));
+    float foamData = foamTexture.Load(int3(dispatchThreadID.xy, 0)).r;
 
     // // Blur kernel. Adjusting centerweight for blur amount
     //int2 texel = int2(dispatchThreadID.xy);
@@ -59,16 +60,13 @@ void main(uint3 dispatchThreadID : SV_DispatchThreadID)
     float jacobian = (1.0f + Lambda.x * dxxdzz.x) * (1.0f + Lambda.y * dxxdzz.y) - Lambda.x * Lambda.y * dydxz.y * dydxz.y;
 	
 	// TODO: this is most probably garbage data. check how you're storing the data. 
-    float foam = foamData;
-    foam *= exp(-foamDecay);
+    float foam = foamData * exp(-foamDecay * deltaTime);
+    float forming = saturate((foamBias - jacobian) / max(foamRange, 0.0001f)); // ramp, not a step: no popping
+    foam += foamAdd * forming * deltaTime;
     foam = saturate(foam);
-	
-    float biasedJacobian = max(0.0f, -(jacobian - foamBias));
-	
-    if (biasedJacobian > foamThreshold)
-        foam += foamAdd * biasedJacobian;
-	
-    slopeTexture[dispatchThreadID.xy] = float4(slopes, 0.0f, 1.0f);
+
+    // Jacobian terms for the pixel shader, which sums them over all cascades (crest foam).
+    slopeTexture[dispatchThreadID.xy] = float4(slopes, Lambda.x * dxxdzz.x, Lambda.y * dxxdzz.y);
     displacementTexture[dispatchThreadID.xy] = float4(displacement, foam);
-    foamTexture[dispatchThreadID.xy] = foam;
+    foamTexture[dispatchThreadID.xy] = float2(foam, Lambda.x * dydxz.y);
 }
