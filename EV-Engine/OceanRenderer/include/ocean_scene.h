@@ -55,6 +55,47 @@ namespace EV
 namespace EV
 {
 
+// Everything the Ocean Parameters panel tunes, plus the skybox and the sun: applying a preset reproduces the whole look.
+// Built-in presets are made in code; the user's are saved to presets/ocean_presets.json (see ocean_scene.cpp).
+struct OceanPreset
+{
+	std::string name;
+	bool builtIn = false;
+
+	// Wind and spectrum (Ocean::JonswapParameters).
+	float windSpeed = 0.0f;     // m/s
+	float windDirection = 0.0f; // degrees
+	float fetch = 0.0f;         // m
+	float scale = 0.0f;
+	float gamma = 0.0f;
+	float swell = 0.0f;
+	float spreadBlend = 0.0f;
+	float shortWavesFade = 0.0f;
+
+	// Lighting (OceanPSO::OceanRenderParams).
+	DirectX::XMFLOAT4 oceanColor = {};
+	DirectX::XMFLOAT4 scatterColor = {};
+	float heightMod = 0.0f;
+	float peakScatterIntensity = 0.0f;
+	float IBLIntensity = 0.0f;
+
+	// Foam (Ocean::m_foamParameters and OceanPSO::OceanRenderParams).
+	float foamDecay = 0.0f;
+	float foamBias = 0.0f;
+	float foamTrailingIntensity = 0.0f;
+	float foamSoftness = 0.0f;
+	DirectX::XMFLOAT4 foamCascadeWeights = {};
+	float foamTextureSize = 0.0f;
+	float foamSharpness = 0.0f;
+	float foamAlbedo = 0.0f;
+
+	// HDR panorama for the skybox and image based lighting, relative to the working directory.
+	std::string skybox;
+	// The sun (directional light 0, Light Parameters panel), placed where the skybox has its sun. It shines from
+	// sunPosition towards the origin.
+	DirectX::XMFLOAT3 sunPosition = {};
+	DirectX::XMFLOAT4 sunColor = {};
+};
 
 class Ocean : public EV::Game
 {
@@ -76,6 +117,14 @@ public:
 	float JonswapAlpha(float fetch, float windSpeed);
 	float JonswapPeakFequency(float fetch, float windSpeed);
 	void UpdateSpectrumParameters();
+	// Derive alpha, peak omega and the angle from the wind parameters and build H0 again for every cascade.
+	void RegenerateSpectrum();
+
+	// Ocean presets.
+	OceanPreset CaptureOceanPreset(const std::string& name) const;
+	void ApplyOceanPreset(const OceanPreset& preset);
+	void LoadOceanPresets();
+	void SaveOceanPresets();
 
 	// Build the skybox cubemap and image based lighting from an HDR panorama.
 	void SetEnvironment(const std::shared_ptr<Texture>& panorama);
@@ -92,6 +141,7 @@ protected:
 	void RecordRenderGraph(const std::shared_ptr<EV::CommandList>& commandList);
 	void DrawMenu();
 	void DrawOceanParameters();
+	void DrawOceanPresets();
 	void DrawLightParameters();
 	// "Path Tracing" editor panel (path tracing M0 task 11): on/off toggle, greyed out with the reason when
 	// RenderCaps says the device can't path trace (e.g. WARP in CI).
@@ -159,7 +209,6 @@ private:
 	std::vector<EV::PointLight> m_pointLights;
 	// std::vector<SpotLight>  m_spotLights;
 	std::vector<EV::DirectionalLight> m_directionalLights;
-	std::shared_ptr<EV::Scene> m_sphere;
 
 	// Camera Controls
 	float m_forward;
@@ -306,6 +355,12 @@ private:
 	OceanData m_oceanCascades[m_oceanCascadesNumber];
 	std::vector<float> m_oceanPatchSizes;
 	std::vector<float> m_foamParameters;
+
+	// Built-in presets first, then the user's.
+	std::vector<OceanPreset> m_oceanPresets;
+	int m_selectedOceanPreset = 0;
+	char m_oceanPresetName[64] = {};
+	std::string m_oceanPresetStatus;
 
 };
 

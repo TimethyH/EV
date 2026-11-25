@@ -7,7 +7,11 @@
 #include "core/EV.h"
 
 #include <DirectXColors.h>
+#include <filesystem>
+#include <fstream>
 #include <random>
+
+#include "nlohmann/json.hpp"
 
 #include "compute_pso.h"
 #include "convolution_pso.h"
@@ -31,6 +35,313 @@ namespace
 
 using namespace DirectX;
 using namespace EV;
+using json = nlohmann::json;
+
+namespace
+{
+    constexpr const char* g_defaultSkybox = "assets/sky4k.hdr";
+
+    /*
+     * Ocean preset file (JSON), relative to the working directory. Only the user's presets are saved in it, the
+     * built-in ones are made in code (BuiltInOceanPresets):
+     *
+     *  {
+     *    "format": "EV Ocean Presets", "version": 1,
+     *    "presets": [ { "name": "My Sea", "windSpeed": 12.0, ..., "oceanColor": [r, g, b, a], ...,
+     *                   "skybox": "assets/bay2k.hdr" } ]
+     *  }
+     *
+     * A missing key keeps the value of the Default preset, so older files still load.
+     */
+    constexpr const char* g_oceanPresetFile = "presets/ocean_presets.json";
+    constexpr const char* g_oceanPresetFormat = "EV Ocean Presets";
+    constexpr int         g_oceanPresetVersion = 1;
+
+    // The preset values as they are named in the file.
+    constexpr std::pair<const char*, float OceanPreset::*> g_oceanPresetFloats[] = {
+        { "windSpeed", &OceanPreset::windSpeed },
+        { "windDirection", &OceanPreset::windDirection },
+        { "fetch", &OceanPreset::fetch },
+        { "scale", &OceanPreset::scale },
+        { "gamma", &OceanPreset::gamma },
+        { "swell", &OceanPreset::swell },
+        { "spreadBlend", &OceanPreset::spreadBlend },
+        { "shortWavesFade", &OceanPreset::shortWavesFade },
+        { "heightMod", &OceanPreset::heightMod },
+        { "peakScatterIntensity", &OceanPreset::peakScatterIntensity },
+        { "IBLIntensity", &OceanPreset::IBLIntensity },
+        { "foamDecay", &OceanPreset::foamDecay },
+        { "foamBias", &OceanPreset::foamBias },
+        { "foamTrailingIntensity", &OceanPreset::foamTrailingIntensity },
+        { "foamSoftness", &OceanPreset::foamSoftness },
+        { "foamTextureSize", &OceanPreset::foamTextureSize },
+        { "foamSharpness", &OceanPreset::foamSharpness },
+        { "foamAlbedo", &OceanPreset::foamAlbedo },
+    };
+    constexpr std::pair<const char*, XMFLOAT4 OceanPreset::*> g_oceanPresetFloat4s[] = {
+        { "oceanColor", &OceanPreset::oceanColor },
+        { "scatterColor", &OceanPreset::scatterColor },
+        { "foamCascadeWeights", &OceanPreset::foamCascadeWeights },
+        { "sunColor", &OceanPreset::sunColor },
+    };
+
+    json WriteOceanPreset(const OceanPreset& preset)
+    {
+        json object = { { "name", preset.name } };
+        for (const auto& [key, member] : g_oceanPresetFloats)
+        {
+            object[key] = preset.*member;
+        }
+        for (const auto& [key, member] : g_oceanPresetFloat4s)
+        {
+            const XMFLOAT4& value = preset.*member;
+            object[key] = json::array({ value.x, value.y, value.z, value.w });
+        }
+        object["skybox"] = preset.skybox;
+        object["sunPosition"] = json::array({ preset.sunPosition.x, preset.sunPosition.y, preset.sunPosition.z });
+        return object;
+    }
+
+    // Values missing from the object keep the ones of 'fallback'.
+    OceanPreset ReadOceanPreset(const json& object, const OceanPreset& fallback)
+    {
+        OceanPreset preset = fallback;
+        preset.builtIn = false;
+        preset.name = object.value("name", "");
+        for (const auto& [key, member] : g_oceanPresetFloats)
+        {
+            preset.*member = object.value(key, preset.*member);
+        }
+        for (const auto& [key, member] : g_oceanPresetFloat4s)
+        {
+            const auto it = object.find(key);
+            if (it != object.end() && it->is_array() && it->size() == 4)
+            {
+                preset.*member = XMFLOAT4((*it)[0].get<float>(), (*it)[1].get<float>(), (*it)[2].get<float>(), (*it)[3].get<float>());
+            }
+        }
+        preset.skybox = object.value("skybox", preset.skybox);
+        if (const auto it = object.find("sunPosition"); it != object.end() && it->is_array() && it->size() == 3)
+        {
+            preset.sunPosition = XMFLOAT3((*it)[0].get<float>(), (*it)[1].get<float>(), (*it)[2].get<float>());
+        }
+        return preset;
+    }
+
+    XMFLOAT4 ColorFromHex(uint32_t rgb)
+    {
+        return XMFLOAT4(((rgb >> 16) & 0xFF) / 255.0f, ((rgb >> 8) & 0xFF) / 255.0f, (rgb & 0xFF) / 255.0f, 1.0f);
+    }
+
+    // The built-in presets, each a different sea. 'defaults' is the look the application starts with. Wind speed in
+    // m/s and fetch in m go into JONSWAP: stronger wind over a longer fetch gives higher and longer waves. Swell
+    // narrows the spreading around the wind direction, a low spread blend widens it into a confused, two-way sea.
+    // The scatter colour (lighter than the ocean colour) glows through crests lit from behind, so most suns sit low in
+    // front of the default view; heightMod is larger for smaller waves, it scales the wave height into that glow.
+    std::vector<OceanPreset> BuiltInOceanPresets(const OceanPreset& defaults)
+    {
+        std::vector<OceanPreset> presets;
+        auto add = [&](const char* name) -> OceanPreset&
+        {
+            OceanPreset& preset = presets.emplace_back(defaults);
+            preset.name = name;
+            preset.builtIn = true;
+            return preset;
+        };
+
+        add("Default");
+
+        // Almost no wind under a clear dawn sky: tiny ripples on a long, low undulation, a mirror for the sky.
+        {
+            OceanPreset& p = add("Glassy Calm");
+            p.windSpeed = 0.2f;
+            p.fetch = 1000000.0f;
+            p.scale = 0.6f;
+            p.gamma = 1.5f;
+            p.swell = 1.0f;
+            p.spreadBlend = 1.0f;
+            p.shortWavesFade = 0.3f;
+            p.oceanColor = ColorFromHex(0x0A2A3C);
+            p.scatterColor = ColorFromHex(0x2E8C8A);
+            p.heightMod = 5.0f;
+            p.peakScatterIntensity = 0.6f;
+            p.IBLIntensity = 0.7f;
+            p.foamDecay = 2.0f;
+            p.foamBias = -0.5f;
+            p.foamTrailingIntensity = 0.5f;
+            p.skybox = "assets/qwantani_dawn_puresky_2k.hdr";
+            p.sunPosition = XMFLOAT3(264.0f, 59.0f, 360.0f);
+            p.sunColor = XMFLOAT4(1.0f, 0.85f, 0.7f, 1.0f);
+        }
+
+        // Light breeze over a short fetch under a high sun: small choppy waves, bright turquoise water lit through
+        // the crests, a little foam.
+        {
+            OceanPreset& p = add("Tropical Lagoon");
+            p.windSpeed = 1.3f;
+            p.fetch = 20000.0f;
+            p.scale = 1.0f;
+            p.gamma = 3.3f;
+            p.swell = 0.1f;
+            p.spreadBlend = 0.8f;
+            p.shortWavesFade = 0.05f;
+            p.oceanColor = ColorFromHex(0x0A5C78);
+            p.scatterColor = ColorFromHex(0x3FE0C8);
+            p.heightMod = 5.0f;
+            p.peakScatterIntensity = 1.0f;
+            p.IBLIntensity = 0.45f;
+            p.foamDecay = 1.2f;
+            p.foamBias = -0.1f;
+            p.foamTrailingIntensity = 2.0f;
+            p.skybox = "assets/sunflowers_puresky_2k.hdr";
+            p.sunPosition = XMFLOAT3(240.0f, 190.0f, 330.0f); // Lower than the sky's sun (out of view) so the crests are back-lit.
+            p.sunColor = XMFLOAT4(1.0f, 0.97f, 0.9f, 1.0f);
+        }
+
+        // Moderate open-ocean sea under fair-weather clouds: mid-blue, regular whitecaps.
+        {
+            OceanPreset& p = add("Trade Winds");
+            p.windSpeed = 2.2f;
+            p.fetch = 300000.0f;
+            p.scale = 1.0f;
+            p.gamma = 3.3f;
+            p.swell = 0.3f;
+            p.spreadBlend = 0.9f;
+            p.shortWavesFade = 0.01f;
+            p.oceanColor = ColorFromHex(0x0A3270);
+            p.scatterColor = ColorFromHex(0x1E9A8A);
+            p.heightMod = 4.0f;
+            p.peakScatterIntensity = 1.0f;
+            p.IBLIntensity = 0.4f;
+            p.foamDecay = 0.5f;
+            p.foamBias = 0.55f;
+            p.foamTrailingIntensity = 4.0f;
+            p.skybox = "assets/kloofendal_48d_partly_cloudy_puresky_2k.hdr";
+            p.sunPosition = XMFLOAT3(240.0f, 190.0f, 330.0f); // Lower than the sky's sun (out of view) so the crests are back-lit.
+            p.sunColor = XMFLOAT4(1.0f, 1.0f, 0.97f, 1.0f);
+        }
+
+        // Long-period swell from far away at sunset: big rolling hills of water from one direction, little local chop.
+        {
+            OceanPreset& p = add("Long Swell");
+            p.windSpeed = 3.5f;
+            p.windDirection = 250.0f; // Rolling towards the camera.
+            p.fetch = 1000000.0f;
+            p.scale = 1.0f;
+            p.gamma = 7.0f;
+            p.swell = 1.0f;
+            p.spreadBlend = 1.0f;
+            p.shortWavesFade = 0.15f;
+            p.oceanColor = ColorFromHex(0x0A3358);
+            p.scatterColor = ColorFromHex(0x2A8C8C);
+            p.heightMod = 2.0f;
+            p.peakScatterIntensity = 0.8f;
+            p.IBLIntensity = 0.5f;
+            p.foamDecay = 1.0f;
+            p.foamBias = 0.0f;
+            p.foamTrailingIntensity = 1.0f;
+            p.skybox = "assets/sky4k.hdr";
+        }
+
+        // Rough, high wind under a cold, broken sky: blue-green to grey water, lots of choppy whitecaps.
+        {
+            OceanPreset& p = add("North Atlantic");
+            p.windSpeed = 4.0f;
+            p.fetch = 500000.0f;
+            p.scale = 1.2f;
+            p.gamma = 3.3f;
+            p.swell = 0.2f;
+            p.spreadBlend = 0.7f;
+            p.shortWavesFade = 0.01f;
+            p.oceanColor = ColorFromHex(0x0A1E26);
+            p.scatterColor = ColorFromHex(0x1F8A6A);
+            p.heightMod = 2.5f;
+            p.peakScatterIntensity = 1.0f;
+            p.IBLIntensity = 0.35f;
+            p.foamDecay = 0.35f;
+            p.foamBias = 0.4f;
+            p.foamTrailingIntensity = 5.0f;
+            p.skybox = "assets/snow_field_puresky_2k.hdr";
+            p.sunPosition = XMFLOAT3(259.0f, 94.0f, 356.0f); // Low behind the clouds, in front of the camera: back-lit crests.
+            p.sunColor = XMFLOAT4(0.7f, 0.7f, 0.7f, 1.0f);
+        }
+
+        // Very high wind from changing directions under heavy cloud: a confused sea, dark slate water, deep green
+        // light through the crests, heavy foam that trails far behind the breakers.
+        {
+            OceanPreset& p = add("Storm");
+            p.windSpeed = 6.0f;
+            p.fetch = 800000.0f;
+            p.scale = 1.5f;
+            p.gamma = 3.3f;
+            p.swell = 0.0f;
+            p.spreadBlend = 0.2f;
+            p.shortWavesFade = 0.01f;
+            p.oceanColor = ColorFromHex(0x08121C);
+            p.scatterColor = ColorFromHex(0x1A7A5E);
+            p.heightMod = 1.0f;
+            p.peakScatterIntensity = 1.0f;
+            p.IBLIntensity = 0.3f;
+            p.foamDecay = 0.3f;
+            p.foamBias = 0.15f;
+            p.foamTrailingIntensity = 4.0f;
+            p.foamTextureSize = 10.0f;
+            p.skybox = "assets/overcast_soil_puresky_2k.hdr";
+            p.sunPosition = XMFLOAT3(259.0f, 94.0f, 356.0f); // Low behind the clouds, in front of the camera: back-lit crests.
+            p.sunColor = XMFLOAT4(0.6f, 0.62f, 0.65f, 1.0f);
+        }
+
+        // A moonlit night: a gentle sea, near-black navy water, a cold glitter path under the moon.
+        {
+            OceanPreset& p = add("Midnight");
+            p.windSpeed = 1.5f;
+            p.fetch = 200000.0f;
+            p.scale = 1.0f;
+            p.gamma = 3.3f;
+            p.swell = 0.4f;
+            p.spreadBlend = 0.9f;
+            p.shortWavesFade = 0.02f;
+            p.oceanColor = ColorFromHex(0x020812);
+            p.scatterColor = ColorFromHex(0x0E3A44);
+            p.heightMod = 3.0f;
+            p.peakScatterIntensity = 1.0f;
+            p.IBLIntensity = 0.4f;
+            p.foamDecay = 0.8f;
+            p.foamBias = 0.2f;
+            p.foamTrailingIntensity = 2.0f;
+            p.foamAlbedo = 0.6f;
+            p.skybox = "assets/kloppenheim_02_puresky_2k.hdr";
+            p.sunPosition = XMFLOAT3(251.0f, 132.0f, 350.0f);
+            p.sunColor = XMFLOAT4(0.3f, 0.33f, 0.42f, 1.0f);
+        }
+
+        // Harbour water at night: short, steep chop from a short fetch, dark green water, the waterfront's lights
+        // smeared across the ripples.
+        {
+            OceanPreset& p = add("Harbour Lights");
+            p.windSpeed = 1.2f;
+            p.fetch = 5000.0f;
+            p.scale = 1.0f;
+            p.gamma = 2.0f;
+            p.swell = 0.0f;
+            p.spreadBlend = 0.6f;
+            p.shortWavesFade = 0.02f;
+            p.oceanColor = ColorFromHex(0x061A16);
+            p.scatterColor = ColorFromHex(0x1A5040);
+            p.heightMod = 4.0f;
+            p.peakScatterIntensity = 1.0f;
+            p.IBLIntensity = 0.6f;
+            p.foamDecay = 1.5f;
+            p.foamBias = 0.0f;
+            p.foamTrailingIntensity = 1.0f;
+            p.skybox = "assets/bay2k.hdr";
+            p.sunPosition = XMFLOAT3(255.0f, 137.0f, 344.0f);
+            p.sunColor = XMFLOAT4(0.6f, 0.35f, 0.15f, 1.0f);
+        }
+
+        return presets;
+    }
+}
 
 Camera Ocean::m_camera; // Staticly defined in .h to get its position for the effectsPSO -> to shader
 
@@ -374,7 +685,7 @@ bool Ocean::LoadContent()
 
     m_skybox = commandList->CreateCube(1.0f, true);
     // Turned into the skybox cubemap and image based lighting by SetEnvironment, once the PSOs exist.
-    auto skyPanorama = commandList->LoadTextureFromFile(L"assets/sky4k.hdr", true);
+    auto skyPanorama = commandList->LoadTextureFromFile(std::filesystem::path(g_defaultSkybox).wstring(), true);
     // Linear data, not colour.
     m_foamDetailTexture = commandList->LoadTextureFromFile(L"assets/ocean/foam.png", false);
 
@@ -383,7 +694,6 @@ bool Ocean::LoadContent()
     m_chessboard = commandList->LoadSceneFromFile(L"assets/chess/ABeautifulGame.gltf");
     m_boat = commandList->LoadSceneFromFile(L"assets/kenny/ship-large.obj");
 
-    m_sphere = commandList->CreateSphere(0.1f);
 
     // Place the helmet once so it can be moved in the editor.
     if (m_helmet)
@@ -526,8 +836,35 @@ bool Ocean::LoadContent()
 
     // Skybox cubemap and image based lighting (also when an HDR file is dropped into the editor).
     SetEnvironment(skyPanorama);
+    m_editor->SetEnvironmentPath(g_defaultSkybox);
     m_editor->SetEnvironmentCallback([this](const std::shared_ptr<Texture>& panorama) { SetEnvironment(panorama); });
     m_editor->SetRenderGraph(&m_renderGraph);
+
+    // The sun is part of the presets; OnUpdate fills in the directions every frame.
+    m_directionalLights.resize(3);
+
+    // The values above are the Default preset. "--preset <name>" on the command line starts with another one.
+    LoadOceanPresets();
+    int argumentCount = 0;
+    if (LPWSTR* arguments = CommandLineToArgvW(GetCommandLineW(), &argumentCount))
+    {
+        for (int i = 1; i + 1 < argumentCount; ++i)
+        {
+            if (std::wstring(arguments[i]) == L"--preset")
+            {
+                const std::string name = ConvertString(arguments[++i]);
+                for (size_t preset = 0; preset < m_oceanPresets.size(); ++preset)
+                {
+                    if (m_oceanPresets[preset].name == name)
+                    {
+                        m_selectedOceanPreset = static_cast<int>(preset);
+                        ApplyOceanPreset(m_oceanPresets[preset]);
+                    }
+                }
+            }
+        }
+        LocalFree(arguments);
+    }
 
     m_pWindow->RegisterCallbacks(shared_from_this());
     m_pWindow->Show();
@@ -629,14 +966,13 @@ void Ocean::OnUpdate(UpdateEventArgs& e)
     // m_lightingPSO->SetDirectionalLights(m_DirectionalLights);
     // m_decalPSO->SetDirectionalLights(m_DirectionalLights);
 
-    float time = static_cast<float>(e.totalTime);
 
     // Initialize point lights BEFORE the scene visitor
     m_pointLights.resize(1);
 
     // Populate the point light with valid data
     PointLight& light = m_pointLights[0];
-    light.positionWS = XMFLOAT4(sinf(time) * 5, 1.0F, 0.0f, 1.0f);
+    light.positionWS = XMFLOAT4(0.0f, 1.0f, 0.0f, 1.0f);
     light.color = XMFLOAT4(0.0f, 0.4f, 0.8f, 1.0f);   // White light for testing
     light.ambient = 0.1f;
     light.constantAttenuation = 1.0f;
@@ -849,12 +1185,6 @@ void Ocean::RecordRenderGraph(const std::shared_ptr<CommandList>& commandList)
                 scene->Accept(visitor);
             }
 
-            // Visualize the point lights as small spheres.
-            for (const auto& light : m_pointLights)
-            {
-                m_sphere->GetRootNode()->SetLocalTransform(XMMatrixTranslationFromVector(XMLoadFloat4(&light.positionWS)));
-                m_sphere->Accept(visitor);
-            }
         });
 
     // HDR -> SDR into the image the editor's Scene panel shows.
@@ -934,6 +1264,8 @@ void Ocean::DrawOceanParameters()
             ImGui::TextColored(color, label);
             ImGui::Separator();
         };
+
+    DrawOceanPresets();
 
     // ── Wind ──
     if (ImGui::CollapsingHeader("  Wind", ImGuiTreeNodeFlags_DefaultOpen))
@@ -1020,14 +1352,240 @@ void Ocean::DrawOceanParameters()
 
     if (paramsChanged)
     {
-        m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
-        m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
-        m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
-        auto& cq = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
-        auto cl = cq.GetCommandList();
-        for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
-            GenerateH0(cl, i);
-        cq.ExecuteCommandList(cl);
+        RegenerateSpectrum();
+    }
+}
+
+void Ocean::DrawOceanPresets()
+{
+    if (!ImGui::CollapsingHeader("  Presets", ImGuiTreeNodeFlags_DefaultOpen))
+    {
+        return;
+    }
+    ImGui::Indent();
+
+    // Picking a preset applies it; Apply goes back to it after the sliders were moved.
+    const OceanPreset& selected = m_oceanPresets[m_selectedOceanPreset];
+    if (ImGui::BeginCombo("Preset", selected.name.c_str()))
+    {
+        for (int i = 0; i < static_cast<int>(m_oceanPresets.size()); ++i)
+        {
+            const OceanPreset& preset = m_oceanPresets[i];
+            if (i > 0 && preset.builtIn != m_oceanPresets[i - 1].builtIn)
+            {
+                ImGui::Separator(); // Built-in presets above, the user's below.
+            }
+            ImGui::PushID(i);
+            if (ImGui::Selectable(preset.name.c_str(), i == m_selectedOceanPreset))
+            {
+                m_selectedOceanPreset = i;
+                ApplyOceanPreset(preset);
+                if (!preset.builtIn)
+                {
+                    strncpy_s(m_oceanPresetName, preset.name.c_str(), _TRUNCATE);
+                }
+            }
+            ImGui::PopID();
+        }
+        ImGui::EndCombo();
+    }
+    if (ImGui::Button("Apply"))
+    {
+        ApplyOceanPreset(m_oceanPresets[m_selectedOceanPreset]);
+    }
+    ImGui::SameLine();
+    ImGui::BeginDisabled(m_oceanPresets[m_selectedOceanPreset].builtIn);
+    if (ImGui::Button("Delete"))
+    {
+        m_oceanPresetStatus = "Deleted " + m_oceanPresets[m_selectedOceanPreset].name;
+        m_oceanPresets.erase(m_oceanPresets.begin() + m_selectedOceanPreset);
+        m_selectedOceanPreset = std::min(m_selectedOceanPreset, static_cast<int>(m_oceanPresets.size()) - 1);
+        SaveOceanPresets();
+    }
+    ImGui::EndDisabled();
+    ImGui::SameLine();
+    ImGui::TextDisabled("Skybox: %s", ConvertString(std::filesystem::path(m_oceanPresets[m_selectedOceanPreset].skybox).filename().wstring()).c_str());
+
+    // Saves the current settings (and skybox) under the name, replacing a saved preset of the same name.
+    ImGui::Spacing();
+    ImGui::InputText("Name", m_oceanPresetName, sizeof(m_oceanPresetName));
+    const std::string name = m_oceanPresetName;
+    const auto existing = std::find_if(m_oceanPresets.begin(), m_oceanPresets.end(),
+        [&](const OceanPreset& preset) { return preset.name == name; });
+    const bool builtInName = existing != m_oceanPresets.end() && existing->builtIn;
+    ImGui::BeginDisabled(name.empty() || builtInName);
+    if (ImGui::Button(existing != m_oceanPresets.end() && !builtInName ? "Overwrite" : "Save Current As"))
+    {
+        OceanPreset preset = CaptureOceanPreset(name);
+        if (existing != m_oceanPresets.end())
+        {
+            *existing = preset;
+            m_selectedOceanPreset = static_cast<int>(existing - m_oceanPresets.begin());
+        }
+        else
+        {
+            m_oceanPresets.push_back(preset);
+            m_selectedOceanPreset = static_cast<int>(m_oceanPresets.size()) - 1;
+        }
+        m_oceanPresetStatus = "Saved " + name;
+        SaveOceanPresets();
+    }
+    ImGui::EndDisabled();
+    if (builtInName)
+    {
+        ImGui::SameLine();
+        ImGui::TextDisabled("Built-in presets can't be overwritten");
+    }
+    if (!m_oceanPresetStatus.empty())
+    {
+        ImGui::TextDisabled("%s", m_oceanPresetStatus.c_str());
+    }
+    ImGui::Unindent();
+}
+
+void Ocean::RegenerateSpectrum()
+{
+    m_jonswapParams.angle = m_jonswapParams.windDirection / 180.0f * PI;
+    m_jonswapParams.alpha = JonswapAlpha(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+    m_jonswapParams.peakOmega = JonswapPeakFequency(m_jonswapParams.fetch, m_jonswapParams.windSpeed);
+    auto& cq = Application::Get().GetCommandQueue(D3D12_COMMAND_LIST_TYPE_COPY);
+    auto cl = cq.GetCommandList();
+    for (UINT i = 0; i < m_oceanCascadesNumber; ++i)
+        GenerateH0(cl, i);
+    cq.ExecuteCommandList(cl);
+}
+
+OceanPreset Ocean::CaptureOceanPreset(const std::string& name) const
+{
+    const auto& params = m_displacementPSO->m_oceanRenderParams;
+    OceanPreset preset;
+    preset.name = name;
+
+    preset.windSpeed = m_jonswapParams.windSpeed;
+    preset.windDirection = m_jonswapParams.windDirection;
+    preset.fetch = m_jonswapParams.fetch;
+    preset.scale = m_jonswapParams.scale;
+    preset.gamma = m_jonswapParams.gamma;
+    preset.swell = m_jonswapParams.swell;
+    preset.spreadBlend = m_jonswapParams.spreadBlend;
+    preset.shortWavesFade = m_jonswapParams.shortWavesFade;
+
+    preset.oceanColor = params.oceanrColor;
+    preset.scatterColor = params.scatterColor;
+    preset.heightMod = params.heightMod;
+    preset.peakScatterIntensity = params.peakScatterIntensity;
+    preset.IBLIntensity = params.IBLIntensity;
+
+    preset.foamDecay = m_foamParameters[0];
+    preset.foamBias = m_foamParameters[1];
+    preset.foamTrailingIntensity = m_foamParameters[2];
+    preset.foamSoftness = m_foamParameters[3];
+    preset.foamCascadeWeights = params.foamCascadeWeights;
+    preset.foamTextureSize = params.foamTextureSize;
+    preset.foamSharpness = params.foamSharpness;
+    preset.foamAlbedo = params.foamAlbedo;
+
+    preset.skybox = ConvertString(m_editor->GetEnvironmentPath().generic_wstring());
+    preset.sunPosition = m_directionalLights[0].position;
+    preset.sunColor = m_directionalLights[0].color;
+    return preset;
+}
+
+void Ocean::ApplyOceanPreset(const OceanPreset& preset)
+{
+    auto& params = m_displacementPSO->m_oceanRenderParams;
+
+    m_jonswapParams.windSpeed = preset.windSpeed;
+    m_jonswapParams.windDirection = preset.windDirection;
+    m_jonswapParams.fetch = preset.fetch;
+    m_jonswapParams.scale = preset.scale;
+    m_jonswapParams.gamma = preset.gamma;
+    m_jonswapParams.swell = preset.swell;
+    m_jonswapParams.spreadBlend = preset.spreadBlend;
+    m_jonswapParams.shortWavesFade = preset.shortWavesFade;
+
+    params.oceanrColor = preset.oceanColor;
+    params.scatterColor = preset.scatterColor;
+    params.heightMod = preset.heightMod;
+    params.peakScatterIntensity = preset.peakScatterIntensity;
+    params.IBLIntensity = preset.IBLIntensity;
+
+    m_foamParameters[0] = preset.foamDecay;
+    m_foamParameters[1] = preset.foamBias;
+    m_foamParameters[2] = preset.foamTrailingIntensity;
+    m_foamParameters[3] = preset.foamSoftness;
+    params.foamCascadeWeights = preset.foamCascadeWeights;
+    params.foamTextureSize = preset.foamTextureSize;
+    params.foamSharpness = preset.foamSharpness;
+    params.foamAlbedo = preset.foamAlbedo;
+
+    m_directionalLights[0].position = preset.sunPosition;
+    m_directionalLights[0].color = preset.sunColor;
+
+    // The wind and spectrum parameters only take effect in a new H0, like when their sliders are released.
+    RegenerateSpectrum();
+
+    // Loaded in the background like a skybox dropped into the Scene, which also bakes the image based lighting again.
+    if (!preset.skybox.empty() && std::filesystem::path(preset.skybox) != m_editor->GetEnvironmentPath())
+    {
+        m_editor->LoadEnvironment(preset.skybox);
+    }
+}
+
+void Ocean::LoadOceanPresets()
+{
+    // The Default preset is what LoadContent set up.
+    m_oceanPresets = BuiltInOceanPresets(CaptureOceanPreset("Default"));
+
+    std::ifstream file(g_oceanPresetFile);
+    if (!file)
+    {
+        return; // No presets saved yet.
+    }
+    try
+    {
+        const json root = json::parse(file);
+        if (root.value("format", "") != g_oceanPresetFormat || root.value("version", 0) > g_oceanPresetVersion)
+        {
+            m_oceanPresetStatus = std::string("Not an ocean preset file: ") + g_oceanPresetFile;
+            return;
+        }
+        for (const auto& object : root.value("presets", json::array()))
+        {
+            OceanPreset preset = ReadOceanPreset(object, m_oceanPresets[0]);
+            const bool taken = std::any_of(m_oceanPresets.begin(), m_oceanPresets.end(),
+                [&](const OceanPreset& other) { return other.name == preset.name; });
+            if (!preset.name.empty() && !taken)
+            {
+                m_oceanPresets.push_back(preset);
+            }
+        }
+    }
+    catch (const std::exception& e)
+    {
+        m_oceanPresetStatus = std::string("Could not read ") + g_oceanPresetFile + ": " + e.what();
+    }
+}
+
+void Ocean::SaveOceanPresets()
+{
+    json presets = json::array();
+    for (const auto& preset : m_oceanPresets)
+    {
+        if (!preset.builtIn)
+        {
+            presets.push_back(WriteOceanPreset(preset));
+        }
+    }
+    const json root = { { "format", g_oceanPresetFormat }, { "version", g_oceanPresetVersion }, { "presets", presets } };
+
+    const std::filesystem::path path = g_oceanPresetFile;
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    std::ofstream file(path);
+    if (!file || !(file << root.dump(2) << '\n'))
+    {
+        m_oceanPresetStatus = std::string("Could not write ") + g_oceanPresetFile;
     }
 }
 
@@ -1081,7 +1639,6 @@ void Ocean::UnloadContent()
     m_defaultTexture.reset();
     m_rootSignature.reset();
     m_pipelineState.reset();
-    m_sphere.reset();
     m_unlitPSO.reset();
     m_displacementPSO.reset();
     m_skyboxPSO.reset();
@@ -1181,7 +1738,8 @@ float Ocean::DirectionSpectrum(float theta, float omega)
 {
     float s = SpreadPower(omega, m_jonswapParams.peakOmega) + 16 * tanh(std::min(omega / m_jonswapParams.peakOmega, 20.0f)) * m_jonswapParams.swell * m_jonswapParams.swell;
 
-    return std::lerp(2.0f / 3.1415f * cos(theta) * cos(theta), Cosine2s(theta - m_jonswapParams.angle, s), m_jonswapParams.spreadBlend);
+    return std::lerp(2.0f / 3.1415f * cos(theta - m_jonswapParams.angle) * cos(theta - m_jonswapParams.angle),
+                     Cosine2s(theta - m_jonswapParams.angle, s), m_jonswapParams.spreadBlend);
 }
 
 float Ocean::ShortWavesFade(float kLength)

@@ -135,6 +135,14 @@ namespace EV
             m_environmentCallback = std::move(callback);
         }
 
+        // Loads an HDR panorama in the background and passes it to the environment callback, like a dropped file.
+        // A request made while another one is loading waits for it (only the latest request is kept).
+        void LoadEnvironment(const std::filesystem::path& path);
+        // The environment that is shown (saved in scene files). The application sets it for the environment it
+        // loaded itself at startup.
+        const std::filesystem::path& GetEnvironmentPath() const { return m_environmentPath; }
+        void SetEnvironmentPath(const std::filesystem::path& path) { m_environmentPath = path; }
+
         // Folder shown in the Assets panel (relative to the working directory). Default: "assets".
         void SetAssetRoot(const std::filesystem::path& root);
 
@@ -374,7 +382,6 @@ namespace EV
         bool DrawModelThumbnail(const std::filesystem::path& path, float size);
         void DrawModelPreview();
         void PreviewModel(const std::filesystem::path& path);
-        void LoadEnvironment(const std::filesystem::path& path);
         void UpdateEnvironmentLoad();
         void AcceptViewportDrop();
         void UpdateModelDrag();
@@ -486,6 +493,7 @@ namespace EV
         bool                         m_focusModelPreview = false;
         std::function<void(const std::shared_ptr<Texture>&)> m_environmentCallback;
         std::unique_ptr<EnvironmentLoad> m_environmentLoad;
+        std::filesystem::path            m_queuedEnvironmentPath; // Requested while m_environmentLoad was loading.
         std::unique_ptr<ModelDrag>   m_modelDrag;
         std::vector<std::future<std::shared_ptr<Scene>>> m_discardedLoads; // Cancelled loads, dropped once finished.
         std::set<std::weak_ptr<Texture>, std::owner_less<std::weak_ptr<Texture>>> m_settledTextures;

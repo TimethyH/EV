@@ -1012,8 +1012,8 @@ void Editor::LoadEnvironment(const fs::path& path)
     }
     if (m_environmentLoad)
     {
-        m_statusMessage = "Still loading " + m_environmentLoad->path.filename().string();
-        m_statusMessageTime = 3.0f;
+        // Loaded when the current one is done, see UpdateEnvironmentLoad.
+        m_queuedEnvironmentPath = path;
         return;
     }
 
@@ -1036,16 +1036,25 @@ void Editor::UpdateEnvironmentLoad()
     auto panorama = m_environmentLoad->loading.get();
     m_environmentLoad.reset();
 
-    if (!panorama)
+    if (panorama)
+    {
+        m_environmentCallback(panorama);
+        m_environmentPath = path; // Saved in scene files.
+        m_statusMessage = "Environment: " + name;
+        m_statusMessageTime = 3.0f;
+    }
+    else
     {
         m_statusMessage = "Could not load " + name;
         m_statusMessageTime = 5.0f;
-        return;
     }
-    m_environmentCallback(panorama);
-    m_environmentPath = path; // Saved in scene files.
-    m_statusMessage = "Environment: " + name;
-    m_statusMessageTime = 3.0f;
+
+    // Requested while this one was loading.
+    const fs::path queued = std::exchange(m_queuedEnvironmentPath, {});
+    if (!queued.empty() && queued != m_environmentPath)
+    {
+        LoadEnvironment(queued);
+    }
 }
 
 // ------------------------------------------------------------------------------------------------
