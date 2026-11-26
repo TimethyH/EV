@@ -1,0 +1,57 @@
+{
+  "format": "EV Ocean Presets",
+  "presets": [
+    {
+      "IBLIntensity": 0.3499999940395355,
+      "fetch": 500000.0,
+      "foamAlbedo": 0.8999999761581421,
+      "foamBias": 0.4000000059604645,
+      "foamCascadeWeights": [
+        1.0,
+        1.0,
+        0.5,
+        0.25
+      ],
+      "foamDecay": 0.3499999940395355,
+      "foamSharpness": 4.0,
+      "foamSoftness": 0.30000001192092896,
+      "foamTextureSize": 6.0,
+      "foamTrailingIntensity": 5.0,
+      "gamma": 3.299999952316284,
+      "heightMod": 2.5,
+      "name": "Gloomy Ocean",
+      "oceanColor": [
+        0.03921568766236305,
+        0.11764705926179886,
+        0.14901961386203766,
+        1.0
+      ],
+      "peakScatterIntensity": 1.0,
+      "scale": 1.2000000476837158,
+      "scatterColor": [
+        0.5455420017242432,
+        0.3987456262111664,
+        0.2435676008462906,
+        1.0
+      ],
+      "shortWavesFade": 0.009999999776482582,
+      "skybox": "assets/snow_field_puresky_2k.hdr",
+      "spreadBlend": 0.699999988079071,
+      "sunColor": [
+        0.699999988079071,
+        0.699999988079071,
+        0.699999988079071,
+        1.0
+      ],
+      "sunPosition": [
+        259.0,
+        94.0,
+        356.0
+      ],
+      "swell": 0.20000000298023224,
+      "windDirection": 0.0,
+      "windSpeed": 4.0
+    }
+  ],
+  "version": 1
+}
