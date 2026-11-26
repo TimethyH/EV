@@ -1,14 +1,14 @@
 /**
  *  @file rc_toy.cpp
  *
- *  @brief RC-0, the 2D radiance cascades toy. See rc_toy.h and docs/path-tracing/knowledge.md "### RC-0".
+ *  @brief RC-0, the 2D radiance cascades toy. See rc_toy.h.
  */
 
 #include "rc_toy.h"
 
 #include <algorithm>
-#include <cfloat> // FLT_MAX (panel size constraints)
-#include <random> // step 7 test tool: scattered light positions
+#include <cfloat>
+#include <random>
 #include <string>
 #include <vector>
 #include <d3dx12.h>
@@ -18,78 +18,69 @@
 
 using namespace EV;
 
-// Root parameter slots of the paint PSO (must match the order they are created in Initialize).
+// Root parameter slots (same order as created in Initialize).
 namespace PaintRoot
 {
     enum : uint32_t
     {
-        CanvasUAV = 0, // descriptor table, u0
-        Brush = 1,     // 8 root constants, b0 = RcToy::PaintConstants
+        CanvasUAV = 0, // u0
+        Brush = 1,     // b0
     };
 }
 
-// Root parameter slots of the reference PSO (step 2).
 namespace ReferenceRoot
 {
     enum : uint32_t
     {
-        CanvasSRV = 0,    // descriptor table, t0 (the canvas, read only)
-        ReferenceUAV = 1, // descriptor table, u0 (the running average)
-        Constants = 2,    // 2 root constants, b0 = RcToy::ReferenceConstants
+        CanvasSRV = 0,    // t0
+        ReferenceUAV = 1, // u0
+        Constants = 2,    // b0
     };
 }
 
-// Root parameter slots of the cascade PSO (step 3, + the upper cascade in step 4).
 namespace CascadeRoot
 {
     enum : uint32_t
     {
-        CanvasSRV = 0,  // descriptor table, t0 (the canvas, read only)
-        CascadeUAV = 1, // descriptor table, u0 (the cascade c_k being written)
-        Constants = 2,  // 5 root constants, b0 = RcToy::CascadeConstants
-        UpperSRV = 3,   // descriptor table, t1 (c_(k+1), already merged: the other ping-pong texture)
+        CanvasSRV = 0,  // t0
+        CascadeUAV = 1, // u0
+        Constants = 2,  // b0
+        UpperSRV = 3,   // t1
     };
 }
 
-// Root parameter slots of the viewer PSO (step 3, panel display only; t1 added in step 5).
 namespace ViewRoot
 {
     enum : uint32_t
     {
-        SourceSRV = 0, // descriptor table, t0 (the texture to show)
-        ViewUAV = 1,   // descriptor table, u0 (what ImGui draws)
-        Constants = 2, // 3 root constants, b0 = RcToy::ViewConstants
-        SecondSRV = 3, // descriptor table, t1 (the reference, read by the Difference view)
+        SourceSRV = 0, // t0
+        ViewUAV = 1,   // u0
+        Constants = 2, // b0
+        SecondSRV = 3, // t1
     };
 }
 
-// Root parameter slots of the fluence PSO (step 5).
 namespace FluenceRoot
 {
     enum : uint32_t
     {
-        Cascade0SRV = 0, // descriptor table, t0 (c0, merged with c1 ... c5)
-        FluenceUAV = 1,  // descriptor table, u0 (the fluence per canvas pixel)
-        CanvasSRV = 2,   // descriptor table, t1 (the canvas: solid pixels show their own emission)
+        Cascade0SRV = 0, // t0
+        FluenceUAV = 1,  // u0
+        CanvasSRV = 2,   // t1
     };
 }
 
 // ── Resources ────────────────────────────────────────────────────────────
-// Called once from Ocean::LoadContent, after the device exists.
 void RcToy::Initialize()
 {
     DXGI_FORMAT rcCanvasFormat = DXGI_FORMAT_R16G16B16A16_FLOAT;
     auto rcDesc = CD3DX12_RESOURCE_DESC::Tex2D(rcCanvasFormat, CanvasSize, CanvasSize);
     rcDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
 
-    // The canvas: rgb = emitted light (linear HDR), a = opacity. The UAV flag lets the paint shader write it.
-    // Created through Application so the editor's texture browser tracks it; new memory starts zeroed = empty canvas.
+    // New memory starts zeroed = empty canvas.
     m_canvas = Application::Get().CreateTexture(rcDesc);
     m_canvas->SetName(L"RC-0 Canvas");
 
-    // The paint shader's root signature, same pattern as the ocean's FFT pass (Ocean::LoadContent):
-    // a descriptor table with one UAV for the canvas, and the brush as root constants (no constant buffer needed
-    // for 8 values: they are stored in the root signature itself and set per dispatch).
     CD3DX12_DESCRIPTOR_RANGE1 canvasRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // 1 UAV starting at u0
     CD3DX12_ROOT_PARAMETER1 paintRootParameters[2];
     paintRootParameters[PaintRoot::CanvasUAV].InitAsDescriptorTable(1, &canvasRange);
@@ -97,15 +88,12 @@ void RcToy::Initialize()
     m_paintPSO = std::make_shared<OceanCompute>(L"/rc_paint.cso", paintRootParameters,
         static_cast<uint32_t>(_countof(paintRootParameters)));
 
-    // Step 2: the reference's running average. 32-bit float per channel: at frame n each new frame only moves the
-    // average by 1/n, and a 16-bit float (10-bit mantissa) would stop changing after roughly a thousand frames.
+    // fp32: the running average moves by 1/n per frame, fp16 would stop changing after ~1000 frames.
     auto referenceDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R32G32B32A32_FLOAT, CanvasSize, CanvasSize);
     referenceDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     m_reference = Application::Get().CreateTexture(referenceDesc);
     m_reference->SetName(L"RC-0 Reference");
 
-    // The reference shader reads the canvas (SRV, t0), writes the average (UAV, u0) and gets 2 root constants (b0).
-    // Separate tables for the SRV and the UAV, like the ocean's H0 pass (ReadTextures / WriteTextures).
     CD3DX12_DESCRIPTOR_RANGE1 referenceCanvasRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // 1 SRV at t0
     CD3DX12_DESCRIPTOR_RANGE1 referenceOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // 1 UAV at u0
     CD3DX12_ROOT_PARAMETER1 referenceRootParameters[3];
@@ -115,8 +103,7 @@ void RcToy::Initialize()
     m_referencePSO = std::make_shared<OceanCompute>(L"/rc_reference.cso", referenceRootParameters,
         static_cast<uint32_t>(_countof(referenceRootParameters)));
 
-    // Step 3: two cascade textures (ping-pong in step 4) and the viewer's output, all 1024^2 fp16 with UAV access.
-    // fp16 is enough here: each cascade is rewritten from scratch every frame (no running average like the reference).
+    // fp16 is enough: cascades are rewritten from scratch every frame.
     auto cascadeDesc = CD3DX12_RESOURCE_DESC::Tex2D(DXGI_FORMAT_R16G16B16A16_FLOAT, CanvasSize, CanvasSize);
     cascadeDesc.Flags = D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS;
     m_cascades[0] = Application::Get().CreateTexture(cascadeDesc);
@@ -126,8 +113,6 @@ void RcToy::Initialize()
     m_viewTexture = Application::Get().CreateTexture(cascadeDesc);
     m_viewTexture->SetName(L"RC-0 View");
 
-    // The cascade shader has one more input than the shared shape: c_(k+1) at t1 (step 4), in its own table so the
-    // canvas table stays as it was.
     CD3DX12_DESCRIPTOR_RANGE1 cascadeCanvasRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // t0
     CD3DX12_DESCRIPTOR_RANGE1 cascadeOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // u0
     CD3DX12_DESCRIPTOR_RANGE1 cascadeUpperRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);  // t1
@@ -139,8 +124,6 @@ void RcToy::Initialize()
     m_cascadePSO = std::make_shared<OceanCompute>(L"/rc_cascade.cso", cascadeRootParameters,
         static_cast<uint32_t>(_countof(cascadeRootParameters)));
 
-    // The viewer: the texture to show (t0), its output (u0), 3 root constants (b0), and a second texture (t1) that only
-    // the Difference view reads (step 5: the reference).
     CD3DX12_DESCRIPTOR_RANGE1 viewSourceRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // t0
     CD3DX12_DESCRIPTOR_RANGE1 viewOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0); // u0
     CD3DX12_DESCRIPTOR_RANGE1 viewSecondRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1); // t1
@@ -152,11 +135,9 @@ void RcToy::Initialize()
     m_viewPSO = std::make_shared<OceanCompute>(L"/rc_view.cso", viewRootParameters,
         static_cast<uint32_t>(_countof(viewRootParameters)));
 
-    // Step 5: the fluence, one value per canvas pixel. fp16 like the cascades (rewritten from scratch every frame).
     m_fluence = Application::Get().CreateTexture(cascadeDesc);
     m_fluence->SetName(L"RC-0 Fluence");
 
-    // rc_fluence.hlsl reads the merged c0 (t0) and the canvas (t1), and writes the fluence (u0). No constants.
     CD3DX12_DESCRIPTOR_RANGE1 fluenceCascadeRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 0); // t0
     CD3DX12_DESCRIPTOR_RANGE1 fluenceOutputRange(D3D12_DESCRIPTOR_RANGE_TYPE_UAV, 1, 0);  // u0
     CD3DX12_DESCRIPTOR_RANGE1 fluenceCanvasRange(D3D12_DESCRIPTOR_RANGE_TYPE_SRV, 1, 1);  // t1
@@ -185,7 +166,6 @@ void RcToy::Release()
 
 RcToy::ReferenceConstants RcToy::NextReferenceConstants()
 {
-    // The canvas changed (painting, clearing) or the ray count moved: the old average belongs to another scene, start over.
     if (m_painting || m_clearRequested || m_raysPerFrame != m_lastRaysPerFrame)
     {
         m_referenceFrame = 0;
@@ -200,7 +180,6 @@ RcToy::ReferenceConstants RcToy::NextReferenceConstants()
 }
 
 // ── Render graph ─────────────────────────────────────────────────────────
-// Every frame, from Ocean::RecordRenderGraph, before the graph is executed.
 void RcToy::AddPasses(RenderGraph& renderGraph)
 {
     if (!m_enabled || !m_canvas)
@@ -208,19 +187,12 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
         return;
     }
 
-    // The canvas lives outside the graph (it must keep what was painted), so it is imported every frame.
     const RGTexture canvas = renderGraph.Import("RC-0 Canvas", m_canvas);
 
-    // Step 1c: paint while the left mouse button is held over the canvas image (m_painting comes from DrawPanel).
-    // Write(canvas) tells the graph this pass writes the canvas as a UAV, so it inserts the transition barrier.
-    // "Clear canvas" reuses this pass for one frame: an eraser centred on the canvas with a radius past its corners
-    // (the centre-to-corner distance is 724 px). `clearing` is captured by value: the flag is reset below, before the
-    // lambda runs.
+    // "Clear canvas" = one eraser stroke past the corners. Captured by value: the flag is reset before the lambda runs.
     const bool clearing = m_clearRequested;
 
-    // Step 7 test tool "Clear + scatter": N lights at random spots, decided NOW (while recording) and captured by
-    // value. A fixed seed gives the same layout every time, so measurements can be repeated. Scatter also sets
-    // m_clearRequested, so the canvas is cleared first in the same pass.
+    // Scatter tool: positions decided while recording, fixed seed. Also sets m_clearRequested (clear first).
     std::vector<PaintConstants> scatterLights;
     if (m_scatterRequested)
     {
@@ -250,15 +222,11 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
             .Write(canvas)
             .Execute([this, canvas, clearing, scatterLights](RGPassContext& context)
                 {
-                    // Runs later, inside rg.Execute: reads the brush members as they are at that moment.
                     CommandList& commandList = context.GetCommandList();
 
-                    // PSO + root signature first: the slots below belong to this root signature.
                     m_paintPSO->SetPipelineState(commandList);
                     std::shared_ptr<Texture> canvasTexture = context.GetTexture(canvas);
 
-                    // The brush as 8 root constants. They are copied into the command list by the call below,
-                    // so a struct on the stack is fine.
                     PaintConstants constants = {};
                     constants.centerX = m_brushPixelX;
                     constants.centerY = m_brushPixelY;
@@ -278,12 +246,11 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 
                     commandList.SetCompute32BitConstants(PaintRoot::Brush, sizeof(PaintConstants) / sizeof(float), &constants);
 					commandList.SetUnorderedAccessView(PaintRoot::CanvasUAV, 0, canvasTexture, 0);
-					// Group counts, not threads: 16 = numthreads(16, 16, 1) in rc_paint.hlsl -> 64 x 64 groups, one thread per pixel.
+					// Group counts: numthreads(16, 16, 1) -> 64 x 64 groups.
 					commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
 
-                    // Step 7 scatter: one brush dispatch per light, on top of the clear above. The UAV barrier makes
-                    // the clear finish first (both write the same pixels). The lights themselves need no barriers in
-                    // between: they only write, and overlapping lights write the same value.
+                    // One dispatch per scattered light. The barrier lets the clear finish first; overlapping lights
+                    // write the same value, so they need none between them.
                     if (!scatterLights.empty())
                     {
                         commandList.UAVBarrier(canvasTexture);
@@ -297,16 +264,11 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
             });
     }
 
-    // Step 2: the brute-force reference, every frame, AFTER the paint pass (the graph runs passes in the order they
-    // are added, so it sees this frame's paint). The constants are taken NOW, while recording: frameIndex is this
-    // frame's value, and m_referenceFrame has already moved on by the time the pass's lambda runs.
-    // So the lambda gets them BY VALUE and never changes RcToy's state itself.
+    // After the paint pass. Constants taken while recording and captured by value (m_referenceFrame moves on).
     const RGTexture referenceTexture = renderGraph.Import("RC-0 Reference", m_reference);
     const ReferenceConstants referenceConstants = NextReferenceConstants();
-    m_clearRequested = false; // Handled: the paint pass erases this frame, and the reference has restarted.
+    m_clearRequested = false;
 
-    // Reads the canvas as an SRV in a compute shader (NonPixelShaderRead: the graph's barrier and the SRV binding
-    // below ask for the same state, so no second transition) and writes the running average as a UAV.
     renderGraph.AddPass("RC-0 Reference")
         .Read(canvas, EV::RGAccess::NonPixelShaderRead)
         .Write(referenceTexture)
@@ -315,35 +277,30 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
                 CommandList& commandList = context.GetCommandList();
                 m_referencePSO->SetPipelineState(commandList);
 
-                // Handles -> the real textures (only valid inside the lambda).
                 std::shared_ptr<Texture> canvasTexture = context.GetTexture(canvas);
                 std::shared_ptr<Texture> refTexture = context.GetTexture(referenceTexture);
 
                 commandList.SetCompute32BitConstants(ReferenceRoot::Constants, sizeof(ReferenceConstants) / sizeof(float), &referenceConstants);
 				commandList.SetShaderResourceView(ReferenceRoot::CanvasSRV, 0, canvasTexture, D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
 				commandList.SetUnorderedAccessView(ReferenceRoot::ReferenceUAV, 0, refTexture, 0);
-				commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1); // 64 x 64 groups of 16 x 16
+				commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
             });
 
-    // Everything below only feeds the panel's views; the Canvas view shows m_canvas directly.
+    // The rest only feeds the panel; the Canvas view shows m_canvas directly.
     if (m_view == View::Canvas)
     {
         return;
     }
 
-    // What the viewer pass shows (t0). The Reference view shows the reference itself; the others replace it below.
     RGTexture viewSource = referenceTexture;
 
-    // Steps 3 + 4: the cascades, for the Cascade view and (step 5) for the fluence. The Fluence and Difference views
-    // always need the WHOLE merge down to c0 (all 6 cascades, Merge on), whatever the Cascade-view settings are.
+    // Fluence and Difference always need the whole merge down to c0.
     const bool fluenceView = (m_view == View::Fluence || m_view == View::Difference);
     if (m_view == View::Cascade || fluenceView)
     {
         const bool merge = fluenceView ? true : m_merge;
 
-        // Step 4, top-down: c5 first (raw, nothing above it), then c4 ... c_shown, each merging with the one just
-        // written. Each cascade is its own pass, so the graph puts a barrier between them (c_(k+1) written as UAV ->
-        // read as SRV). Merge off = step 3's behaviour: only c_shown, raw.
+        // Top-down, c5 first, one pass per cascade (the graph puts the UAV -> SRV barrier between them).
         const RGTexture cascadeTextures[2] = {
             renderGraph.Import("RC-0 Cascade A", m_cascades[0]),
             renderGraph.Import("RC-0 Cascade B", m_cascades[1]),
@@ -353,15 +310,13 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 
         for (int k = static_cast<int>(top); k >= static_cast<int>(shown); --k)
         {
-            const RGTexture target = cascadeTextures[CascadeSlot(k)];    // c_k is written here...
-            const RGTexture upper = cascadeTextures[CascadeSlot(k) ^ 1u]; // ...and c_(k+1) was written to the other.
+            const RGTexture target = cascadeTextures[CascadeSlot(k)];
+            const RGTexture upper = cascadeTextures[CascadeSlot(k) ^ 1u];
 
             CascadeConstants cascadeConstants;
             cascadeConstants.cascadeIndex = static_cast<uint32_t>(k);
-            // c5 has nothing above it. `upper` is still bound for c5 (a root table must be set before a dispatch),
-            // the shader just doesn't read it.
+            // c5 has nothing above it (upper is still bound: a root table must be set before a dispatch).
             cascadeConstants.mergeWithUpper = (merge && k < static_cast<int>(CascadeCount) - 1) ? 1u : 0u;
-            // Step 6: the panel's fixes, the same for every cascade (the shader decides where they apply).
             cascadeConstants.overlap = m_overlap ? 1u : 0u;
             cascadeConstants.bilinearFix = m_bilinearFix ? 1u : 0u;
             cascadeConstants.intervalT0 = static_cast<float>(m_t0);
@@ -382,14 +337,12 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
                         commandList.SetShaderResourceView(CascadeRoot::UpperSRV, 0, context.GetTexture(upper),
                             D3D12_RESOURCE_STATE_NON_PIXEL_SHADER_RESOURCE);
                         commandList.SetUnorderedAccessView(CascadeRoot::CascadeUAV, 0, context.GetTexture(target), 0);
-                        // One thread per cascade TEXEL (= one ray: one probe, one direction). Every cascade is 1024^2.
                         commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
                     });
         }
-        const RGTexture cascadeTexture = cascadeTextures[CascadeSlot(shown)]; // c_shown (c0 for the fluence views).
+        const RGTexture cascadeTexture = cascadeTextures[CascadeSlot(shown)];
         viewSource = cascadeTexture;
 
-        // Step 5: merged c0 -> one light value per canvas pixel (rc_fluence.hlsl). One thread per canvas pixel.
         if (fluenceView)
         {
             const RGTexture fluenceTexture = renderGraph.Import("RC-0 Fluence", m_fluence);
@@ -416,16 +369,14 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
         }
     }
 
-    // Viewer: viewSource -> m_viewTexture with alpha 1, for the panel. Modes (rc_view.hlsl): 0 = rgb (tonemapped for
-    // Reference + Fluence when the box is ticked, so both look the same), 1 = a cascade's beta as grey,
-    // 2 = Difference (viewSource = fluence, t1 = reference).
+    // viewSource -> m_viewTexture with alpha 1.
     const RGTexture viewTexture = renderGraph.Import("RC-0 View", m_viewTexture);
     ViewConstants viewConstants;
     viewConstants.mode = (m_view == View::Difference) ? 2u : (m_view == View::Cascade && m_showBeta) ? 1u : 0u;
     viewConstants.tonemap = (m_tonemap && (m_view == View::Reference || m_view == View::Fluence)) ? 1u : 0u;
     viewConstants.differenceScale = m_differenceScale;
 
-    // The reference is read twice in the Reference view (t0 and t1): fine, the graph allows declaring a read twice.
+    // The Reference view declares the reference twice (t0 and t1); the graph allows that.
     renderGraph.AddPass("RC-0 View")
         .Read(viewSource, EV::RGAccess::NonPixelShaderRead)
         .Read(referenceTexture, EV::RGAccess::NonPixelShaderRead)
@@ -447,27 +398,21 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 }
 
 // ── Panel ────────────────────────────────────────────────────────────────
-// The "RC-0" tab next to the Scene view. Layout: a fixed-width column of controls on the left, the canvas image in
-// the rest of the panel (so the image gets the panel's full height), either scaled to fit or at 1 pixel per texel.
+// Controls column left of the canvas image, or on top when the panel is narrow.
 void RcToy::DrawPanel(Editor& editor)
 {
-    // Width of the controls column in screen pixels; sliders inside it get a fixed width so their labels still fit.
     constexpr float ControlsWidth = 300.0f;
     constexpr float SliderWidth = 140.0f;
-    // Below this much room for the image next to the column, the controls go on top instead (a narrow panel, e.g.
-    // docked at the side, would otherwise leave the image only a few pixels wide).
     constexpr float MinImageWidth = 400.0f;
     const bool sideBySide = ImGui::GetContentRegionAvail().x >= ControlsWidth + MinImageWidth;
 
-    // The controls in a child window: its own scroll region, so they scroll on a short panel while the image keeps
-    // its size. Side by side: a fixed-width column at full height. On top: full width, as tall as its contents
-    // (AutoResizeY). Every Begin/BeginChild needs its End/EndChild, also on the early return.
+    // Own child window so the controls scroll while the image keeps its size.
     const ImVec2 controlsSize = sideBySide ? ImVec2(ControlsWidth, 0.0f) : ImVec2(0.0f, 0.0f);
     const ImGuiChildFlags controlsFlags = sideBySide ? ImGuiChildFlags_Borders
         : (ImGuiChildFlags_Borders | ImGuiChildFlags_AutoResizeY);
     if (!sideBySide)
     {
-        // On top: at most 40% of the panel's height, the rest stays for the image (the controls scroll inside).
+        // On top: at most 40% of the panel's height.
         ImGui::SetNextWindowSizeConstraints(ImVec2(0.0f, 0.0f),
             ImVec2(FLT_MAX, std::max(80.0f, ImGui::GetContentRegionAvail().y * 0.4f)));
     }
@@ -482,7 +427,6 @@ void RcToy::DrawPanel(Editor& editor)
         return;
     }
 
-    // Brush settings (step 1c). The mode numbers are what rc_paint.hlsl receives.
     ImGui::SeparatorText("Brush");
     int mode = static_cast<int>(m_brushMode);
     ImGui::RadioButton("Light", &mode, static_cast<int>(BrushMode::Light));
@@ -498,8 +442,6 @@ void RcToy::DrawPanel(Editor& editor)
         m_clearRequested = true;
     }
 
-    // Step 7 test tool: replace the canvas with N lights (the brush's colour, intensity and radius; same spots every
-    // time). For 7.1: does RC's cost stay the same for 2, 100 and 1,000 lights?
     ImGui::SetNextItemWidth(SliderWidth);
     ImGui::SliderInt("Lights", &m_scatterCount, 1, 2000, "%d", ImGuiSliderFlags_Logarithmic);
     if (ImGui::Button("Clear + scatter lights"))
@@ -515,7 +457,6 @@ void RcToy::DrawPanel(Editor& editor)
         ImGui::DragFloat("Intensity", &m_brushIntensity, 0.1f, 0.0f, 100.0f, "%.1f");
     }
 
-    // Which texture to show (step 2), one per line.
     ImGui::SeparatorText("View");
     int view = static_cast<int>(m_view);
     ImGui::RadioButton("Canvas", &view, static_cast<int>(View::Canvas));
@@ -529,34 +470,28 @@ void RcToy::DrawPanel(Editor& editor)
     m_view = static_cast<View>(view);
     ImGui::Checkbox("1:1 pixels (scroll)", &m_pixelPerfect);
 
-    // Step 2: the reference's settings.
     ImGui::SeparatorText("Reference");
     ImGui::SetNextItemWidth(SliderWidth);
     ImGui::SliderInt("Rays / frame", &m_raysPerFrame, 1, 64);
     ImGui::Text("%u frames accumulated", m_referenceFrame);
 
-    // Step 3: which raw cascade to compute and show, and radiance vs beta.
     if (m_view == View::Cascade)
     {
         ImGui::SeparatorText("Cascade");
-        // ImGui hashes the label into the widget ID: "Cascade" is already the radio button above, so this label must
-        // differ (same label in one window = conflicting IDs, hovering one highlights both).
+        // Label must differ from the "Cascade" radio button (same label = same ImGui ID).
         ImGui::SetNextItemWidth(SliderWidth);
         ImGui::SliderInt("Shown cascade", &m_shownCascade, 0, static_cast<int>(CascadeCount) - 1, "c%d");
         ImGui::Checkbox("Show beta", &m_showBeta);
         ImGui::SameLine();
-        // Step 4: off = the raw interval only (step 3), on = c5 ... c_shown merged top-down.
         ImGui::Checkbox("Merge", &m_merge);
     }
 
-    // Step 6: RC's fixes, for every view that runs the cascades. Each one is an A/B: flip it, watch Fluence/Difference.
     if (m_view == View::Cascade || m_view == View::Fluence || m_view == View::Difference)
     {
         ImGui::SeparatorText("Fixes");
         ImGui::Checkbox("Overlap", &m_overlap);
         ImGui::SameLine();
         ImGui::Checkbox("Bilinear fix", &m_bilinearFix);
-        // t0 only takes powers of two (1, 2, 4, 8): radio buttons on one line instead of a slider.
         ImGui::TextUnformatted("t0");
         for (int value : { 1, 2, 4, 8 })
         {
@@ -565,7 +500,6 @@ void RcToy::DrawPanel(Editor& editor)
         }
     }
 
-    // Step 5: Reference and Fluence share the tonemap setting (compare like with like); Difference has its own scale.
     if (m_view == View::Reference || m_view == View::Fluence)
     {
         ImGui::SeparatorText("Display");
@@ -579,15 +513,13 @@ void RcToy::DrawPanel(Editor& editor)
         ImGui::TextWrapped("Red = RC too bright, blue = too dark. Let the reference converge first.");
     }
 
-    // Last frame's mouse mapping (it is computed after the image, below).
+    // Last frame's mouse mapping (computed after the image, below).
     ImGui::SeparatorText("Mouse");
     ImGui::Text("Brush pixel: (%.0f, %.0f)", m_brushPixelX, m_brushPixelY);
     ImGui::Text("Painting: %s", m_painting ? "yes" : "no");
 
     ImGui::EndChild();
 
-    // The image (right of the column, or below the controls), in its own child window so 1:1 mode can scroll it
-    // (both axes) without moving the controls.
     if (sideBySide)
     {
         ImGui::SameLine();
@@ -595,33 +527,25 @@ void RcToy::DrawPanel(Editor& editor)
     ImGui::BeginChild("##RcImage", ImVec2(0.0f, 0.0f), ImGuiChildFlags_None,
         ImGuiWindowFlags_HorizontalScrollbar);
 
-    // Scaled to fit: the largest square in the space left. 1:1: exactly CanvasSize screen pixels, one per texel
-    // (no texels skipped, so no moire; the child window scrolls when the panel is smaller than that).
+    // Fit: largest square in the space left. 1:1: CanvasSize screen pixels (child window scrolls).
     const ImVec2 available = ImGui::GetContentRegionAvail();
     const float side = m_pixelPerfect ? static_cast<float>(CanvasSize)
         : std::max(1.0f, std::min(available.x, available.y));
 
-    // ImGui alpha-blends images, and the canvas's alpha is OPACITY (0 = empty space), so a plain Image() of an empty
-    // canvas is fully transparent. Drawing it over a dark grey background turns that into a readable view:
-    // empty = grey (background shows through), wall = black (rgb 0, alpha 1), light = its colour (rgb > 0, alpha 1).
+    // The canvas's alpha is opacity, so empty space would be transparent: draw it over dark grey.
     const ImVec4 emptySpaceColor(0.15f, 0.15f, 0.15f, 1.0f);
-    // Every view except the canvas is drawn by the viewer pass into m_viewTexture (alpha 1, tonemap, difference).
     const std::shared_ptr<Texture>& shown = (m_view != View::Canvas && m_viewTexture) ? m_viewTexture : m_canvas;
     ImGui::ImageWithBg(editor.GetGUI()->GetTextureID(shown), ImVec2(side, side), ImVec2(0.0f, 0.0f),
         ImVec2(1.0f, 1.0f), emptySpaceColor);
 
-    // Step 1b: which canvas pixel is under the mouse, and is the left button painting there?
-    // The image's rectangle and the mouse are both in SCREEN pixels, so (mouse - min) is the position inside the image;
-    // dividing by the image size gives 0..1, times CanvasSize gives canvas pixels (y points down in both).
-    // No clamp needed: the brush is only used while hovered, and ImGui's hover test is min <= mouse < max.
-	ImVec2 rectMin = ImGui::GetItemRectMin(); // top-left of the image, screen space
-	ImVec2 rectMax = ImGui::GetItemRectMax(); // bottom-right of the image, screen space
-	ImVec2 mousePos = ImGui::GetMousePos(); // mouse, screen space
+    // Mouse -> canvas pixel (both y-down). No clamp: only used while hovered (min <= mouse < max).
+	ImVec2 rectMin = ImGui::GetItemRectMin(); // screen space
+	ImVec2 rectMax = ImGui::GetItemRectMax();
+	ImVec2 mousePos = ImGui::GetMousePos();
 
 	m_brushPixelX = (mousePos.x - rectMin.x) / (rectMax.x - rectMin.x) * CanvasSize;
 	m_brushPixelY = (mousePos.y - rectMin.y) / (rectMax.y - rectMin.y) * CanvasSize;
 	m_painting = ImGui::IsItemHovered() && ImGui::IsMouseDown(ImGuiMouseButton_Left);
-	// (The brush pixel / painting read-out moved to the controls column, "Mouse".)
 
     ImGui::EndChild();
 }

@@ -352,10 +352,8 @@ Application::~Application()
     gs_WindowByName.clear();
 }
 
-// Path tracing M0 (Agility SDK check): logs which D3D12Core.dll the process actually loaded.
-// The exports from EV_AGILITY_SDK_EXPORTS (core/agility_sdk.h) only *ask* D3D12 to use EV's copy in <exe dir>\D3D12\;
-// if the version or path is wrong, D3D12 silently falls back to System32. This log line is the proof either way.
-// Must be called after the first D3D12 call (D3D12Core.dll is loaded lazily by d3d12.dll).
+// Logs which D3D12Core.dll was loaded (D3D12 silently falls back to System32 when the Agility exports are wrong).
+// Call after the first D3D12 call: the core is loaded lazily.
 static void LogLoadedD3D12Core()
 {
 	HMODULE hModule = GetModuleHandleW(L"D3D12Core.dll");
@@ -431,8 +429,8 @@ void Application::Initialize()
     if (m_dxgiAdapter)
     {
         m_device = CreateDevice(m_dxgiAdapter);
-        LogLoadedD3D12Core(); // Agility SDK check (path tracing M0)
-        // HRESULT ignored on purpose: without the Agility runtime this fails, m_device16 stays null and CheckFeatureSupport() falls back.
+        LogLoadedD3D12Core();
+        // May fail without the Agility runtime: m_device16 stays null and CheckFeatureSupport() falls back.
         m_device.As(&m_device16);
 
         // A fence that is signaled with UINT64_MAX when the device is removed.
@@ -474,14 +472,10 @@ void Application::Initialize()
         m_highestRootSignatureVersion = featureData.HighestVersion;
     }
 
-    // Path tracing M0 step 3: what can this GPU do (DXR tier, shader model, bindless, SER) + one log line.
     QueryRenderCaps();
 }
 
-// Fills m_renderCaps once at startup and prints ONE summary line to the Output window (path tracing M0 step 3).
-// Rules: every device query goes through CheckFeatureSupport() (the #989 wrapper), never m_device directly; and
-// nothing here may throw: when a query fails (WARP, old driver, OS runtime) the field keeps its safe default from
-// RenderCaps and startup continues. Reference: knowledge.md §10 "M0 – Capabilities & plumbing".
+// Queries go through CheckFeatureSupport() (#989 wrapper) and never throw: a failed query keeps the safe default.
 void Application::QueryRenderCaps()
 {
     DXGI_ADAPTER_DESC1 adapterDesc;
@@ -510,9 +504,8 @@ void Application::QueryRenderCaps()
     {
         m_renderCaps.serActuallyReorders = SERfeatureSupportData.ShaderExecutionReorderingActuallyReorders;
     }
-    // HighestShaderModel is in AND out: we ask "up to the newest model this header knows" and the runtime answers with
-    // the highest one the device supports. A runtime older than the header returns E_INVALIDARG for a model it has
-    // never heard of, so step down one minor version at a time (low hex digit = minor) and stop at 6.0.
+    // HighestShaderModel is in and out. A runtime older than the header returns E_INVALIDARG for an unknown model, so
+    // step down one minor version at a time.
 	HRESULT shaderModelResult = CheckFeatureSupport(D3D12_FEATURE_SHADER_MODEL, &shaderModelSupportData, sizeof(shaderModelSupportData));
     while(shaderModelResult == E_INVALIDARG && shaderModelSupportData.HighestShaderModel > D3D_SHADER_MODEL_6_0)
     {
@@ -538,11 +531,9 @@ void Application::QueryRenderCaps()
 	OutputDebugStringW(output.c_str());
 }
 
-// See RenderCaps in application.h. Checks the minimum requirements in order and returns the first one that is missing.
+// Returns the first missing minimum. SM 6.9 extras (SER, OMM) are optional and checked where used.
 const char* RenderCaps::GetPathTracingUnsupportedReason() const
 {
-    // Minimums (decided 2026-11-23): DXR 1.1 for inline RayQuery, SM 6.6 for RayQuery (6.5) + ResourceDescriptorHeap
-    // bindless (6.6), binding tier 3 for bindless materials. SM 6.9 extras (SER, OMM) are optional, checked where used.
     if(raytracingTier < D3D12_RAYTRACING_TIER_1_1)
     {
         return "no DXR 1.1 (inline RayQuery)";
@@ -622,22 +613,14 @@ static void CALLBACK OnDebugLayerMessage(D3D12_MESSAGE_CATEGORY, D3D12_MESSAGE_S
 
 Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> adapter)
 {
-    // The device is created in two steps (path tracing M0 step 2) instead of asking D3D12CreateDevice for Device13
-    // directly, so the two possible failures give two different, readable errors instead of one opaque HRESULT.
-    // No separate ID3D12Device5 query is needed: Device13 inherits from Device5, so all DXR device methods
-    // (CreateStateObject, GetRaytracingAccelerationStructurePrebuildInfo) are already on m_device. Whether DXR actually
-    // *works* is a hardware question answered by OPTIONS5.RaytracingTier (RenderCaps), not by which interface exists.
-    // Both pointers are locals: Initialize stores the result in m_device, this function has no side effects.
+    // Two steps, so "adapter can't do D3D12" and "runtime too old" give different errors. Device13 inherits Device5
+    // (DXR methods); whether DXR works is RenderCaps' job.
     ComPtr<ID3D12Device13> d3d12Device13;
     ComPtr<ID3D12Device> baseDevice;
     //    NAME_D3D12_OBJECT(d3d12Device2);
 
-    // Step 1 – base device. Can only fail when the adapter cannot do D3D12 at feature level 11_0 (hardware/driver).
     ThrowIfFailed(D3D12CreateDevice(adapter.Get(), D3D_FEATURE_LEVEL_11_0, IID_PPV_ARGS(&baseDevice)));
 
-    // Step 2 – upgrade with ComPtr::As (= COM QueryInterface). Can only fail when the loaded D3D12 *runtime* is too old,
-    // e.g. the Agility SDK did not load and System32's D3D12Core.dll is used. Log which core was loaded (it is certainly
-    // loaded by now) right before the error; on success Initialize logs it once.
     if (FAILED(baseDevice.As(&d3d12Device13)))
     {
         LogLoadedD3D12Core();
@@ -675,13 +658,8 @@ Microsoft::WRL::ComPtr<ID3D12Device13> Application::CreateDevice(Microsoft::WRL:
             D3D12_MESSAGE_ID_CLEARRENDERTARGETVIEW_MISMATCHINGCLEARVALUE,   // I'm really not sure how to avoid this message.
             D3D12_MESSAGE_ID_MAP_INVALID_NULLRANGE,                         // This warning occurs when using capture frame while graphics debugging.
             D3D12_MESSAGE_ID_UNMAP_INVALID_NULLRANGE,                       // This warning occurs when using capture frame while graphics debugging.
-            // #989 "deprecated API". Since Agility 1.620 the classic ID3D12Device::CheckFeatureSupport is deprecated.
-            // EV's own capability queries all go through Application::CheckFeatureSupport (-> CheckFeatureSupport1),
-            // but on some systems (the RTX 3070 Ti laptop) dxgi.dll itself calls the old function on our device while
-            // it creates / resizes the swapchain. That call is not ours and can't be changed, and with break-on-warning
-            // it crashed every Debug run there. Denied for the whole run because we don't know every DXGI call that
-            // does it. Cost: a NEW deprecated call in EV code would go unnoticed too - keep capability queries in the
-            // wrapper.
+            // #989: dxgi.dll itself calls the deprecated CheckFeatureSupport (swapchain create/resize, laptop). EV's
+            // own queries must keep going through Application::CheckFeatureSupport, this hides new ones too.
             D3D12_MESSAGE_ID_DEPRECATED_API,
         };
 
@@ -1348,13 +1326,9 @@ DescriptorAllocation Application::AllocateDescriptors(D3D12_DESCRIPTOR_HEAP_TYPE
 }
 
 
-// Path tracing M0 / debug-layer warning #989: engine-wide capability query (see application.h).
-// Reference: ID3D12Device16::CheckFeatureSupport1 in thirdparty/agility/include/d3d12.h (around line 32024),
-// D3D12_SDK_VERSION is defined in the same header (line 1458).
 HRESULT Application::CheckFeatureSupport(D3D12_FEATURE feature, void* pFeatureSupportData, UINT featureSupportDataSize) const
 {
-    // Agility runtime loaded → new call, tiers clamped to the SDK version EV was compiled against.
-    // Otherwise (OS runtime fallback, m_device16 stays null) → classic call, which has no #989 warning there.
+    // Agility: tiers clamped to the SDK version EV was built against. OS runtime: classic call (no #989 there).
     if (m_device16 != nullptr)
     {
         return m_device16->CheckFeatureSupport1(feature, pFeatureSupportData, featureSupportDataSize, D3D12_SDK_VERSION);
@@ -1427,12 +1401,10 @@ void Application::TrackLiveTexture(const std::shared_ptr<Texture>& texture)
     m_liveTextures.push_back(texture);
 }
 
-// Readable name for one DRED auto-breadcrumb (one GPU command recorded in a command list), used by
-// GetDeviceRemovedReport() to list the commands around the one the GPU was executing when the device was removed.
+// Name of one DRED breadcrumb op for GetDeviceRemovedReport (the caller also prints the raw number).
+// Inline RayQuery has no op of its own: it is a Dispatch.
 static const char* GetBreadcrumbOpName(D3D12_AUTO_BREADCRUMB_OP op)
 {
-    // Ops without a name return "Unknown Operation"; the caller also prints the raw op number, so any op can still be
-    // looked up in enum D3D12_AUTO_BREADCRUMB_OP (d3d12.h). Inline RayQuery has no op of its own: it is a Dispatch.
     switch (op)
     {
     case D3D12_AUTO_BREADCRUMB_OP_SETMARKER: return "SetMarker";

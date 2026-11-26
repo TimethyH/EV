@@ -143,8 +143,7 @@ protected:
 	void DrawOceanParameters();
 	void DrawOceanPresets();
 	void DrawLightParameters();
-	// "Path Tracing" editor panel (path tracing M0 task 11): on/off toggle, greyed out with the reason when
-	// RenderCaps says the device can't path trace (e.g. WARP in CI).
+	// "Path Tracing" panel: toggle, greyed out with the reason when RenderCaps says no.
 	void DrawPathTracingPanel();
 	void ResizeViewport(uint32_t width, uint32_t height);
 	void OnKeyPress(KeyEventArgs& e) override;
@@ -183,8 +182,7 @@ private:
 	bool m_showOceanParams = true;
 	bool m_showLightParams = false;
 	bool m_showPathTracingPanel = true;
-	// The toggle in the Path Tracing panel. Nothing reads it yet; from M2/M3 on the render graph chooses raster or
-	// path tracing with it. Must stay false on devices where RenderCaps::SupportsPathTracing() is false.
+	// Not read yet (M2/M3). Must stay false when RenderCaps::SupportsPathTracing() is false.
 	bool m_pathTracingEnabled = false;
 	// RC-0, the 2D radiance cascades toy (GI track): its own "RC-0" panel and render-graph passes.
 	bool m_showRcToyPanel = true;

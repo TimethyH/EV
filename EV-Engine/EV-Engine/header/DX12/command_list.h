@@ -508,8 +508,7 @@ namespace EV
         using TrackedObjects = std::vector < Microsoft::WRL::ComPtr<ID3D12Object> >;
 
         D3D12_COMMAND_LIST_TYPE m_commandListType;
-        // List4 (path tracing M0) adds the DXR commands: BuildRaytracingAccelerationStructure, DispatchRays, ...
-        // IID_PPV_ARGS in the constructor reads this type, so changing it here is all creation needs.
+        // List4 = the DXR commands (BuildRaytracingAccelerationStructure, ...).
         Microsoft::WRL::ComPtr<ID3D12GraphicsCommandList4> m_commandList;
         Microsoft::WRL::ComPtr<ID3D12CommandAllocator> m_commandAllocator;
 

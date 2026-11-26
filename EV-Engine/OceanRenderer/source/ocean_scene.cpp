@@ -1614,14 +1614,11 @@ void Ocean::DrawLightParameters()
 }
 
 // ── Path Tracing ─────────────────────────────────────────────────────────
-// Draws the contents of the "Path Tracing" panel; the Editor already wraps it in ImGui::Begin/End (Editor::AddPanel).
-// Asks RenderCaps whether this device can path trace and greys the toggle out with the reason when it can't.
 void Ocean::DrawPathTracingPanel()
 {
 	const RenderCaps& caps = Application::Get().GetRenderCaps();
 	bool pathTracingSupported = caps.SupportsPathTracing();
     ImGui::BeginDisabled(!pathTracingSupported);
-    // Checkbox both shows and flips m_pathTracingEnabled; disabled (greyed out) when the device can't path trace.
     ImGui::Checkbox("Enable Path Tracing", &m_pathTracingEnabled);
     ImGui::EndDisabled();
     if (!pathTracingSupported)

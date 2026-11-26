@@ -671,3 +671,26 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   Step 6 board, "7.3 result"). Not fixed (known artefact; 3D answer = probe relocation / zero weight for probes in
   geometry, cf. DDGI). Optional 2D fix: skip solid-centre c0 probes in the fluence blend + renormalise.
 - **Step 7 done on the main PC.** Laptop rows (7.1/7.4) later.
+- **Committed**: step 7 (scatter tool + 7.1–7.4 docs) on `path-tracing`, pushed 2026-11-26 (`1f3fc68`). RC-0 done
+  except the laptop rows.
+
+## 2026-11-26 – M1 started: task 1 (AS buffer creation) issued
+- Tutor entry: `knowledge.md` "### M1 – Acceleration structures" + §6.4. Optional M1b already decided (after M1,
+  before M2). The developer was bored of measuring at the end of RC-0, so M1 rounds stay small and hands-on.
+- Claude's plumbing: `MakeBuffer(ComPtr)` constructor (no tracker registration), declaration
+  `Application::CreateAccelerationStructureBuffer(UINT64, const std::wstring&)` + empty body with the TODO, and a
+  TEMPORARY checkpoint in `Ocean::LoadContent` (1000 B requested → expects width 1024, VA % 256 = 0; removed in
+  task 2).
+- Reading pointer verified on the DXR spec: "Acceleration structure memory restrictions" (under "System limits and
+  fixed function behaviors") + its subsection "Synchronizing acceleration structure memory writes/reads".
+  `D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT` = 256 (Agility `d3d12.h`).
+- Board: M1 task 1 "doing", node "Task 1 · AS buffers" (visual: tracker-managed buffer vs AS buffer, 256-B rounding,
+  the `Resource` constructor pattern, checkpoint), "Where I struggled · M1" section under the task list.
+
+## 2026-11-26 – Comment cleanup of M0 + RC-0 (developer's request)
+- New rule (CLAUDE.md): before every push, comments of finished tasks are cut to a minimum; the explanations live on
+  the Patroni boards + `knowledge.md`.
+- Cut to short headers / one-liners: the five `rc_*.hlsl`, `rc_toy.h/.cpp`, `agility_sdk.h`, `application.h/.cpp`
+  (RenderCaps, CheckFeatureSupport, CreateDevice, #989 deny, DRED names), `command_list.h`, `compute_pso.h`,
+  `ocean_scene.h/.cpp` (Path Tracing panel), `editor.cpp` (VRAM line), OceanRenderer `main.cpp`. Code lines unchanged
+  (checked with a comment-stripping compare), Release builds.

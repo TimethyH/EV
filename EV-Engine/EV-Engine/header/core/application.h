@@ -13,8 +13,7 @@
 #include "UI/GUI.h"
 #include "DX12/render_target.h"
 
-// The global window procedure (application.cpp). Declared here, outside namespace EV, so the friend declaration in
-// Application can name it as ::WndProc; an unqualified friend would mean a non-existent EV::WndProc.
+// Declared outside namespace EV so Application can befriend ::WndProc.
 LRESULT CALLBACK WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
 namespace EV
@@ -42,27 +41,20 @@ class ShaderLibrary;
 	 */
 	using WndProcEvent = EV::Delegate<LRESULT(HWND hWnd, UINT msg, WPARAM wParam, LPARAM lParam)>;
 
-	// What this GPU + D3D12 runtime can do, queried once at startup by Application::QueryRenderCaps (path tracing M0
-	// step 3). Every default is the "not supported / lowest" value, so a query that fails (WARP, old driver, OS runtime
-	// without Agility) simply leaves a safe answer instead of garbage. Read it via Application::GetRenderCaps().
+	// What this GPU + runtime can do, filled once by Application::QueryRenderCaps. Defaults = "not supported", so a
+	// failed query leaves a safe answer.
 	struct RenderCaps
 	{
-		std::wstring adapterName;   // DXGI_ADAPTER_DESC1::Description, e.g. L"AMD Radeon RX 9070 XT"
-		UINT vendorId = 0;          // PCI vendor: 0x1002 AMD, 0x10DE NVIDIA, 0x1414 Microsoft (WARP)
-		LUID adapterLuid = {};      // id of this adapter until reboot; M6 uses it to find the same GPU in HIP/CUDA
+		std::wstring adapterName;
+		UINT vendorId = 0;          // 0x1002 AMD, 0x10DE NVIDIA, 0x1414 WARP
+		LUID adapterLuid = {};      // M6: find the same GPU in HIP/CUDA
 
-		// OPTIONS5: can this device trace rays at all (DXR), and which DXR version. NOT_SUPPORTED = no path tracer.
 		D3D12_RAYTRACING_TIER raytracingTier = D3D12_RAYTRACING_TIER_NOT_SUPPORTED;
-		// SHADER_MODEL: newest HLSL shader model the device runs (0x69 = 6.9: high nibble major, low nibble minor).
-		D3D_SHADER_MODEL highestShaderModel = D3D_SHADER_MODEL_5_1;
-		// OPTIONS: tier 3 = fully bindless (a shader may index any descriptor in the heap, e.g. any material texture).
+		D3D_SHADER_MODEL highestShaderModel = D3D_SHADER_MODEL_5_1; // 0x69 = 6.9
 		D3D12_RESOURCE_BINDING_TIER resourceBindingTier = D3D12_RESOURCE_BINDING_TIER_1;
-		// OPTIONS22: does Shader Execution Reordering really regroup threads on this hardware, or is it a no-op?
 		bool serActuallyReorders = false;
 
-		// The ONE place that decides "can EV's path tracer run on this device?" (path tracing M0 task 11).
-		// Returns nullptr when it can, otherwise a short reason for the UI, e.g. "no DXR 1.1 (inline RayQuery)".
-		// Only string literals may be returned (they live for the whole program, see GetBreadcrumbOpName).
+		// nullptr = the path tracer can run, else a short reason for the UI (string literals only).
 		const char* GetPathTracingUnsupportedReason() const;
 		bool SupportsPathTracing() const { return GetPathTracingUnsupportedReason() == nullptr; }
 	};
@@ -93,13 +85,10 @@ class ShaderLibrary;
 
 		Microsoft::WRL::ComPtr<ID3D12Device13> GetDevice() const;
 
-		// Capability query for the whole engine (path tracing M0, debug-layer warning #989).
-		// Agility SDK 1.620+ deprecates ID3D12Device::CheckFeatureSupport in favour of
-		// ID3D12Device16::CheckFeatureSupport1, which clamps reported tiers to the SDK version EV was built against.
-		// Same arguments and return value as ID3D12Device::CheckFeatureSupport. Use this instead of calling the device.
+		// Use this instead of the device's CheckFeatureSupport (deprecated in Agility 1.620+, warning #989):
+		// CheckFeatureSupport1 when available, the classic call otherwise.
 		HRESULT CheckFeatureSupport(D3D12_FEATURE feature, void* pFeatureSupportData, UINT featureSupportDataSize) const;
 
-		// GPU capabilities queried once in Initialize (see RenderCaps). Cheap to call every frame.
 		const RenderCaps& GetRenderCaps() const { return m_renderCaps; }
 
 		CommandQueue& GetCommandQueue(
@@ -230,7 +219,7 @@ class ShaderLibrary;
 
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> CreateAdapter(bool bUseWarp);
 		Microsoft::WRL::ComPtr<ID3D12Device13> CreateDevice(Microsoft::WRL::ComPtr<IDXGIAdapter4> pAdapter);
-		// Fills m_renderCaps and prints one summary line to the Output window. Needs m_dxgiAdapter + m_device.
+		// Fills m_renderCaps + one Output-window line. Needs m_dxgiAdapter + m_device.
 		void QueryRenderCaps();
 		bool CheckTearingSupport();
 		void TrackLiveTexture(const std::shared_ptr<Texture>& texture);
@@ -243,7 +232,7 @@ class ShaderLibrary;
 
 		friend LRESULT CALLBACK ::WndProc(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam);
 
-		// Global frame index (path tracing M0): only ::WndProc (WM_PAINT, once per frame) may advance it, hence private.
+		// Only ::WndProc (WM_PAINT, once per frame) advances the frame index.
 		void IncrementFrame() {
 			++m_frameCount;
 		}
@@ -252,10 +241,8 @@ class ShaderLibrary;
 		HINSTANCE m_hInstance = {};
 		Microsoft::WRL::ComPtr<IDXGIAdapter4> m_dxgiAdapter = {};
 		Microsoft::WRL::ComPtr<ID3D12Device13> m_device = {};
-		// Same device seen through ID3D12Device16 (for CheckFeatureSupport1). Stays null when the Agility runtime is not
-		// loaded (OS runtime fallback), then CheckFeatureSupport() uses the classic call.
+		// For CheckFeatureSupport1; null without the Agility runtime.
 		Microsoft::WRL::ComPtr<ID3D12Device16> m_device16 = {};
-		// Filled once by QueryRenderCaps(), read through GetRenderCaps().
 		RenderCaps m_renderCaps = {};
 
 		std::shared_ptr<CommandQueue> m_DirectCommandQueue;

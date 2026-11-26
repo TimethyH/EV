@@ -11,7 +11,7 @@
 
 #include "core/application.h"
 
-EV_AGILITY_SDK_EXPORTS(D3D12_SDK_VERSION) // Exports D3D12SDKVersion and D3D12SDKPath from the executable, so D3D12 loads EV's own D3D12Core.dll instead of the one in System32. See docs/path-tracing/knowledge.md section 6.1.
+EV_AGILITY_SDK_EXPORTS(D3D12_SDK_VERSION) // Load EV's own D3D12Core.dll (agility_sdk.h).
 
 void ReportLiveObjects()
 {

@@ -46,8 +46,7 @@ public:
     };
 
     // Binds the pipeline state and root signature, after creating the pipeline state again if the shader was recompiled.
-    // Public so callers with their own bindings (e.g. RcToy's paint pass) can bind the PSO and then set their own
-    // UAVs / constants and dispatch, without adding another Dispatch overload here.
+    // Public for callers with their own bindings (RcToy).
     void SetPipelineState(CommandList& commandList);
 
 private:

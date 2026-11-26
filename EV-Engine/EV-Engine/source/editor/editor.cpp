@@ -1770,9 +1770,7 @@ void Editor::DrawStats()
         ImGui::Text("Viewport: %u x %u", m_viewportWidth, m_viewportHeight);
         ImGui::Text("Live textures: %zu", Application::Get().GetLiveTextures().size());
 
-        // VRAM (path tracing M0 task 13): how much video memory this process uses now vs. the budget the OS gives it.
-        // Needed for every performance.md baseline row, and from M1 on to see what acceleration structures cost.
-        // LOCAL = the GPU's own memory (on WARP: system memory). Both values are bytes (UINT64 -> %llu).
+        // VRAM used vs. the OS budget (LOCAL = the GPU's own memory; system memory on WARP).
 		DXGI_QUERY_VIDEO_MEMORY_INFO vramInfo = {};
 		if(SUCCEEDED(Application::Get().GetAdapter()->QueryVideoMemoryInfo(0, DXGI_MEMORY_SEGMENT_GROUP_LOCAL, &vramInfo)))
         {

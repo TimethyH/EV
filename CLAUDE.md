@@ -9,6 +9,9 @@ EV is a DX12 C++ engine (static lib `EV-Engine`) with apps on top (`OceanRendere
 - Every step is issued in three parts: (1) what we build + why, (2) the knowledge, with concrete reading pointers
   (section / page / paragraph + what to look for), (3) the `TODO(human)` task.
 - After a review passes, Claude removes the `TODO(human)` line and instruction-only comments (explanations stay).
+- **Before every commit/push**: comments of finished tasks are cut to a minimum (short headers, one-liners for
+  non-obvious lines; the explanations live on the Patroni boards + `knowledge.md`), and temp checkpoint lines, debug
+  returns, commented-out experiments and scratch files are removed.
 - After every step: `docs/path-tracing/build-log.md` entry, Patroni milestone board (task ticks + a card in the
   "Where I struggled" section under the task list), and `plan.md` / `knowledge.md` if the plan changed.
 - Commit + push only when the developer asks; never commit `EV-Engine/imgui.ini`. No co-author line.
