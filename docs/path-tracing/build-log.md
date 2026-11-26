@@ -615,3 +615,59 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   c5 starts outside the canvas (≈ free) → 5 cascades would do at t0 = 8.
 - **Decided**: t0 stays 2 (passes both limits on this canvas). Step 6 done. Board explorer "6.3 · How far do
   6 cascades reach?" + updated t0 note on the Step 6 board.
+- **Committed**: step 6 on `path-tracing`, pushed 2026-11-26 (`92a1997`).
+
+## 2026-11-26 – RC-0 step 7 test tool: "Clear + scatter lights" (Claude, asked)
+- For 7.1 (cost vs light count): Brush section, "Lights" slider (1…2000, logarithmic) + "Clear + scatter lights"
+  button. While recording, N `PaintConstants` lights at random spots (`std::mt19937`, fixed seed 1234 → the same
+  layout every time; the brush's colour / intensity / radius; margin radius + 2 px) are captured by value into the
+  paint pass. The pass clears (existing eraser path), `UAVBarrier(canvas)`, then one brush dispatch per light (no
+  barriers between lights: write-only, overlaps write the same value). Sets `m_clearRequested` too → the reference
+  restarts. One-frame cost ≈ N full-canvas dispatches (a hitch at N = 2000 is expected, it's a one-shot). Release
+  builds.
+
+## 2026-11-26 – RC-0 step 7.1: cost vs number of lights (main PC, RX 9070 XT, Release)
+- Setup: "Clear + scatter lights" (seed 1234), radius 2, intensity ~10, Bilinear fix on, Overlap off, t0 = 2,
+  Fluence view. Render Graph GPU ms per cascade pass:
+
+  | lights | c0 | c1 | c2 | c3 | c4 | c5 | sum c0–c5 |
+  |---|---|---|---|---|---|---|---|
+  | 2 | 0.075 | 0.175 | 0.91 | 4.9 | 11.6 | 0.0 | 17.7 |
+  | 100 | 0.075 | 0.175 | 0.9 | 4.75 | 10.5 | 0.0 | 16.4 |
+  | 1000 | 0.075 | 0.175 | 0.83 | 3.7 | 4.6 | 0.0 | 9.4 |
+
+- **Result**: RC's cost does not grow with the light count; it DROPS with more lights, because rays stop at the first
+  hit (1-px marching: cost = marched length). 1000 lights of ~4 px on 1024² → mean free path ≈ 260 px: c3 (128-px
+  intervals) drops a little, c4 (up to 512 px) more than half, c0–c1 (≤ 10 px) not at all.
+- Per cascade: ~×4–5 per cascade up to c3 (interval length ×4), c4 limited by the canvas edge, c5 ≈ 0 (its interval
+  starts at 682 px = mostly off-canvas; at t0 = 1 it starts at 341 px → 0.3 ms). knowledge.md's "expect c5 to cost
+  most" corrected.
+
+## 2026-11-26 – RC-0 step 7.4: cost of the bilinear fix (main PC, 1000 lights)
+- Same scene as 7.1 (1000 lights). Fix off: c0 0.02, c1 0.034, c2 0.22, c3 0.92, c4 1.1, c5 0.0 = 2.3 ms. Fix on:
+  9.4 ms (7.1 table) → ≈ 4× per cascade (c1 5×: tiny numbers, overhead), as predicted from 4 marches per texel; the
+  segments are about as long as the plain interval (± the upper-probe offset). c5 unchanged (no merge).
+- 2 lights, Fix off: c0 0.02, c1 0.03, c2 0.24, c3 1.17, c4 2.9, c5 0.0 = 4.4 ms vs Fix on 17.7 ms → again ≈ 4.1×:
+  the factor doesn't depend on the scene. Without the fix the light count lowers the cost the same way
+  (4.4 → 2.3 ms, mostly c4: 2.9 → 1.1).
+- `performance.md` A/B row added. Laptop numbers later.
+
+## 2026-11-26 – RC-0 step 7.3: bias vs the reference (measured by Claude, asked)
+- Developer saw "blue near the walls" and handed the measurement to Claude. Scripted run (mouse automation of the
+  RC-0 panel, no code changes, `imgui.ini` restored after): 1:1 pixels, 3 lights (r 8, intensity 20), thin wall
+  (r 1, x = 300) and thick wall (r 15, x ≈ 685–715), t0 = 2, Overlap off, Reference 387 frames × 64 rays ≈ 25k rays
+  per pixel (64 rays/frame made the PC lag – use ≤ 16 next time), Difference ×16. Signed profile (R − B of the view,
+  averaged over 100 rows) per canvas column.
+- **Walls, Fix on**: lit side 2 px saturated blue (= c0 spacing); far side 4–5 px fading (−206 → −13, = c1 spacing);
+  thin wall the same 2 px lit side. Identical with Fix off → caused by probes INSIDE the wall (they hit at t = 0 and
+  return black, and the step-5 bilinear blend mixes them into open pixels; upper probes inside the wall block the
+  segments into it).
+- **Lights**: red (too bright) within ~30 px – the same mechanism mirrored: probes inside a light return its emission.
+- **Shadow edges**: red/blue line pairs (penumbra slightly shifted). Faint concentric bands still visible at ×16
+  (ringing reduced, not zero). Open area ≈ −0.003 (noise level).
+- **Fix off adds**: the ~170-px rings around every light, leaks through the thin wall (red stripes behind it, up to
+  saturation), a ~12-px dark band on the thick wall's lit side.
+- Screenshots `T:\Projects\DX12\Resources\Screenshots\rc0_bias_fix_off.png` / `rc0_bias_fix_on.png` (also on the
+  Step 6 board, "7.3 result"). Not fixed (known artefact; 3D answer = probe relocation / zero weight for probes in
+  geometry, cf. DDGI). Optional 2D fix: skip solid-centre c0 probes in the fluence blend + renormalise.
+- **Step 7 done on the main PC.** Laptop rows (7.1/7.4) later.

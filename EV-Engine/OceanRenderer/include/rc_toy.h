@@ -123,6 +123,11 @@ private:
     // Panel button "Clear canvas": the next frame's paint pass erases the whole canvas (one big eraser stroke).
     bool  m_clearRequested = false;
 
+    // Step 7 test tool "Clear + scatter lights": the next frame clears the canvas and paints m_scatterCount lights at
+    // random spots (fixed seed: the same layout every time, so measurements can be repeated).
+    bool  m_scatterRequested = false;
+    int   m_scatterCount = 100;
+
     // Brush settings from the panel.
     BrushMode m_brushMode = BrushMode::Light;
     float     m_brushColor[3] = { 1.0f, 0.85f, 0.6f }; // Warm white.

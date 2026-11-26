@@ -2099,8 +2099,12 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   7. **Measure + verify** (below), build-log entry, `performance.md` row (both PCs).
 - **Verify**: (1) same RC time for 2, 100 and 1,000 painted lights (Sannikov's figure: cost independent of light
   count); (2) ringing visible around a 2-px light without the bilinear fix, gone with it; (3) RC vs the converged
-  reference: no visible bias except at the known artefacts; (4) Render Graph ms per cascade on both PCs (expect c5 to
-  cost most with 1-px marching: its intervals are 2048 px long – that is the argument for the distance field).
+  reference: no visible bias except at the known artefacts; (4) Render Graph ms per cascade on both PCs. With 1-px
+  marching a ray costs its marched length, so the cost grows ~×4 per cascade (that is the argument for the distance
+  field) – but only while the interval lies inside the canvas: c5 starts at 682 px, so most of its rays start OFF the
+  1024² canvas and stop on the first step (measured 2026-11-26, main PC, t0 = 2, Fix on: c4 ≈ 10.5 ms is the most
+  expensive, c5 ≈ 0; at t0 = 1 c5 starts at 341 px → 0.3 ms). (Corrected: this entry first said "expect c5 to cost
+  most".)
 - **Pitfalls**: β convention flipped (GM Shaders); off-by-one in interval starts (gaps → light leaks through thin
   walls, research §2 "interval overlap"); merging c_k with the c_(k+1) value *already merged* (correct – that's the
   point) vs with its raw interval (wrong); bilinear weights computed from texel instead of probe-centre positions;

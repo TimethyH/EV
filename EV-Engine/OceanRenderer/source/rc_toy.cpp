@@ -8,7 +8,9 @@
 
 #include <algorithm>
 #include <cfloat> // FLT_MAX (panel size constraints)
+#include <random> // step 7 test tool: scattered light positions
 #include <string>
+#include <vector>
 #include <d3dx12.h>
 
 #include "core/EV.h"
@@ -215,11 +217,38 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
     // (the centre-to-corner distance is 724 px). `clearing` is captured by value: the flag is reset below, before the
     // lambda runs.
     const bool clearing = m_clearRequested;
+
+    // Step 7 test tool "Clear + scatter": N lights at random spots, decided NOW (while recording) and captured by
+    // value. A fixed seed gives the same layout every time, so measurements can be repeated. Scatter also sets
+    // m_clearRequested, so the canvas is cleared first in the same pass.
+    std::vector<PaintConstants> scatterLights;
+    if (m_scatterRequested)
+    {
+        std::mt19937 random(1234u);
+        const float margin = m_brushRadius + 2.0f; // keep every light fully on the canvas
+        std::uniform_real_distribution<float> position(margin, static_cast<float>(CanvasSize) - margin);
+        scatterLights.reserve(static_cast<size_t>(m_scatterCount));
+        for (int i = 0; i < m_scatterCount; ++i)
+        {
+            PaintConstants light = {};
+            light.centerX = position(random);
+            light.centerY = position(random);
+            light.radius = m_brushRadius;
+            light.mode = static_cast<uint32_t>(BrushMode::Light);
+            light.color[0] = m_brushColor[0];
+            light.color[1] = m_brushColor[1];
+            light.color[2] = m_brushColor[2];
+            light.intensity = m_brushIntensity;
+            scatterLights.push_back(light);
+        }
+        m_scatterRequested = false;
+    }
+
     if (m_painting || clearing)
     {
         renderGraph.AddPass("RC-0 Paint")
             .Write(canvas)
-            .Execute([this, canvas, clearing](RGPassContext& context)
+            .Execute([this, canvas, clearing, scatterLights](RGPassContext& context)
                 {
                     // Runs later, inside rg.Execute: reads the brush members as they are at that moment.
                     CommandList& commandList = context.GetCommandList();
@@ -251,6 +280,20 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 					commandList.SetUnorderedAccessView(PaintRoot::CanvasUAV, 0, canvasTexture, 0);
 					// Group counts, not threads: 16 = numthreads(16, 16, 1) in rc_paint.hlsl -> 64 x 64 groups, one thread per pixel.
 					commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
+
+                    // Step 7 scatter: one brush dispatch per light, on top of the clear above. The UAV barrier makes
+                    // the clear finish first (both write the same pixels). The lights themselves need no barriers in
+                    // between: they only write, and overlapping lights write the same value.
+                    if (!scatterLights.empty())
+                    {
+                        commandList.UAVBarrier(canvasTexture);
+                        for (const PaintConstants& light : scatterLights)
+                        {
+                            commandList.SetCompute32BitConstants(PaintRoot::Brush, sizeof(PaintConstants) / sizeof(float), &light);
+                            commandList.SetUnorderedAccessView(PaintRoot::CanvasUAV, 0, canvasTexture, 0);
+                            commandList.Dispatch(CanvasSize / 16, CanvasSize / 16, 1);
+                        }
+                    }
             });
     }
 
@@ -453,6 +496,16 @@ void RcToy::DrawPanel(Editor& editor)
     if (ImGui::Button("Clear canvas"))
     {
         m_clearRequested = true;
+    }
+
+    // Step 7 test tool: replace the canvas with N lights (the brush's colour, intensity and radius; same spots every
+    // time). For 7.1: does RC's cost stay the same for 2, 100 and 1,000 lights?
+    ImGui::SetNextItemWidth(SliderWidth);
+    ImGui::SliderInt("Lights", &m_scatterCount, 1, 2000, "%d", ImGuiSliderFlags_Logarithmic);
+    if (ImGui::Button("Clear + scatter lights"))
+    {
+        m_scatterRequested = true;
+        m_clearRequested = true; // clears first, and restarts the reference
     }
     if (m_brushMode == BrushMode::Light)
     {
