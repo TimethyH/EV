@@ -76,13 +76,16 @@ public:
     // Step 3: how many cascades RC-0 uses (c0..c5; c5's interval ends at 2730 px, past the 1448-px diagonal).
     static constexpr uint32_t CascadeCount = 6;
 
-    // What rc_cascade.hlsl receives (cbuffer CascadeConstants, b0): 2 root constants.
+    // What rc_cascade.hlsl receives (cbuffer CascadeConstants, b0): 5 root constants.
     struct CascadeConstants
     {
         uint32_t cascadeIndex = 0;   // k: which cascade this dispatch fills (0 = finest, CascadeCount-1 = coarsest).
         uint32_t mergeWithUpper = 0; // Step 4: 1 = merge with c_(k+1) (bound at t1), 0 = raw (c5, or Merge off).
+        uint32_t overlap = 0;        // Step 6.1: 1 = the near march goes one upper probe spacing past tEnd.
+        uint32_t bilinearFix = 0;    // Step 6.2: 1 = merge with MergeWithUpperFixed (one near segment per upper probe).
+        float    intervalT0 = 2.0f;  // Step 6.3: c0's interval length in px; every interval scales with it.
     };
-    static_assert(sizeof(CascadeConstants) == 2 * sizeof(uint32_t), "CascadeConstants must be 2 root constants");
+    static_assert(sizeof(CascadeConstants) == 5 * sizeof(uint32_t), "CascadeConstants must be 5 root constants");
 
     // What rc_view.hlsl receives (cbuffer ViewConstants, b0): 3 root constants.
     struct ViewConstants
@@ -116,6 +119,9 @@ private:
     float m_brushPixelX = 0.0f;
     float m_brushPixelY = 0.0f;
     bool  m_painting = false;
+
+    // Panel button "Clear canvas": the next frame's paint pass erases the whole canvas (one big eraser stroke).
+    bool  m_clearRequested = false;
 
     // Brush settings from the panel.
     BrushMode m_brushMode = BrushMode::Light;
@@ -165,6 +171,11 @@ private:
     int  m_shownCascade = 0;    // Panel slider: which cascade is shown.
     bool m_showBeta = false;    // Panel checkbox: show the cascade's beta instead of its radiance.
     bool m_merge = true;        // Panel checkbox (step 4): merged c5 ... c_shown top-down, or only c_shown raw (step 3).
+
+    // Step 6 panel controls (each an A/B against the Reference), sent in CascadeConstants.
+    bool m_overlap = false;     // 6.1: interval overlap.
+    bool m_bilinearFix = false; // 6.2: the bilinear fix.
+    int  m_t0 = 2;              // 6.3: c0's interval length in px (1, 2, 4 or 8).
 
     // Step 5: the RC result per canvas pixel, R16G16B16A16_FLOAT 1024^2 (rgb = fluence, a = 1). Rewritten every frame.
     std::shared_ptr<EV::Texture> m_fluence;

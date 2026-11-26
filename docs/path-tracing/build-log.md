@@ -555,3 +555,63 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   column left ~30 px (and the old 1024² → ~350 px squeeze explains the earlier blur). Fix: below 300 + 400 px width the
   controls go on top (AutoResizeY, capped at 40 % of the height, scrolling), image below. Best view: dock RC-0 next to
   Scene.
+
+## 2026-11-24 – Plan: optional M2w (ray-traced water refraction in the raster ocean)
+- Question: can the path tracer make the ocean transparent? Yes (M5), but only as the offline reference; the real-time
+  ocean had nothing planned. Options compared on the Patroni board "Ocean look → ⑤ See-through water": A screen-space
+  refraction, B one inline `RayQuery` refraction ray from `ocean_pixel.hlsl`, C path tracer (M5).
+- Decided (developer): add **B as optional milestone M2w**, any time after M2 (needs M1's TLAS, M2's first RayQuery
+  code + ocean BLAS to exclude). `plan.md` roadmap row + Roadmap board node. The developer brings implementation
+  resources when we reach it – ask for them before writing a tutor entry.
+
+## 2026-11-26 – RC-0 step 6: plumbing + round 6.1 (interval overlap)
+- **Scope** (decided 2026-11-25): optional items skipped (pre-averaging, ×2 intervals, distance field); step 7 on the
+  main PC now, laptop later. Board "Step 6 · Fixes + Step 7 · Verify" (node on the RC-0 board).
+- **Plumbing** (Claude): `CascadeConstants` 2 → 5 root constants (`overlap`, `bilinearFix`, `intervalT0`); panel
+  section "Fixes" (Overlap, Bilinear fix, t0 1/2/4/8 radio buttons) in the Cascade / Fluence / Difference views;
+  `static const T0` → `intervalT0` in `DecodeTexel`; the developer's step-4 grid/weight/clamp code moved unchanged into
+  `FindUpperProbes` → `UpperProbes` (ids, weights, side), used by `MergeWithUpper` and the new shell
+  `MergeWithUpperFixed(ray, k)` (empty loop until round 6.2; `main` calls it early when Merge + Fix are on);
+  `marchEnd` local copy in `main`. OceanRenderer Release builds.
+- **Round 6.1** (developer): `if (overlap && cascadeIndex < 5) marchEnd += 1 << (cascadeIndex + 2)`. Chose
+  `cascadeIndex < 5` over `mergeWithUpper` → the raw Cascade view (Merge off) shows the longer interval too.
+- **Question on the way**: why `1 << (k + 2)` and not `+ 1`? c_k's own side/spacing is already `2^(k+1)` (c0 = 2 px,
+  2×2 block for 4 directions), so c_(k+1)'s is `2^(k+2)`.
+- **Checked**: first-time pass. Cleanup (Claude): `TODO(human)` → explanation.
+- **"Clear canvas" button** (Claude, asked, for faster A/B iterating): Brush section; `m_clearRequested` makes the
+  next frame's paint pass one eraser stroke (centre 512, radius 1024 > the 724-px centre-to-corner distance) and
+  restarts the reference (`NextReferenceConstants`). No new shader. Release builds.
+
+## 2026-11-26 – RC-0 step 6 round 6.2: the bilinear fix
+- **What** (developer): loop body of `MergeWithUpperFixed`: `upCenter = id * side + side / 2`,
+  `segStart = origin + d·tStart`, `segEnd = upCenter + d·tEnd`, `dir`/`dist` from `segEnd − segStart`,
+  `near = MarchInterval(segStart, dir, 0, dist)`, `far = ReadUpperCone(id, n, side)`,
+  `result += (near over far) · w`.
+- **Bumps on the way** (4 attempts): (1) segment points in `uint2` and unused, marched Q's own interval
+  (`MarchInterval(upCenter, d, tStart, tEnd)`), weight applied 3× (on near, on the composite, `/ 4`); (2) points
+  right, but `MarchInterval(ray.origin, dir, ray.tStart, dist)` = ray parameters with a segment direction → starts at
+  P, stops ≈ tStart short (right at c0 by luck); (3) end moved to Q's centre (dir/dist from `upCenter − segStart`),
+  `segEnd` rebuilt from dir·dist, range still from tStart; (4) correct. Concept: ray = origin + d·t, t ∈ [tStart, tEnd)
+  vs segment = start + dir·t, t ∈ [0, length); one call stays in one of them. Board "6.2 · Where does your march
+  walk?" (explorer: goal vs attempts 2/3 per cascade, direction, upper probe).
+- **Noted**: weighting near before "over" is equivalent to weighting the composite ("over" is linear in the front
+  layer = premultiplied alpha).
+- **Checked**: OceanRenderer Release builds. Cleanup (Claude): `TODO(human)` + step list → explanations.
+- **Run** (developer, one small light, Fluence): Fix off = a dim ring at ~170 canvas px (the c3/c4 interval border);
+  Fix on = ring gone, smooth falloff. Screenshots `T:\Projects\DX12\Resources\Screenshots\BilinearOff.png` /
+  `bilinearOn.png` (also on the Step 6 board, "6.2 result").
+
+## 2026-11-26 – RC-0 step 6 round 6.3: the t0 experiment (no code)
+- **Q1, t0 = 1** (reach t0 · 1365 = 1365 px < 1448-px diagonal): developer predicted the far corner gets no light
+  (refined: the texels ARE written, the rays just end before the light → (0,0,0, β = 1)). Confirmed: blue patch with a
+  round edge in the opposite corner (big bright corner light, Difference ×64).
+- **Q2, t0 = 4 / 8**: developer predicted light "jumping over the wall because the cascade jumps get bigger". Seen at
+  t0 = 8: leaks exactly ON the interval rings (8, 40, 168, 680 px). Cause = angular undersampling: the gap between
+  neighbouring rays at an interval end is tEnd · 2π / N ≈ 1.6–2.1 · t0 px, the same in every cascade (≈ 15 px at
+  t0 = 8), so small lights / walls fall between rays. (Claude's first answer blamed only c0's 4 rays – incomplete;
+  the developer's "bigger jumps" was right in the angular sense.) Check: wall blob radius 9 (> gap) → leaks gone.
+  Rule: t0 ≈ half the smallest feature.
+- **Q3, cost**: goes up with t0 (developer). c0–c3 intervals 4× longer at t0 = 8; c4 marches to the canvas edge;
+  c5 starts outside the canvas (≈ free) → 5 cascades would do at t0 = 8.
+- **Decided**: t0 stays 2 (passes both limits on this canvas). Step 6 done. Board explorer "6.3 · How far do
+  6 cascades reach?" + updated t0 note on the Step 6 board.

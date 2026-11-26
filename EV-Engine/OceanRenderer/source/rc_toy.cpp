@@ -44,7 +44,7 @@ namespace CascadeRoot
     {
         CanvasSRV = 0,  // descriptor table, t0 (the canvas, read only)
         CascadeUAV = 1, // descriptor table, u0 (the cascade c_k being written)
-        Constants = 2,  // 2 root constants, b0 = RcToy::CascadeConstants
+        Constants = 2,  // 5 root constants, b0 = RcToy::CascadeConstants
         UpperSRV = 3,   // descriptor table, t1 (c_(k+1), already merged: the other ping-pong texture)
     };
 }
@@ -183,8 +183,8 @@ void RcToy::Release()
 
 RcToy::ReferenceConstants RcToy::NextReferenceConstants()
 {
-    // The canvas changed (painting) or the ray count moved: the old average belongs to another scene, start over.
-    if (m_painting || m_raysPerFrame != m_lastRaysPerFrame)
+    // The canvas changed (painting, clearing) or the ray count moved: the old average belongs to another scene, start over.
+    if (m_painting || m_clearRequested || m_raysPerFrame != m_lastRaysPerFrame)
     {
         m_referenceFrame = 0;
         m_lastRaysPerFrame = m_raysPerFrame;
@@ -211,11 +211,15 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
 
     // Step 1c: paint while the left mouse button is held over the canvas image (m_painting comes from DrawPanel).
     // Write(canvas) tells the graph this pass writes the canvas as a UAV, so it inserts the transition barrier.
-    if (m_painting)
+    // "Clear canvas" reuses this pass for one frame: an eraser centred on the canvas with a radius past its corners
+    // (the centre-to-corner distance is 724 px). `clearing` is captured by value: the flag is reset below, before the
+    // lambda runs.
+    const bool clearing = m_clearRequested;
+    if (m_painting || clearing)
     {
         renderGraph.AddPass("RC-0 Paint")
             .Write(canvas)
-            .Execute([this, canvas](RGPassContext& context)
+            .Execute([this, canvas, clearing](RGPassContext& context)
                 {
                     // Runs later, inside rg.Execute: reads the brush members as they are at that moment.
                     CommandList& commandList = context.GetCommandList();
@@ -235,6 +239,13 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
                     constants.color[0] = m_brushColor[0];
                     constants.color[1] = m_brushColor[1];
                     constants.color[2] = m_brushColor[2];
+                    if (clearing)
+                    {
+                        constants.centerX = CanvasSize * 0.5f;
+                        constants.centerY = CanvasSize * 0.5f;
+                        constants.radius = static_cast<float>(CanvasSize);
+                        constants.mode = static_cast<uint32_t>(BrushMode::Eraser);
+                    }
 
                     commandList.SetCompute32BitConstants(PaintRoot::Brush, sizeof(PaintConstants) / sizeof(float), &constants);
 					commandList.SetUnorderedAccessView(PaintRoot::CanvasUAV, 0, canvasTexture, 0);
@@ -249,6 +260,7 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
     // So the lambda gets them BY VALUE and never changes RcToy's state itself.
     const RGTexture referenceTexture = renderGraph.Import("RC-0 Reference", m_reference);
     const ReferenceConstants referenceConstants = NextReferenceConstants();
+    m_clearRequested = false; // Handled: the paint pass erases this frame, and the reference has restarted.
 
     // Reads the canvas as an SRV in a compute shader (NonPixelShaderRead: the graph's barrier and the SRV binding
     // below ask for the same state, so no second transition) and writes the running average as a UAV.
@@ -306,6 +318,10 @@ void RcToy::AddPasses(RenderGraph& renderGraph)
             // c5 has nothing above it. `upper` is still bound for c5 (a root table must be set before a dispatch),
             // the shader just doesn't read it.
             cascadeConstants.mergeWithUpper = (merge && k < static_cast<int>(CascadeCount) - 1) ? 1u : 0u;
+            // Step 6: the panel's fixes, the same for every cascade (the shader decides where they apply).
+            cascadeConstants.overlap = m_overlap ? 1u : 0u;
+            cascadeConstants.bilinearFix = m_bilinearFix ? 1u : 0u;
+            cascadeConstants.intervalT0 = static_cast<float>(m_t0);
 
             renderGraph.AddPass("RC-0 Cascade c" + std::to_string(k))
                 .Read(canvas, EV::RGAccess::NonPixelShaderRead)
@@ -434,6 +450,10 @@ void RcToy::DrawPanel(Editor& editor)
     m_brushMode = static_cast<BrushMode>(mode);
     ImGui::SetNextItemWidth(SliderWidth);
     ImGui::SliderFloat("Radius", &m_brushRadius, 1.0f, 64.0f, "%.0f px");
+    if (ImGui::Button("Clear canvas"))
+    {
+        m_clearRequested = true;
+    }
     if (m_brushMode == BrushMode::Light)
     {
         ImGui::ColorEdit3("Colour", m_brushColor, ImGuiColorEditFlags_NoInputs);
@@ -474,6 +494,22 @@ void RcToy::DrawPanel(Editor& editor)
         ImGui::SameLine();
         // Step 4: off = the raw interval only (step 3), on = c5 ... c_shown merged top-down.
         ImGui::Checkbox("Merge", &m_merge);
+    }
+
+    // Step 6: RC's fixes, for every view that runs the cascades. Each one is an A/B: flip it, watch Fluence/Difference.
+    if (m_view == View::Cascade || m_view == View::Fluence || m_view == View::Difference)
+    {
+        ImGui::SeparatorText("Fixes");
+        ImGui::Checkbox("Overlap", &m_overlap);
+        ImGui::SameLine();
+        ImGui::Checkbox("Bilinear fix", &m_bilinearFix);
+        // t0 only takes powers of two (1, 2, 4, 8): radio buttons on one line instead of a slider.
+        ImGui::TextUnformatted("t0");
+        for (int value : { 1, 2, 4, 8 })
+        {
+            ImGui::SameLine();
+            ImGui::RadioButton((std::to_string(value) + " px").c_str(), &m_t0, value);
+        }
     }
 
     // Step 5: Reference and Fluence share the tonemap setting (compare like with like); Difference has its own scale.
