@@ -694,3 +694,19 @@ Newest entry at the bottom. Decisions and roadmap: `plan.md`. Tutor reference: `
   (RenderCaps, CheckFeatureSupport, CreateDevice, #989 deny, DRED names), `command_list.h`, `compute_pso.h`,
   `ocean_scene.h/.cpp` (Path Tracing panel), `editor.cpp` (VRAM line), OceanRenderer `main.cpp`. Code lines unchanged
   (checked with a comment-stripping compare), Release builds.
+
+## 2026-11-27 – M1 task 1 done: `CreateAccelerationStructureBuffer`
+- **Developer** wrote the body of `Application::CreateAccelerationStructureBuffer`: size rounded up by hand
+  (`(x + 255) & ~255` with the DXR constant = what `Math::AlignUp` does), `CD3DX12_RESOURCE_DESC::Buffer(size,
+  ALLOW_UNORDERED_ACCESS)`, `CreateCommittedResource` on `m_device` (DEFAULT heap, born in
+  `RAYTRACING_ACCELERATION_STRUCTURE`, no clear value), no tracker registration, wrapped in `MakeBuffer(ComPtr)` +
+  `SetName`. Developer asked for a more concrete walkthrough first (long day) → step-by-step diff vs the `Resource`
+  desc constructor.
+- **Where it went wrong (3 rounds)**: (1) `Resource resource; make_shared<MakeBuffer>(resource)` before creating
+  anything + `IID_PPV_ARGS(&m_resource)` + `CheckFeatureSupport()` copied from the pattern → EV wrapper vs raw D3D12
+  object; (2) `Resource* resource` → `IID_PPV_ARGS` needs a COM interface (`__uuidof`); (3) `ID3D12Resource*` ran
+  fine but leaked one reference (raw pointer never releases, the Buffer's ComPtr AddRefs) → `ComPtr<ID3D12Resource>`.
+- **Checkpoint**: Debug run, debug layer silent, `M1 AS test: width 1024 | VA % 256 = 0`. TEMP checkpoint removed
+  from `Ocean::LoadContent` before the push (pre-push rule) instead of in task 2; comments cut to one-liners.
+  Debug builds (MSBuild).
+- Next: task 2 – BLAS build (read Bikker part 2 first).

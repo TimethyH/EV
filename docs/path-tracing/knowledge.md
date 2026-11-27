@@ -2157,6 +2157,10 @@ kept. "Measure" names the main metric; quality-affecting rows also need the equa
   [Bikker BVH series](https://jacco.ompf2.com/articles/) parts 1–6 (start at
   [part 1](https://jacco.ompf2.com/2022/04/13/how-to-build-a-bvh-part-1-basics/)),
   HelloWorld sample, [RRA quickstart](https://gpuopen.com/manuals/rra_manual/quickstart/).
+- **Bikker reading per task** (decided 2026-11-26: read each part when its task comes up, Claude points to it then):
+  task 1 → part 1 (concepts only: what the driver builds into the AS buffer); task 2 → part 2 (SAH = what
+  `PREFER_FAST_TRACE` buys); tasks 4–5 → parts 5 + 6 (TLAS over BLAS boxes ≈ instance descs). Parts 1–4 are then
+  implemented in M1b. Skip parts 7, 8, 9b; 9a optional skim.
 
 ### M1b – Hand-built SAH BVH (optional)
 

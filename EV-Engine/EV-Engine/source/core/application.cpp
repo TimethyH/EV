@@ -138,6 +138,12 @@ public:
     {
     }
 
+    // Wraps an existing resource without registering it with the ResourceStateTracker (AS buffers).
+    MakeBuffer(Microsoft::WRL::ComPtr<ID3D12Resource> resource)
+        : Buffer(resource)
+    {
+    }
+
     virtual ~MakeBuffer() {}
 };
 
@@ -1538,7 +1544,7 @@ std::vector<std::shared_ptr<Texture>> Application::GetLiveTextures()
         else
         {
             it = m_liveTextures.erase(it);
-        }
+        } 
     }
 
     return textures;
@@ -1547,6 +1553,23 @@ std::vector<std::shared_ptr<Texture>> Application::GetLiveTextures()
 std::shared_ptr<Buffer> Application::CreateBuffer(const D3D12_RESOURCE_DESC& resourceDesc)
 {
     return std::make_shared<MakeBuffer>(resourceDesc);
+}
+
+// AS buffer: like Resource's desc constructor, but 256 B aligned, born in the AS state and not tracked (it never transitions).
+std::shared_ptr<Buffer> Application::CreateAccelerationStructureBuffer(UINT64 sizeInBytes, const std::wstring& name)
+{
+        CD3DX12_HEAP_PROPERTIES heapProp(D3D12_HEAP_TYPE_DEFAULT);
+		UINT64 alignedSize = (sizeInBytes + D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT - 1u) & ~(D3D12_RAYTRACING_ACCELERATION_STRUCTURE_BYTE_ALIGNMENT - 1u);
+		CD3DX12_RESOURCE_DESC resourceDesc = CD3DX12_RESOURCE_DESC::Buffer(alignedSize, D3D12_RESOURCE_FLAG_ALLOW_UNORDERED_ACCESS);
+        ComPtr<ID3D12Resource> resource;
+
+        ThrowIfFailed(m_device->CreateCommittedResource(
+            &heapProp, D3D12_HEAP_FLAG_NONE, &resourceDesc,
+            D3D12_RESOURCE_STATE_RAYTRACING_ACCELERATION_STRUCTURE, nullptr, IID_PPV_ARGS(&resource)));
+
+        auto buffer = std::make_shared<MakeBuffer>(resource);
+        buffer->SetName(name);
+        return buffer;
 }
 
 std::shared_ptr<GUI> Application::CreateGUI(HWND hWnd, const RenderTarget& renderTarget)

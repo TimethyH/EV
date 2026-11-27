@@ -155,6 +155,9 @@ class ShaderLibrary;
 		 */
 		std::shared_ptr<Buffer> CreateBuffer(const D3D12_RESOURCE_DESC& resourceDesc);
 
+		/** Buffer for a BLAS/TLAS: size rounded up to 256 B, always in the AS state, untracked (order builds with UAV barriers). */
+		std::shared_ptr<Buffer> CreateAccelerationStructureBuffer(UINT64 sizeInBytes, const std::wstring& name);
+
 		std::shared_ptr<GUI> CreateGUI(HWND hWnd, const RenderTarget& renderTarget);
 
 		std::shared_ptr<IndexBuffer> CreateIndexBuffer(size_t numIndices, DXGI_FORMAT indexFormat);
